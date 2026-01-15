@@ -15,7 +15,9 @@ async function getData() {
 
   const nextQuoteNumber = generateQuoteNumber(lastQuote?.quoteNumber || null);
 
-  return { customers, materials, pricingRules, nextQuoteNumber };
+  const serialized = JSON.parse(JSON.stringify({ customers, materials, pricingRules }));
+  
+  return { ...serialized, nextQuoteNumber };
 }
 
 export default async function NewQuotePage() {

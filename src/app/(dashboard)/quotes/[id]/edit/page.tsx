@@ -26,7 +26,7 @@ async function getData(quoteId: number) {
     prisma.pricingRule.findMany({ where: { isActive: true }, orderBy: { category: 'asc' } }),
   ]);
 
-  return { quote, customers, materials, pricingRules };
+  return JSON.parse(JSON.stringify({ quote, customers, materials, pricingRules }));
 }
 
 export default async function EditQuotePage({
