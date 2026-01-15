@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { formatCurrency, calculateArea } from '@/lib/utils';
+import DrawingUploadModal from './DrawingUploadModal';
 
 interface Customer {
   id: number;
@@ -120,6 +121,10 @@ export default function QuoteForm({
     })) || []
   );
 
+  // Modal states
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showRoomSelector, setShowRoomSelector] = useState(false);
+
   const taxRate = 10;
 
   // Group pricing rules by category
@@ -163,11 +168,24 @@ export default function QuoteForm({
   const totals = calculateTotals();
 
   // Room management
+  const roomTypes = ['Kitchen', 'Bathroom', 'Ensuite', 'Laundry', 'Pantry', 'Butler\'s Pantry', 'Powder Room', 'Other'];
+
   function addRoom() {
-    const roomTypes = ['Kitchen', 'Bathroom', 'Ensuite', 'Laundry', 'Pantry', 'Butler\'s Pantry', 'Powder Room'];
+    setShowRoomSelector(true);
+  }
+
+  function addRoomWithType(roomType: string) {
     const usedNames = rooms.map((r) => r.name);
-    const availableNames = roomTypes.filter((n) => !usedNames.includes(n));
-    const newName = availableNames[0] || `Room ${rooms.length + 1}`;
+    let newName = roomType;
+    
+    // Handle duplicate names
+    if (usedNames.includes(newName)) {
+      let counter = 2;
+      while (usedNames.includes(`${roomType} ${counter}`)) {
+        counter++;
+      }
+      newName = `${roomType} ${counter}`;
+    }
 
     setRooms([
       ...rooms,
@@ -177,6 +195,37 @@ export default function QuoteForm({
         pieces: [],
       },
     ]);
+    setShowRoomSelector(false);
+  }
+
+  // Handle pieces from drawing upload
+  function handleAddPiecesFromDrawing(
+    roomName: string,
+    pieces: Array<{
+      description: string;
+      lengthMm: number;
+      widthMm: number;
+      thicknessMm: number;
+      selected: boolean;
+    }>
+  ) {
+    const newRoom: QuoteRoom = {
+      id: `new-${Date.now()}`,
+      name: roomName,
+      pieces: pieces
+        .filter((p) => p.selected)
+        .map((p, index) => ({
+          id: `new-${Date.now()}-${index}`,
+          description: p.description,
+          lengthMm: p.lengthMm,
+          widthMm: p.widthMm,
+          thicknessMm: p.thicknessMm,
+          materialId: materials[0]?.id || null,
+          features: [],
+        })),
+    };
+    setRooms([...rooms, newRoom]);
+    toast.success(`Added ${roomName} with ${newRoom.pieces.length} piece(s)`);
   }
 
   function removeRoom(roomId: string) {
@@ -648,6 +697,55 @@ export default function QuoteForm({
         <button type="button" onClick={addRoom} className="btn-secondary w-full">
           + Add Room
         </button>
+
+        {/* Room Type Selector Modal */}
+        {showRoomSelector && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowRoomSelector(false)} />
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                <h3 className="text-lg font-semibold mb-4">Select Room Type</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {roomTypes.map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => addRoomWithType(type)}
+                      className="btn-secondary text-left"
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setShowRoomSelector(false)}
+                  className="mt-4 w-full btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Upload Drawing Button */}
+        <button
+          type="button"
+          onClick={() => setShowUploadModal(true)}
+          className="btn-primary w-full flex items-center justify-center gap-2"
+        >
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Upload Drawing (AI Extract)
+        </button>
+
+        {/* Drawing Upload Modal */}
+        <DrawingUploadModal
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          onAddPieces={handleAddPiecesFromDrawing}
+          existingRoomNames={rooms.map((r) => r.name)}
+        />
       </div>
 
       {/* Notes */}
