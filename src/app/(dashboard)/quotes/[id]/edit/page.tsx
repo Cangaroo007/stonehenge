@@ -67,17 +67,17 @@ export default async function EditQuotePage({
           projectName: data.quote.projectName,
           projectAddress: data.quote.projectAddress,
           notes: data.quote.notes,
-          rooms: data.quote.rooms.map((r) => ({
+          rooms: data.quote.rooms.map((r: any) => ({
             id: r.id,
             name: r.name,
-            pieces: r.pieces.map((p) => ({
+            pieces: r.pieces.map((p: any) => ({
               id: p.id,
               description: p.description,
               lengthMm: p.lengthMm,
               widthMm: p.widthMm,
               thicknessMm: p.thicknessMm,
               materialId: p.materialId,
-              features: p.features.map((f) => ({
+              features: p.features.map((f: any) => ({
                 id: f.id,
                 name: f.name,
                 quantity: f.quantity,
