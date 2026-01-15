@@ -1,0 +1,220 @@
+// Prisma Schema for Stone Henge MVP
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  quotes       Quote[]
+
+  @@map("users")
+}
+
+// ============================================
+// CUSTOMERS
+// ============================================
+
+model Customer {
+  id        Int       @id @default(autoincrement())
+  name      String
+  company   String?
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  quotes    Quote[]
+
+  @@map("customers")
+}
+
+// ============================================
+// MATERIALS
+// ============================================
+
+model Material {
+  id          Int       @id @default(autoincrement())
+  name        String
+  collection  String?
+  description String?
+  pricePerSqm Decimal   @map("price_per_sqm") @db.Decimal(10, 2)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  pieces      QuotePiece[]
+
+  @@map("materials")
+}
+
+// ============================================
+// PRICING RULES
+// ============================================
+
+model PricingRule {
+  id          Int       @id @default(autoincrement())
+  category    String    // 'thickness', 'edge', 'cutout', 'feature'
+  name        String
+  description String?
+  price       Decimal   @db.Decimal(10, 2)
+  priceType   String    @map("price_type") // 'fixed', 'per_meter', 'per_sqm', 'multiplier'
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  pieceFeatures PieceFeature[]
+
+  @@map("pricing_rules")
+}
+
+// ============================================
+// QUOTES
+// ============================================
+
+model Quote {
+  id             Int       @id @default(autoincrement())
+  quoteNumber    String    @unique @map("quote_number")
+  revision       Int       @default(1)
+  
+  // Customer
+  customerId     Int?      @map("customer_id")
+  customer       Customer? @relation(fields: [customerId], references: [id])
+  
+  // Project details
+  projectName    String?   @map("project_name")
+  projectAddress String?   @map("project_address")
+  
+  // Status
+  status         String    @default("draft") // draft, sent, accepted, declined
+  
+  // Pricing
+  subtotal       Decimal   @default(0) @db.Decimal(10, 2)
+  taxRate        Decimal   @default(10) @map("tax_rate") @db.Decimal(5, 2)
+  taxAmount      Decimal   @default(0) @map("tax_amount") @db.Decimal(10, 2)
+  total          Decimal   @default(0) @db.Decimal(10, 2)
+  
+  // Terms
+  validUntil     DateTime? @map("valid_until")
+  notes          String?
+  internalNotes  String?   @map("internal_notes")
+  
+  // Metadata
+  createdBy      Int?      @map("created_by")
+  createdByUser  User?     @relation(fields: [createdBy], references: [id])
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  rooms          QuoteRoom[]
+  files          QuoteFile[]
+
+  @@map("quotes")
+}
+
+model QuoteRoom {
+  id        Int       @id @default(autoincrement())
+  quoteId   Int       @map("quote_id")
+  quote     Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  name      String    // Kitchen, Bathroom, Ensuite, etc.
+  sortOrder Int       @default(0) @map("sort_order")
+  
+  pieces    QuotePiece[]
+
+  @@map("quote_rooms")
+}
+
+model QuotePiece {
+  id           Int       @id @default(autoincrement())
+  roomId       Int       @map("room_id")
+  room         QuoteRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  
+  // Material
+  materialId   Int?      @map("material_id")
+  material     Material? @relation(fields: [materialId], references: [id])
+  materialName String?   @map("material_name") // Denormalized for display
+  
+  // Description
+  description  String?
+  
+  // Dimensions
+  lengthMm     Int       @map("length_mm")
+  widthMm      Int       @map("width_mm")
+  thicknessMm  Int       @map("thickness_mm")
+  areaSqm      Decimal   @map("area_sqm") @db.Decimal(10, 4)
+  
+  // Pricing
+  materialCost Decimal   @default(0) @map("material_cost") @db.Decimal(10, 2)
+  featuresCost Decimal   @default(0) @map("features_cost") @db.Decimal(10, 2)
+  totalCost    Decimal   @default(0) @map("total_cost") @db.Decimal(10, 2)
+  
+  sortOrder    Int       @default(0) @map("sort_order")
+  
+  features     PieceFeature[]
+
+  @@map("quote_pieces")
+}
+
+model PieceFeature {
+  id            Int          @id @default(autoincrement())
+  pieceId       Int          @map("piece_id")
+  piece         QuotePiece   @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+  
+  pricingRuleId Int?         @map("pricing_rule_id")
+  pricingRule   PricingRule? @relation(fields: [pricingRuleId], references: [id])
+  
+  name          String
+  quantity      Int          @default(1)
+  unitPrice     Decimal      @map("unit_price") @db.Decimal(10, 2)
+  totalPrice    Decimal      @map("total_price") @db.Decimal(10, 2)
+
+  @@map("piece_features")
+}
+
+// ============================================
+// FILES
+// ============================================
+
+model QuoteFile {
+  id           Int      @id @default(autoincrement())
+  quoteId      Int      @map("quote_id")
+  quote        Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String   @map("original_name")
+  filePath     String   @map("file_path")
+  fileType     String?  @map("file_type")
+  fileSize     Int?     @map("file_size")
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+  @@map("quote_files")
+}
+
+// ============================================
+// SETTINGS (Key-Value store for app config)
+// ============================================
+
+model Setting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

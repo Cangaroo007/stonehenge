@@ -1,0 +1,96 @@
+import { SignJWT, jwtVerify } from 'jose';
+import { cookies } from 'next/headers';
+import bcrypt from 'bcryptjs';
+import prisma from './db';
+
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || 'default-secret-change-me'
+);
+
+const COOKIE_NAME = 'stonehenge-token';
+
+export interface UserPayload {
+  id: number;
+  email: string;
+  name: string | null;
+}
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 10);
+}
+
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
+}
+
+export async function createToken(user: UserPayload): Promise<string> {
+  return new SignJWT({ user })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(JWT_SECRET);
+}
+
+export async function verifyToken(token: string): Promise<UserPayload | null> {
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return payload.user as UserPayload;
+  } catch {
+    return null;
+  }
+}
+
+export async function setAuthCookie(token: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+    path: '/',
+  });
+}
+
+export async function removeAuthCookie(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_NAME);
+}
+
+export async function getAuthCookie(): Promise<string | undefined> {
+  const cookieStore = await cookies();
+  return cookieStore.get(COOKIE_NAME)?.value;
+}
+
+export async function getCurrentUser(): Promise<UserPayload | null> {
+  const token = await getAuthCookie();
+  if (!token) return null;
+  return verifyToken(token);
+}
+
+export async function login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (!user) {
+    return { success: false, error: 'Invalid email or password' };
+  }
+
+  const valid = await verifyPassword(password, user.passwordHash);
+  if (!valid) {
+    return { success: false, error: 'Invalid email or password' };
+  }
+
+  const token = await createToken({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+  });
+
+  await setAuthCookie(token);
+  return { success: true };
+}
+
+export async function logout(): Promise<void> {
+  await removeAuthCookie();
+}
