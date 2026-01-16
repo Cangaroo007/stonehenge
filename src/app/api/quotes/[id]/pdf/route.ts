@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { renderToBuffer } from '@react-pdf/renderer';
+import { pdf } from '@react-pdf/renderer';
 import prisma from '@/lib/db';
-import QuotePDF from '@/components/QuotePDF';
+import { QuotePDFDocument } from '@/components/QuotePDF';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,16 +48,13 @@ export async function GET(
       email: process.env.COMPANY_EMAIL || 'admin@northcoaststone.com.au',
     };
 
-    // Generate PDF buffer
-    const pdfBuffer = await renderToBuffer(
-      QuotePDF({ quote, companyInfo })
-    );
-
-    // Convert Buffer to Uint8Array for NextResponse compatibility
-    const uint8Array = new Uint8Array(pdfBuffer);
+    // Generate PDF using the pdf() function
+    const pdfDoc = QuotePDFDocument(quote, companyInfo);
+    const pdfBlob = await pdf(pdfDoc).toBlob();
+    const pdfBuffer = await pdfBlob.arrayBuffer();
 
     // Return PDF response
-    return new NextResponse(uint8Array, {
+    return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${quote.quoteNumber}.pdf"`,
@@ -66,7 +63,7 @@ export async function GET(
   } catch (error) {
     console.error('PDF generation error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate PDF' },
+      { error: 'Failed to generate PDF', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Document,
   Page,
@@ -290,14 +289,8 @@ function formatDate(date: Date): string {
   return format(new Date(date), 'dd/MM/yyyy');
 }
 
-// PDF Component
-export default function QuotePDF({
-  quote,
-  companyInfo,
-}: {
-  quote: QuoteData;
-  companyInfo: CompanyInfo;
-}) {
+// Named export function for use with pdf() - returns JSX element
+export function QuotePDFDocument(quote: QuoteData, companyInfo: CompanyInfo) {
   const subtotal = typeof quote.subtotal === 'number' ? quote.subtotal : parseFloat(quote.subtotal.toString());
   const taxAmount = typeof quote.taxAmount === 'number' ? quote.taxAmount : parseFloat(quote.taxAmount.toString());
   const total = typeof quote.total === 'number' ? quote.total : parseFloat(quote.total.toString());
@@ -386,7 +379,7 @@ export default function QuotePDF({
             forms part of, and is intended to read in conjunction with this quotation. I agree to be bound by 
             these conditions. I authorise the use of my personal information as detailed in the Privacy Act 
             Clause therein. I agree that if I am a Director or a shareholder (owning at least 15% of the shares) 
-            of the client I shall be personally liable for the performance of the client&apos;s obligations under this act.
+            of the client I shall be personally liable for the performance of the clients obligations under this act.
           </Text>
           <Text style={styles.termsText}>
             Please read this quote carefully for all details regarding edge thickness, stone colour and work 
@@ -432,7 +425,7 @@ export default function QuotePDF({
                   {piece.lengthMm} x {piece.widthMm} x {piece.thicknessMm}mm
                   {' '}({typeof piece.areaSqm === 'number' 
                     ? piece.areaSqm.toFixed(2) 
-                    : parseFloat(piece.areaSqm.toString()).toFixed(2)} m²)
+                    : parseFloat(piece.areaSqm.toString()).toFixed(2)} m2)
                 </Text>
                 {piece.materialName && (
                   <Text style={styles.pieceMaterial}>
@@ -443,7 +436,7 @@ export default function QuotePDF({
                   <View>
                     {piece.features.map((feature) => (
                       <Text key={feature.id} style={styles.pieceFeatures}>
-                        • {feature.quantity}x {feature.name}
+                        - {feature.quantity}x {feature.name}
                       </Text>
                     ))}
                   </View>
@@ -491,4 +484,15 @@ export default function QuotePDF({
       </Page>
     </Document>
   );
+}
+
+// PDF Component (kept for backward compatibility)
+export default function QuotePDF({
+  quote,
+  companyInfo,
+}: {
+  quote: QuoteData;
+  companyInfo: CompanyInfo;
+}) {
+  return QuotePDFDocument(quote, companyInfo);
 }
