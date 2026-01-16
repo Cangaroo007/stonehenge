@@ -53,8 +53,11 @@ export async function GET(
       QuotePDF({ quote, companyInfo })
     );
 
+    // Convert Buffer to Uint8Array for NextResponse compatibility
+    const uint8Array = new Uint8Array(pdfBuffer);
+
     // Return PDF response
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(uint8Array, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${quote.quoteNumber}.pdf"`,
