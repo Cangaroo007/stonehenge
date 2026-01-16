@@ -18,15 +18,36 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const base64 = Buffer.from(bytes).toString('base64');
     
-    // Determine media type
-    const mediaType = file.type as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    // Determine media type and content type
+    const mediaType = file.type;
+    const isPdf = mediaType === 'application/pdf';
+    const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mediaType);
     
-    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mediaType)) {
+    if (!isPdf && !isImage) {
       return NextResponse.json(
-        { error: 'Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.' },
+        { error: 'Invalid file type. Please upload a PDF, JPEG, PNG, GIF, or WebP file.' },
         { status: 400 }
       );
     }
+
+    // Build the content block based on file type
+    const fileContent = isPdf
+      ? {
+          type: 'document' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: 'application/pdf' as const,
+            data: base64,
+          },
+        }
+      : {
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+            data: base64,
+          },
+        };
 
     // Call Claude API to analyze the drawing
     const response = await anthropic.messages.create({
@@ -36,14 +57,7 @@ export async function POST(request: NextRequest) {
         {
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: base64,
-              },
-            },
+            fileContent,
             {
               type: 'text',
               text: `You are analyzing an architectural drawing or floor plan for a stone benchtop fabrication quote. 

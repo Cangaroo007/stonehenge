@@ -53,6 +53,7 @@ export default function DrawingUploadModal({
   const [dragActive, setDragActive] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPdfFile, setIsPdfFile] = useState(false);
   
   // Analysis results
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -64,6 +65,7 @@ export default function DrawingUploadModal({
     setStep('upload');
     setPreviewUrl(null);
     setError(null);
+    setIsPdfFile(false);
     setAnalysis(null);
     setSelectedRoomType('');
     setCustomRoomName('');
@@ -87,14 +89,24 @@ export default function DrawingUploadModal({
 
   const processFile = useCallback(async (file: File) => {
     // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file (JPEG, PNG, GIF, or WebP)');
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf';
+    
+    if (!isImage && !isPdf) {
+      setError('Please upload an image file (JPEG, PNG, GIF, WebP) or PDF');
       return;
     }
 
-    // Create preview
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
+    setIsPdfFile(isPdf);
+    
+    // Create preview (use placeholder for PDFs)
+    if (isImage) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl(null); // Will show PDF placeholder
+    }
+    
     setError(null);
     setStep('analyzing');
 
@@ -262,13 +274,13 @@ export default function DrawingUploadModal({
                     <input
                       type="file"
                       className="hidden"
-                      accept="image/*"
+                      accept="image/*,.pdf,application/pdf"
                       onChange={handleFileSelect}
                     />
                   </label>
                 </p>
                 <p className="mt-2 text-xs text-gray-500">
-                  Supports JPEG, PNG, GIF, and WebP images
+                  Supports PDF, JPEG, PNG, GIF, and WebP files
                 </p>
               </div>
             )}
@@ -276,15 +288,21 @@ export default function DrawingUploadModal({
             {/* Analyzing Step */}
             {step === 'analyzing' && (
               <div className="text-center py-8">
-                {previewUrl && (
-                  <div className="mb-6">
+                <div className="mb-6">
+                  {previewUrl ? (
                     <img
                       src={previewUrl}
                       alt="Uploaded drawing"
                       className="max-h-48 mx-auto rounded-lg shadow-md"
                     />
-                  </div>
-                )}
+                  ) : isPdfFile ? (
+                    <div className="mx-auto w-24 h-32 bg-red-50 border border-red-200 rounded-lg flex items-center justify-center">
+                      <svg className="w-12 h-12 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8.5 13H10v4H8.5v-1.5h-1v1.5H6v-4h1.5v1.5h1V13zm4 0H15c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1h-2.5v-4zm1.5 3v-2h-1v2h1zm3-3h2v1h-1v.5h1v1h-1v1.5h-1V13z"/>
+                      </svg>
+                    </div>
+                  ) : null}
+                </div>
                 <div className="flex items-center justify-center gap-3">
                   <svg
                     className="animate-spin h-6 w-6 text-primary-600"
@@ -305,7 +323,7 @@ export default function DrawingUploadModal({
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  <span className="text-gray-600">Analyzing drawing with AI...</span>
+                  <span className="text-gray-600">Analyzing {isPdfFile ? 'PDF' : 'drawing'} with AI...</span>
                 </div>
                 <p className="mt-2 text-sm text-gray-500">
                   This may take a few seconds
@@ -318,15 +336,22 @@ export default function DrawingUploadModal({
               <div className="space-y-6">
                 {/* Preview and Room Type */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {previewUrl && (
-                    <div>
+                  <div>
+                    {previewUrl ? (
                       <img
                         src={previewUrl}
                         alt="Uploaded drawing"
                         className="w-full h-48 object-contain rounded-lg bg-gray-100"
                       />
-                    </div>
-                  )}
+                    ) : isPdfFile ? (
+                      <div className="w-full h-48 bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center">
+                        <svg className="w-16 h-16 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8.5 13H10v4H8.5v-1.5h-1v1.5H6v-4h1.5v1.5h1V13zm4 0H15c.55 0 1 .45 1 1v2c0 .55-.45 1-1 1h-2.5v-4zm1.5 3v-2h-1v2h1zm3-3h2v1h-1v.5h1v1h-1v1.5h-1V13z"/>
+                        </svg>
+                        <span className="mt-2 text-sm text-red-600">PDF Document</span>
+                      </div>
+                    ) : null}
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Room Type
