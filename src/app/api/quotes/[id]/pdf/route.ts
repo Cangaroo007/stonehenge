@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import PDFDocument from 'pdfkit';
 import prisma from '@/lib/db';
 import { format } from 'date-fns';
@@ -39,7 +39,7 @@ function formatDate(date: Date): string {
 }
 
 export async function GET(
-  request: NextRequest,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -246,7 +246,10 @@ export async function GET(
       });
     });
 
-    return new NextResponse(pdfBuffer, {
+    // Create Blob from buffer for proper Response compatibility
+    const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
+
+    return new Response(blob, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${quote.quoteNumber}.pdf"`,
