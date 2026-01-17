@@ -88,8 +88,8 @@ export async function GET(
     const margin = 40;
     const contentWidth = pageWidth - (margin * 2);
 
-    // Helper function to draw wrapped text
-    function drawWrappedText(
+    // Helper to draw wrapped text (arrow function for strict mode compatibility)
+    const drawWrappedText = (
       page: ReturnType<typeof pdfDoc.addPage>,
       text: string,
       x: number,
@@ -99,7 +99,7 @@ export async function GET(
       fontSize: number,
       color: typeof black,
       lineHeight: number = 1.2
-    ): number {
+    ): number => {
       const words = text.split(' ');
       let line = '';
       let currentY = y;
@@ -123,7 +123,7 @@ export async function GET(
       }
       
       return currentY;
-    }
+    };
 
     // ========== PAGE 1 - COVER ==========
     const page1 = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -342,8 +342,8 @@ export async function GET(
     });
     y -= 40;
 
-    // Helper to check if we need a new page
-    const checkNewPage = (neededSpace: number) => {
+    // Helper to check if we need a new page (arrow function)
+    const checkNewPage = (neededSpace: number): boolean => {
       if (y < neededSpace + 50) {
         // Add page footer
         currentPage.drawText(`Page ${pageNum} of ${pageNum}`, { 
