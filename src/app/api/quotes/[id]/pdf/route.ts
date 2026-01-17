@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont, RGB } from 'pdf-lib';
 import prisma from '@/lib/db';
 import { format } from 'date-fns';
 
@@ -90,14 +90,14 @@ export async function GET(
 
     // Helper to draw wrapped text (arrow function for strict mode compatibility)
     const drawWrappedText = (
-      page: ReturnType<typeof pdfDoc.addPage>,
+      page: PDFPage,
       text: string,
       x: number,
       y: number,
       maxWidth: number,
-      font: typeof helvetica,
+      font: PDFFont,
       fontSize: number,
-      color: typeof black,
+      color: RGB,
       lineHeight: number = 1.2
     ): number => {
       const words = text.split(' ');
@@ -501,10 +501,11 @@ export async function GET(
       });
     }
 
-    // Generate PDF bytes
+    // Generate PDF bytes and convert to Buffer for Response compatibility
     const pdfBytes = await pdfDoc.save();
+    const pdfBuffer = Buffer.from(pdfBytes);
 
-    return new Response(pdfBytes, {
+    return new Response(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${quote.quoteNumber}.pdf"`,
