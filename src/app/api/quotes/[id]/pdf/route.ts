@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import PDFDocument from 'pdfkit';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import prisma from '@/lib/db';
 import { format } from 'date-fns';
 
@@ -66,188 +66,445 @@ export async function GET(
     const total = parseFloat(quote.total.toString());
     const taxRate = parseFloat(quote.taxRate.toString());
 
-    // Create PDF
-    const doc = new PDFDocument({ size: 'A4', margin: 40 });
-    const chunks: Buffer[] = [];
+    // Create PDF document
+    const pdfDoc = await PDFDocument.create();
+    
+    // Embed fonts
+    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    
+    // Colors
+    const black = rgb(0, 0, 0);
+    const gray = rgb(0.4, 0.4, 0.4);
+    const darkGray = rgb(0.2, 0.2, 0.2);
+    const blue = rgb(0.145, 0.388, 0.922);
+    const lightGray = rgb(0.95, 0.95, 0.96);
+    const noteYellow = rgb(0.996, 0.953, 0.78);
+    const lineGray = rgb(0.8, 0.8, 0.8);
 
-    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    // Page dimensions
+    const pageWidth = 595.28; // A4
+    const pageHeight = 841.89;
+    const margin = 40;
+    const contentWidth = pageWidth - (margin * 2);
 
-    // Page 1 - Cover
-    // Header
-    doc.fontSize(24).font('Helvetica-Bold').text(company.name, 40, 40);
-    doc.fontSize(9).font('Helvetica').fillColor('#666').text(`ABN: ${company.abn}`, 40, 70);
-    doc.fontSize(9).fillColor('#333').text(company.address, 40, 85);
-    doc.text(`Phone: ${company.phone} | Fax: ${company.fax}`, 40, 100);
+    // Helper function to draw wrapped text
+    function drawWrappedText(
+      page: ReturnType<typeof pdfDoc.addPage>,
+      text: string,
+      x: number,
+      y: number,
+      maxWidth: number,
+      font: typeof helvetica,
+      fontSize: number,
+      color: typeof black,
+      lineHeight: number = 1.2
+    ): number {
+      const words = text.split(' ');
+      let line = '';
+      let currentY = y;
+      
+      for (const word of words) {
+        const testLine = line + (line ? ' ' : '') + word;
+        const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+        
+        if (testWidth > maxWidth && line) {
+          page.drawText(line, { x, y: currentY, size: fontSize, font, color });
+          line = word;
+          currentY -= fontSize * lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      
+      if (line) {
+        page.drawText(line, { x, y: currentY, size: fontSize, font, color });
+        currentY -= fontSize * lineHeight;
+      }
+      
+      return currentY;
+    }
 
-    // Divider
-    doc.moveTo(40, 130).lineTo(555, 130).strokeColor('#ccc').stroke();
+    // ========== PAGE 1 - COVER ==========
+    const page1 = pdfDoc.addPage([pageWidth, pageHeight]);
+    let y = pageHeight - margin;
+
+    // Header - Company name
+    page1.drawText(company.name, {
+      x: margin,
+      y: y - 24,
+      size: 24,
+      font: helveticaBold,
+      color: black,
+    });
+    y -= 50;
+
+    // ABN
+    page1.drawText(`ABN: ${company.abn}`, {
+      x: margin,
+      y,
+      size: 9,
+      font: helvetica,
+      color: gray,
+    });
+    y -= 15;
+
+    // Address
+    page1.drawText(company.address, {
+      x: margin,
+      y,
+      size: 9,
+      font: helvetica,
+      color: darkGray,
+    });
+    y -= 12;
+
+    // Phone/Fax
+    page1.drawText(`Phone: ${company.phone} | Fax: ${company.fax}`, {
+      x: margin,
+      y,
+      size: 9,
+      font: helvetica,
+      color: darkGray,
+    });
+    y -= 25;
+
+    // Divider line
+    page1.drawLine({
+      start: { x: margin, y },
+      end: { x: pageWidth - margin, y },
+      thickness: 1,
+      color: lineGray,
+    });
+    y -= 25;
 
     // Quote Title
-    doc.fontSize(18).font('Helvetica-Bold').fillColor('#2563eb')
-      .text(`Quote - ${quote.quoteNumber} - ${quote.projectName || 'Untitled Project'}`, 40, 150);
-    doc.fontSize(10).font('Helvetica').fillColor('#666')
-      .text(`Revision ${quote.revision}`, 40, 175);
-    doc.fontSize(10).fillColor('#333')
-      .text(`Date: ${formatDate(quote.createdAt)}`, 450, 150);
+    const quoteTitle = `Quote - ${quote.quoteNumber} - ${quote.projectName || 'Untitled Project'}`;
+    page1.drawText(quoteTitle, {
+      x: margin,
+      y,
+      size: 18,
+      font: helveticaBold,
+      color: blue,
+    });
+    
+    // Date on right
+    page1.drawText(`Date: ${formatDate(quote.createdAt)}`, {
+      x: pageWidth - margin - 100,
+      y,
+      size: 10,
+      font: helvetica,
+      color: darkGray,
+    });
+    y -= 20;
 
-    // Customer
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text('For:', 40, 210);
-    doc.fontSize(12).font('Helvetica').fillColor('#333')
-      .text(`${quote.customer?.name || 'No customer specified'}${quote.customer?.company ? ` - ${quote.customer.company}` : ''}`, 40, 225);
+    // Revision
+    page1.drawText(`Revision ${quote.revision}`, {
+      x: margin,
+      y,
+      size: 10,
+      font: helvetica,
+      color: gray,
+    });
+    y -= 35;
 
-    // Introduction
-    const introY = 260;
-    doc.fontSize(10).fillColor('#333');
-    doc.text('Please see below for our price breakdown for your quotation as per the plans supplied. Any differences in stonework at measure and fabrication stage will be charged accordingly.', 40, introY, { width: 515 });
-    doc.text('This quote is for supply, fabrication and local installation of stonework.', 40, introY + 35, { width: 515 });
-    doc.text('Thank you for the opportunity in submitting this quotation. We look forward to working with you.', 40, introY + 55, { width: 515 });
+    // Customer section
+    page1.drawText('For:', {
+      x: margin,
+      y,
+      size: 10,
+      font: helveticaBold,
+      color: black,
+    });
+    y -= 15;
+
+    const customerText = `${quote.customer?.name || 'No customer specified'}${quote.customer?.company ? ` - ${quote.customer.company}` : ''}`;
+    page1.drawText(customerText, {
+      x: margin,
+      y,
+      size: 12,
+      font: helvetica,
+      color: darkGray,
+    });
+    y -= 35;
+
+    // Introduction paragraphs
+    y = drawWrappedText(
+      page1,
+      'Please see below for our price breakdown for your quotation as per the plans supplied. Any differences in stonework at measure and fabrication stage will be charged accordingly.',
+      margin, y, contentWidth, helvetica, 10, darkGray
+    );
+    y -= 10;
+
+    y = drawWrappedText(
+      page1,
+      'This quote is for supply, fabrication and local installation of stonework.',
+      margin, y, contentWidth, helvetica, 10, darkGray
+    );
+    y -= 10;
+
+    y = drawWrappedText(
+      page1,
+      'Thank you for the opportunity in submitting this quotation. We look forward to working with you.',
+      margin, y, contentWidth, helvetica, 10, darkGray
+    );
+    y -= 25;
 
     // Please Note box
-    const noteY = introY + 90;
-    doc.rect(40, noteY, 515, 50).fillColor('#fef3c7').fill();
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text('PLEASE NOTE:', 50, noteY + 10);
-    doc.fontSize(9).font('Helvetica-Bold').fillColor('#333')
-      .text('This Quote is based on the proviso that all stonework is the same colour and fabricated and installed at the same time. Any variation from this assumption will require re-quoting.', 50, noteY + 25, { width: 495 });
+    const noteBoxHeight = 55;
+    page1.drawRectangle({
+      x: margin,
+      y: y - noteBoxHeight,
+      width: contentWidth,
+      height: noteBoxHeight,
+      color: noteYellow,
+    });
 
-    // Totals
-    const totalsY = noteY + 70;
-    doc.fontSize(10).font('Helvetica').fillColor('#333').text('Cost:', 40, totalsY);
-    doc.font('Helvetica-Bold').text(formatCurrency(subtotal), 120, totalsY);
-    doc.font('Helvetica').text('GST:', 40, totalsY + 18);
-    doc.font('Helvetica-Bold').text(formatCurrency(taxAmount), 120, totalsY + 18);
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#333').text('Total Including GST:', 40, totalsY + 45);
-    doc.fillColor('#2563eb').text(formatCurrency(total), 180, totalsY + 45);
+    page1.drawText('PLEASE NOTE:', {
+      x: margin + 10,
+      y: y - 15,
+      size: 10,
+      font: helveticaBold,
+      color: black,
+    });
 
-    // Terms
-    const termsY = totalsY + 80;
-    doc.fontSize(8).font('Helvetica').fillColor('#666');
-    doc.text(`Upon acceptance of this quotation I hereby certify that the above information is true and correct. I have read and understand the TERMS AND CONDITIONS OF TRADE OF ${company.name.toUpperCase()} which forms part of, and is intended to read in conjunction with this quotation. I agree to be bound by these conditions. I authorise the use of my personal information as detailed in the Privacy Act Clause therein. I agree that if I am a Director or a shareholder (owning at least 15% of the shares) of the client I shall be personally liable for the performance of the client's obligations under this act.`, 40, termsY, { width: 515 });
-    
-    doc.text('Please read this quote carefully for all details regarding edge thickness, stone colour and work description. We require a 50% deposit and completed purchase order upon acceptance of this quote.', 40, termsY + 55, { width: 515 });
-    
-    doc.text(`Please contact our office via email ${company.email} if you wish to proceed.`, 40, termsY + 85, { width: 515 });
-    
-    doc.text('This quote is valid for 30 days, on the exception of being signed off as a job, where it will be valid for a 3 month period.', 40, termsY + 100, { width: 515 });
+    drawWrappedText(
+      page1,
+      'This Quote is based on the proviso that all stonework is the same colour and fabricated and installed at the same time. Any variation from this assumption will require re-quoting.',
+      margin + 10, y - 30, contentWidth - 20, helveticaBold, 9, darkGray
+    );
+    y -= noteBoxHeight + 20;
+
+    // Totals section
+    page1.drawText('Cost:', { x: margin, y, size: 10, font: helvetica, color: darkGray });
+    page1.drawText(formatCurrency(subtotal), { x: margin + 80, y, size: 10, font: helveticaBold, color: darkGray });
+    y -= 18;
+
+    page1.drawText('GST:', { x: margin, y, size: 10, font: helvetica, color: darkGray });
+    page1.drawText(formatCurrency(taxAmount), { x: margin + 80, y, size: 10, font: helveticaBold, color: darkGray });
+    y -= 25;
+
+    page1.drawText('Total Including GST:', { x: margin, y, size: 12, font: helveticaBold, color: darkGray });
+    page1.drawText(formatCurrency(total), { x: margin + 140, y, size: 12, font: helveticaBold, color: blue });
+    y -= 35;
+
+    // Terms paragraphs
+    y = drawWrappedText(
+      page1,
+      `Upon acceptance of this quotation I hereby certify that the above information is true and correct. I have read and understand the TERMS AND CONDITIONS OF TRADE OF ${company.name.toUpperCase()} which forms part of, and is intended to read in conjunction with this quotation. I agree to be bound by these conditions. I authorise the use of my personal information as detailed in the Privacy Act Clause therein. I agree that if I am a Director or a shareholder (owning at least 15% of the shares) of the client I shall be personally liable for the performance of the client's obligations under this act.`,
+      margin, y, contentWidth, helvetica, 8, gray
+    );
+    y -= 15;
+
+    y = drawWrappedText(
+      page1,
+      'Please read this quote carefully for all details regarding edge thickness, stone colour and work description. We require a 50% deposit and completed purchase order upon acceptance of this quote.',
+      margin, y, contentWidth, helvetica, 8, gray
+    );
+    y -= 15;
+
+    y = drawWrappedText(
+      page1,
+      `Please contact our office via email ${company.email} if you wish to proceed.`,
+      margin, y, contentWidth, helvetica, 8, gray
+    );
+    y -= 15;
+
+    y = drawWrappedText(
+      page1,
+      'This quote is valid for 30 days, on the exception of being signed off as a job, where it will be valid for a 3 month period.',
+      margin, y, contentWidth, helvetica, 8, gray
+    );
+    y -= 35;
 
     // Signature
-    const sigY = termsY + 140;
-    doc.fontSize(10).fillColor('#000').text('Yours Sincerely', 40, sigY);
-    doc.font('Helvetica-Bold').text('Beau Kavanagh', 40, sigY + 40);
-    doc.font('Helvetica').fillColor('#666').text(company.name, 40, sigY + 55);
+    page1.drawText('Yours Sincerely', { x: margin, y, size: 10, font: helvetica, color: black });
+    y -= 40;
+    page1.drawText('Beau Kavanagh', { x: margin, y, size: 10, font: helveticaBold, color: black });
+    y -= 15;
+    page1.drawText(company.name, { x: margin, y, size: 10, font: helvetica, color: gray });
 
-    // Page footer
-    doc.fontSize(9).fillColor('#666').text('Page 1 of 2', 500, 800);
+    // Page 1 footer
+    page1.drawText('Page 1 of 2', { x: pageWidth - margin - 50, y: 30, size: 9, font: helvetica, color: gray });
 
-    // Page 2 - Breakdown
-    doc.addPage();
+    // ========== PAGE 2 - BREAKDOWN ==========
+    let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+    let pageNum = 2;
+    y = pageHeight - margin;
 
-    doc.fontSize(14).font('Helvetica-Bold').fillColor('#000')
-      .text(`${quote.projectName || 'Project'} Breakdown`, 40, 40);
+    // Breakdown title
+    currentPage.drawText(`${quote.projectName || 'Project'} Breakdown`, {
+      x: margin,
+      y: y - 14,
+      size: 14,
+      font: helveticaBold,
+      color: black,
+    });
+    y -= 40;
 
-    let yPos = 70;
-
-    for (const room of quote.rooms) {
-      // Check if we need a new page
-      if (yPos > 700) {
-        doc.addPage();
-        yPos = 40;
+    // Helper to check if we need a new page
+    const checkNewPage = (neededSpace: number) => {
+      if (y < neededSpace + 50) {
+        // Add page footer
+        currentPage.drawText(`Page ${pageNum} of ${pageNum}`, { 
+          x: pageWidth - margin - 50, y: 30, size: 9, font: helvetica, color: gray 
+        });
+        
+        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+        pageNum++;
+        y = pageHeight - margin;
+        return true;
       }
+      return false;
+    };
+
+    // Rooms and pieces
+    for (const room of quote.rooms) {
+      checkNewPage(100);
 
       // Room header
-      doc.rect(40, yPos, 515, 22).fillColor('#f3f4f6').fill();
-      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000')
-        .text(room.name.toUpperCase(), 46, yPos + 6);
-      yPos += 30;
+      currentPage.drawRectangle({
+        x: margin,
+        y: y - 18,
+        width: contentWidth,
+        height: 22,
+        color: lightGray,
+      });
+
+      currentPage.drawText(room.name.toUpperCase(), {
+        x: margin + 6,
+        y: y - 12,
+        size: 11,
+        font: helveticaBold,
+        color: black,
+      });
+      y -= 30;
 
       for (const piece of room.pieces) {
-        // Check if we need a new page
-        if (yPos > 700) {
-          doc.addPage();
-          yPos = 40;
-        }
+        checkNewPage(80);
 
         const pieceTotal = parseFloat(piece.totalCost.toString());
         const areaSqm = parseFloat(piece.areaSqm.toString());
 
-        doc.fontSize(10).font('Helvetica-Bold').fillColor('#000')
-          .text(piece.description || 'Stone piece', 46, yPos);
-        yPos += 14;
+        // Piece description
+        currentPage.drawText(piece.description || 'Stone piece', {
+          x: margin + 6,
+          y,
+          size: 10,
+          font: helveticaBold,
+          color: black,
+        });
+        y -= 14;
 
-        doc.fontSize(9).font('Helvetica').fillColor('#666')
-          .text(`${piece.lengthMm} x ${piece.widthMm} x ${piece.thicknessMm}mm (${areaSqm.toFixed(2)} m2)`, 46, yPos);
-        yPos += 12;
+        // Dimensions
+        currentPage.drawText(
+          `${piece.lengthMm} x ${piece.widthMm} x ${piece.thicknessMm}mm (${areaSqm.toFixed(2)} m²)`,
+          { x: margin + 6, y, size: 9, font: helvetica, color: gray }
+        );
+        y -= 12;
 
+        // Material
         if (piece.materialName) {
-          doc.fillColor('#333').text(`Material: ${piece.materialName}`, 46, yPos);
-          yPos += 12;
+          currentPage.drawText(`Material: ${piece.materialName}`, {
+            x: margin + 6,
+            y,
+            size: 9,
+            font: helvetica,
+            color: darkGray,
+          });
+          y -= 12;
         }
 
-        if (piece.features.length > 0) {
-          for (const feature of piece.features) {
-            doc.fontSize(8).fillColor('#666')
-              .text(`- ${feature.quantity}x ${feature.name}`, 56, yPos);
-            yPos += 10;
-          }
+        // Features
+        for (const feature of piece.features) {
+          currentPage.drawText(`- ${feature.quantity}x ${feature.name}`, {
+            x: margin + 16,
+            y,
+            size: 8,
+            font: helvetica,
+            color: gray,
+          });
+          y -= 10;
         }
 
-        doc.fontSize(10).font('Helvetica-Bold').fillColor('#000')
-          .text(formatCurrency(pieceTotal), 480, yPos - 10, { width: 75, align: 'right' });
+        // Price (right-aligned)
+        const priceText = formatCurrency(pieceTotal);
+        const priceWidth = helveticaBold.widthOfTextAtSize(priceText, 10);
+        currentPage.drawText(priceText, {
+          x: pageWidth - margin - priceWidth,
+          y: y + 10,
+          size: 10,
+          font: helveticaBold,
+          color: black,
+        });
 
         // Divider line
-        doc.moveTo(46, yPos + 5).lineTo(555, yPos + 5).strokeColor('#e5e7eb').stroke();
-        yPos += 15;
+        y -= 5;
+        currentPage.drawLine({
+          start: { x: margin + 6, y },
+          end: { x: pageWidth - margin, y },
+          thickness: 0.5,
+          color: rgb(0.9, 0.9, 0.91),
+        });
+        y -= 10;
       }
 
-      yPos += 10;
+      y -= 10;
     }
 
-    // Notes
+    // Notes section
     if (quote.notes) {
-      if (yPos > 650) {
-        doc.addPage();
-        yPos = 40;
-      }
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000').text('Notes:', 40, yPos);
-      yPos += 15;
-      doc.fontSize(9).font('Helvetica').fillColor('#666').text(quote.notes, 40, yPos, { width: 515 });
-      yPos += 30;
-    }
-
-    // Page 2 totals
-    if (yPos > 700) {
-      doc.addPage();
-      yPos = 40;
-    }
-    
-    doc.moveTo(40, yPos).lineTo(555, yPos).strokeColor('#ccc').stroke();
-    yPos += 15;
-
-    doc.fontSize(10).font('Helvetica').fillColor('#333').text('Total Excl. GST', 40, yPos);
-    doc.font('Helvetica-Bold').text(formatCurrency(subtotal), 150, yPos);
-    yPos += 15;
-    
-    doc.font('Helvetica').text(`GST (${taxRate}%)`, 40, yPos);
-    doc.font('Helvetica-Bold').text(formatCurrency(taxAmount), 150, yPos);
-    yPos += 20;
-    
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#333').text('Total Incl. GST', 40, yPos);
-    doc.fillColor('#2563eb').text(formatCurrency(total), 150, yPos);
-
-    // Page 2 footer
-    doc.fontSize(9).fillColor('#666').text('Page 2 of 2', 500, 800);
-
-    // Finalize PDF
-    doc.end();
-
-    // Wait for PDF to finish generating
-    const pdfBuffer = await new Promise<Buffer>((resolve) => {
-      doc.on('end', () => {
-        resolve(Buffer.concat(chunks));
+      checkNewPage(80);
+      
+      currentPage.drawText('Notes:', {
+        x: margin,
+        y,
+        size: 10,
+        font: helveticaBold,
+        color: black,
       });
-    });
+      y -= 15;
 
-    // Return buffer as Uint8Array for Node.js Response compatibility
-    return new Response(new Uint8Array(pdfBuffer), {
+      y = drawWrappedText(currentPage, quote.notes, margin, y, contentWidth, helvetica, 9, gray);
+      y -= 20;
+    }
+
+    // Final totals
+    checkNewPage(80);
+    
+    currentPage.drawLine({
+      start: { x: margin, y },
+      end: { x: pageWidth - margin, y },
+      thickness: 1,
+      color: lineGray,
+    });
+    y -= 20;
+
+    currentPage.drawText('Total Excl. GST', { x: margin, y, size: 10, font: helvetica, color: darkGray });
+    currentPage.drawText(formatCurrency(subtotal), { x: margin + 110, y, size: 10, font: helveticaBold, color: darkGray });
+    y -= 18;
+
+    currentPage.drawText(`GST (${taxRate}%)`, { x: margin, y, size: 10, font: helvetica, color: darkGray });
+    currentPage.drawText(formatCurrency(taxAmount), { x: margin + 110, y, size: 10, font: helveticaBold, color: darkGray });
+    y -= 22;
+
+    currentPage.drawText('Total Incl. GST', { x: margin, y, size: 12, font: helveticaBold, color: darkGray });
+    currentPage.drawText(formatCurrency(total), { x: margin + 110, y, size: 12, font: helveticaBold, color: blue });
+
+    // Final page footer - update all page numbers
+    const totalPages = pdfDoc.getPageCount();
+    for (let i = 1; i < totalPages; i++) {
+      const pg = pdfDoc.getPage(i);
+      // Clear old footer by drawing white rectangle (optional, but cleaner)
+      pg.drawText(`Page ${i + 1} of ${totalPages}`, { 
+        x: pageWidth - margin - 50, y: 30, size: 9, font: helvetica, color: gray 
+      });
+    }
+
+    // Generate PDF bytes
+    const pdfBytes = await pdfDoc.save();
+
+    return new Response(pdfBytes, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${quote.quoteNumber}.pdf"`,
