@@ -246,10 +246,8 @@ export async function GET(
       });
     });
 
-    // Create Blob from buffer for proper Response compatibility
-    const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
-
-    return new Response(blob, {
+    // Return buffer as Uint8Array for Node.js Response compatibility
+    return new Response(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="${quote.quoteNumber}.pdf"`,
