@@ -3,7 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { formatCurrency, calculateArea } from '@/lib/utils';
+import {
+  formatCurrency,
+  calculateArea,
+  calculateSlabsRequiredDetailed,
+  COMMON_SLAB_SIZES,
+  type SlabDimensions,
+  type ProjectPiece,
+} from '@/lib/utils';
 import DrawingUploadModal from './DrawingUploadModal';
 
 interface Customer {
@@ -125,6 +132,12 @@ export default function QuoteForm({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showRoomSelector, setShowRoomSelector] = useState(false);
 
+  // Slab calculator state
+  const [selectedSlabSize, setSelectedSlabSize] = useState<string>('standard');
+  const [customSlabLength, setCustomSlabLength] = useState<number>(3000);
+  const [customSlabWidth, setCustomSlabWidth] = useState<number>(1400);
+  const [wasteFactor, setWasteFactor] = useState<number>(15);
+
   const taxRate = 10;
 
   // Group pricing rules by category
@@ -166,6 +179,30 @@ export default function QuoteForm({
   }
 
   const totals = calculateTotals();
+
+  // Slab calculation
+  const getSlabDimensions = (): SlabDimensions => {
+    if (selectedSlabSize === 'custom') {
+      return { lengthMm: customSlabLength, widthMm: customSlabWidth };
+    }
+    return COMMON_SLAB_SIZES[selectedSlabSize] || COMMON_SLAB_SIZES.standard;
+  };
+
+  const getAllPieces = (): ProjectPiece[] => {
+    return rooms.flatMap((room) =>
+      room.pieces.map((piece) => ({
+        lengthMm: piece.lengthMm,
+        widthMm: piece.widthMm,
+        quantity: 1,
+      }))
+    );
+  };
+
+  const slabCalculation = calculateSlabsRequiredDetailed(
+    getAllPieces(),
+    getSlabDimensions(),
+    wasteFactor / 100
+  );
 
   // Room management
   const roomTypes = ['Kitchen', 'Bathroom', 'Ensuite', 'Laundry', 'Pantry', 'Butler\'s Pantry', 'Powder Room', 'Other'];
@@ -759,6 +796,139 @@ export default function QuoteForm({
           placeholder="Any special notes for this quote..."
         />
       </div>
+
+      {/* Slab Usage Report */}
+      {getAllPieces().length > 0 && (
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold mb-4">Slab Usage Report</h3>
+
+          {/* Slab Configuration */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div>
+              <label className="label">Slab Size</label>
+              <select
+                className="input"
+                value={selectedSlabSize}
+                onChange={(e) => setSelectedSlabSize(e.target.value)}
+              >
+                <option value="standard">Standard (3000 × 1400mm)</option>
+                <option value="jumbo">Jumbo (3200 × 1600mm)</option>
+                <option value="compact">Compact (2400 × 1200mm)</option>
+                <option value="custom">Custom Size</option>
+              </select>
+            </div>
+
+            {selectedSlabSize === 'custom' && (
+              <>
+                <div>
+                  <label className="label">Length (mm)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={customSlabLength}
+                    onChange={(e) => setCustomSlabLength(Number(e.target.value))}
+                    min={1000}
+                    max={5000}
+                  />
+                </div>
+                <div>
+                  <label className="label">Width (mm)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={customSlabWidth}
+                    onChange={(e) => setCustomSlabWidth(Number(e.target.value))}
+                    min={500}
+                    max={3000}
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="label">Waste Factor (%)</label>
+              <input
+                type="number"
+                className="input"
+                value={wasteFactor}
+                onChange={(e) => setWasteFactor(Number(e.target.value))}
+                min={0}
+                max={50}
+              />
+            </div>
+          </div>
+
+          {/* Results */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-primary-600">
+                  {slabCalculation.slabsRequired}
+                </div>
+                <div className="text-sm text-gray-600">Slabs Required</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-semibold text-gray-800">
+                  {slabCalculation.totalPieceArea.toFixed(2)} m²
+                </div>
+                <div className="text-sm text-gray-600">Total Piece Area</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-semibold text-gray-800">
+                  {slabCalculation.totalSlabArea.toFixed(2)} m²
+                </div>
+                <div className="text-sm text-gray-600">Total Slab Area</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-semibold text-gray-800">
+                  {slabCalculation.utilizationPercentage.toFixed(1)}%
+                </div>
+                <div className="text-sm text-gray-600">Utilization</div>
+              </div>
+            </div>
+
+            {/* Waste/Leftover Info */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm text-gray-600">Estimated Leftover Material: </span>
+                  <span className="font-semibold">
+                    {(slabCalculation.totalSlabArea - slabCalculation.totalPieceArea).toFixed(2)} m²
+                  </span>
+                  <span className="text-sm text-gray-500 ml-2">
+                    ({slabCalculation.wastePercentage.toFixed(1)}% waste)
+                  </span>
+                </div>
+                <div className="text-sm text-gray-500">
+                  Slab: {getSlabDimensions().lengthMm} × {getSlabDimensions().widthMm}mm = {slabCalculation.slabArea.toFixed(2)} m² each
+                </div>
+              </div>
+            </div>
+
+            {/* Oversized Pieces Warning */}
+            {!slabCalculation.piecesFitOnSlab && (
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <svg className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <div className="font-medium text-amber-800">Warning: Oversized Pieces</div>
+                    <div className="text-sm text-amber-700">
+                      {slabCalculation.oversizedPieces.length} piece(s) exceed the selected slab dimensions and may require special ordering or joining:
+                    </div>
+                    <ul className="text-sm text-amber-700 mt-1 list-disc list-inside">
+                      {slabCalculation.oversizedPieces.map((piece, index) => (
+                        <li key={index}>{piece.lengthMm} × {piece.widthMm}mm</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Totals and Actions */}
       <div className="card p-6">
