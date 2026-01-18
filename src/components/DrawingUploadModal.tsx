@@ -9,20 +9,47 @@ interface ExtractedPiece {
   thicknessMm: number;
   notes?: string;
   selected: boolean;
+  dimensionConfidence?: 'measured' | 'scaled' | 'estimated';
+  pieceType?: 'benchtop' | 'splashback' | 'vanity' | 'waterfall' | 'sill' | 'other';
+  isComplexShape?: boolean;
+  edgeProfile?: string | null;
+}
+
+interface Cutout {
+  type: string;
+  subtype?: string | null;
+  quantity: number;
+  associatedPiece?: string;
+  notes?: string | null;
+}
+
+interface EdgeProfile {
+  profile: string;
+  location: string;
+  lengthMm?: number;
 }
 
 interface AnalysisResult {
   roomType: string;
-  confidence: 'high' | 'medium' | 'low';
+  roomTypeConfidence: 'high' | 'medium' | 'low';
   roomTypeReasoning?: string;
+  scaleDetected?: string | null;
+  scaleSource?: string | null;
   pieces: Array<{
     description: string;
     lengthMm: number;
     widthMm: number;
     thicknessMm: number;
     notes?: string;
+    dimensionConfidence?: 'measured' | 'scaled' | 'estimated';
+    pieceType?: 'benchtop' | 'splashback' | 'vanity' | 'waterfall' | 'sill' | 'other';
+    isComplexShape?: boolean;
+    edgeProfile?: string | null;
   }>;
+  cutouts?: Cutout[];
+  edgeProfiles?: EdgeProfile[];
   drawingNotes?: string;
+  warnings?: string[];
 }
 
 interface DrawingUploadModalProps {
@@ -126,12 +153,22 @@ export default function DrawingUploadModal({
       }
 
       if (data.success && data.analysis) {
-        setAnalysis(data.analysis);
+        // Handle both old and new API response formats
+        const analysisData = {
+          ...data.analysis,
+          // Normalize confidence field name (old: confidence, new: roomTypeConfidence)
+          roomTypeConfidence: data.analysis.roomTypeConfidence || data.analysis.confidence || 'medium',
+        };
+        setAnalysis(analysisData);
         setSelectedRoomType(data.analysis.roomType);
         setExtractedPieces(
           data.analysis.pieces.map((p: AnalysisResult['pieces'][0]) => ({
             ...p,
             selected: true,
+            dimensionConfidence: p.dimensionConfidence || 'estimated',
+            pieceType: p.pieceType || 'benchtop',
+            isComplexShape: p.isComplexShape || false,
+            edgeProfile: p.edgeProfile || null,
           }))
         );
         setStep('review');
@@ -334,6 +371,25 @@ export default function DrawingUploadModal({
             {/* Review Step */}
             {step === 'review' && analysis && (
               <div className="space-y-6">
+                {/* Warnings */}
+                {analysis.warnings && analysis.warnings.length > 0 && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <svg className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <div className="font-medium text-amber-800">Attention Required</div>
+                        <ul className="text-sm text-amber-700 mt-1 list-disc list-inside">
+                          {analysis.warnings.map((warning, index) => (
+                            <li key={index}>{warning}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Preview and Room Type */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -351,6 +407,16 @@ export default function DrawingUploadModal({
                         <span className="mt-2 text-sm text-red-600">PDF Document</span>
                       </div>
                     ) : null}
+                    {/* Scale Detection Info */}
+                    {analysis.scaleDetected && (
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm">
+                        <span className="font-medium text-green-800">Scale detected:</span>{' '}
+                        <span className="text-green-700">{analysis.scaleDetected}</span>
+                        {analysis.scaleSource && (
+                          <span className="text-green-600 text-xs block">{analysis.scaleSource}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -379,19 +445,19 @@ export default function DrawingUploadModal({
                         onChange={(e) => setCustomRoomName(e.target.value)}
                       />
                     )}
-                    {analysis.confidence && (
+                    {analysis.roomTypeConfidence && (
                       <p className="mt-2 text-sm text-gray-500">
                         Detection confidence:{' '}
                         <span
                           className={`font-medium ${
-                            analysis.confidence === 'high'
+                            analysis.roomTypeConfidence === 'high'
                               ? 'text-green-600'
-                              : analysis.confidence === 'medium'
+                              : analysis.roomTypeConfidence === 'medium'
                               ? 'text-yellow-600'
                               : 'text-red-600'
                           }`}
                         >
-                          {analysis.confidence}
+                          {analysis.roomTypeConfidence}
                         </span>
                       </p>
                     )}
@@ -407,6 +473,44 @@ export default function DrawingUploadModal({
                 {analysis.drawingNotes && (
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
                     <strong>AI Notes:</strong> {analysis.drawingNotes}
+                  </div>
+                )}
+
+                {/* Cutouts Detected */}
+                {analysis.cutouts && analysis.cutouts.length > 0 && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                    <h4 className="font-medium text-purple-800 mb-2">Cutouts Detected</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {analysis.cutouts.map((cutout, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800"
+                        >
+                          {cutout.type}
+                          {cutout.subtype && ` (${cutout.subtype})`}
+                          {cutout.quantity > 1 && ` ×${cutout.quantity}`}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-purple-600 mt-2">
+                      These will need to be added as features to the relevant pieces
+                    </p>
+                  </div>
+                )}
+
+                {/* Edge Profiles Detected */}
+                {analysis.edgeProfiles && analysis.edgeProfiles.length > 0 && (
+                  <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                    <h4 className="font-medium text-indigo-800 mb-2">Edge Profiles Detected</h4>
+                    <div className="space-y-1">
+                      {analysis.edgeProfiles.map((edge, index) => (
+                        <div key={index} className="text-sm text-indigo-700">
+                          <span className="font-medium capitalize">{edge.profile}</span>
+                          {' - '}{edge.location}
+                          {edge.lengthMm && ` (${edge.lengthMm}mm)`}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -432,45 +536,91 @@ export default function DrawingUploadModal({
                             onChange={() => togglePieceSelection(index)}
                             className="mt-1 h-4 w-4 text-primary-600 rounded"
                           />
-                          <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <div className="md:col-span-2">
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Description
-                              </label>
-                              <input
-                                type="text"
-                                className="input w-full text-sm"
-                                value={piece.description}
-                                onChange={(e) =>
-                                  updatePiece(index, { description: e.target.value })
-                                }
-                              />
+                          <div className="flex-1">
+                            {/* Badges row */}
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {/* Piece Type Badge */}
+                              {piece.pieceType && (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                  piece.pieceType === 'benchtop' ? 'bg-blue-100 text-blue-800' :
+                                  piece.pieceType === 'splashback' ? 'bg-green-100 text-green-800' :
+                                  piece.pieceType === 'vanity' ? 'bg-pink-100 text-pink-800' :
+                                  piece.pieceType === 'waterfall' ? 'bg-cyan-100 text-cyan-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {piece.pieceType}
+                                </span>
+                              )}
+                              {/* Dimension Confidence Badge */}
+                              {piece.dimensionConfidence && (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                  piece.dimensionConfidence === 'measured' ? 'bg-green-100 text-green-800' :
+                                  piece.dimensionConfidence === 'scaled' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-orange-100 text-orange-800'
+                                }`}>
+                                  {piece.dimensionConfidence === 'measured' ? '✓ Measured' :
+                                   piece.dimensionConfidence === 'scaled' ? '~ Scaled' :
+                                   '? Estimated'}
+                                </span>
+                              )}
+                              {/* Complex Shape Badge */}
+                              {piece.isComplexShape && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                  Complex Shape
+                                </span>
+                              )}
+                              {/* Edge Profile Badge */}
+                              {piece.edgeProfile && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                                  {piece.edgeProfile} edge
+                                </span>
+                              )}
                             </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Length (mm)
-                              </label>
-                              <input
-                                type="number"
-                                className="input w-full text-sm"
-                                value={piece.lengthMm}
-                                onChange={(e) =>
-                                  updatePiece(index, { lengthMm: Number(e.target.value) })
-                                }
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Width (mm)
-                              </label>
-                              <input
-                                type="number"
-                                className="input w-full text-sm"
-                                value={piece.widthMm}
-                                onChange={(e) =>
-                                  updatePiece(index, { widthMm: Number(e.target.value) })
-                                }
-                              />
+                            {/* Input fields */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                              <div className="md:col-span-2">
+                                <label className="block text-xs text-gray-500 mb-1">
+                                  Description
+                                </label>
+                                <input
+                                  type="text"
+                                  className="input w-full text-sm"
+                                  value={piece.description}
+                                  onChange={(e) =>
+                                    updatePiece(index, { description: e.target.value })
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">
+                                  Length (mm)
+                                </label>
+                                <input
+                                  type="number"
+                                  className={`input w-full text-sm ${
+                                    piece.dimensionConfidence === 'estimated' ? 'border-orange-300' : ''
+                                  }`}
+                                  value={piece.lengthMm}
+                                  onChange={(e) =>
+                                    updatePiece(index, { lengthMm: Number(e.target.value) })
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">
+                                  {piece.pieceType === 'splashback' ? 'Height (mm)' : 'Width (mm)'}
+                                </label>
+                                <input
+                                  type="number"
+                                  className={`input w-full text-sm ${
+                                    piece.dimensionConfidence === 'estimated' ? 'border-orange-300' : ''
+                                  }`}
+                                  value={piece.widthMm}
+                                  onChange={(e) =>
+                                    updatePiece(index, { widthMm: Number(e.target.value) })
+                                  }
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>

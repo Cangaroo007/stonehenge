@@ -60,43 +60,125 @@ export async function POST(request: NextRequest) {
             fileContent,
             {
               type: 'text',
-              text: `You are analyzing an architectural drawing or floor plan for a stone benchtop fabrication quote. 
+              text: `You are an expert at analyzing architectural drawings and floor plans for stone benchtop fabrication quotes. Your goal is to extract accurate dimensions and identify all stone pieces needed.
 
-Please extract the following information and return it as JSON:
+## SCALE DETECTION (Critical - Do This First)
+1. Look for a scale bar, scale notation (e.g., "1:50", "1:100", "Scale 1:20"), or reference dimensions
+2. If found, use it to calculate all other dimensions accurately
+3. If no scale is found, look for standard reference objects (doors are typically 820mm wide, standard base cabinets are 600mm deep)
 
-1. **roomType**: The type of room shown (Kitchen, Bathroom, Ensuite, Laundry, Pantry, Butler's Pantry, Powder Room, or "Unknown" if unclear)
-2. **confidence**: Your confidence in the room type detection ("high", "medium", or "low")
-3. **pieces**: An array of stone benchtop pieces you can identify. For each piece include:
-   - description: What the piece is (e.g., "Main Benchtop", "Island Bench", "Splashback", "Vanity Top")
-   - lengthMm: Length in millimeters (estimate from drawing scale if shown, otherwise use reasonable default like 2000mm for kitchen benchtops, 900mm for vanities)
-   - widthMm: Width/depth in millimeters (typically 600mm for kitchen benchtops, 500mm for vanities, 100mm for splashbacks)
-   - thicknessMm: Suggested thickness (20, 30, or 40mm - default 20mm)
-   - notes: Any relevant notes about the piece
+## EXTRACTION REQUIREMENTS
 
-Look for:
-- Benchtop outlines and dimensions
-- Islands or peninsulas
-- Splashbacks
-- Vanity tops
-- Any dimension annotations on the drawing
+### Room Identification
+- Identify the room type: Kitchen, Bathroom, Ensuite, Laundry, Pantry, Butler's Pantry, Powder Room, or "Unknown"
+- Provide confidence level and reasoning
 
-If you cannot identify specific dimensions, make reasonable estimates based on typical Australian residential standards.
+### Pieces to Extract
+For EACH stone piece, extract:
+1. **Benchtops**: Main work surfaces, islands, peninsulas
+2. **Splashbacks**: Measure as LINEAR LENGTH × HEIGHT (not depth). Standard heights: 600mm (full), 150mm (upstand)
+3. **Vanity tops**: Bathroom/ensuite surfaces
+4. **Waterfall ends**: Vertical drops on islands/benchtops
+5. **Window sills**: If stone is specified
 
-Return ONLY valid JSON in this exact format:
+### Per-Piece Information Required
+- description: Clear name (e.g., "Main Benchtop - Left Section", "Island Bench", "Full Height Splashback")
+- lengthMm: Length in millimeters
+- widthMm: Width/depth in millimeters (for splashbacks, this is the HEIGHT)
+- thicknessMm: 20, 30, or 40mm (default 20mm, islands often 40mm)
+- dimensionConfidence: "measured" (from drawing), "scaled" (calculated from scale), or "estimated" (best guess)
+- pieceType: "benchtop", "splashback", "vanity", "waterfall", "sill", or "other"
+- isComplexShape: true if L-shaped, U-shaped, or has angles (may need to be split for fabrication)
+- notes: Any relevant observations
+
+### Cutouts to Detect
+Look for symbols or annotations indicating:
+- Sink cutouts (undermount, top-mount, butler sink)
+- Cooktop/hob cutouts
+- Tap holes
+- Power outlet cutouts
+- Other penetrations
+
+### Edge Profiles to Detect
+Look for edge detail callouts:
+- Square/Straight
+- Bullnose
+- Beveled/Chamfered
+- Ogee
+- Pencil round
+- Waterfall (vertical continuation)
+- Mitred edges
+
+## IMPORTANT GUIDELINES
+1. If a piece is L-shaped or U-shaped, note this in isComplexShape and consider if it should be listed as multiple pieces
+2. For splashbacks, widthMm should be the HEIGHT (e.g., 600mm for full height, 150mm for upstand)
+3. Always specify dimensionConfidence - never assume "measured" unless you can see the actual dimension annotation
+4. If dimensions seem unrealistic (e.g., benchtop over 4000mm), flag in notes as may need joining
+
+## OUTPUT FORMAT
+Return ONLY valid JSON:
 {
   "roomType": "Kitchen",
-  "confidence": "high",
-  "roomTypeReasoning": "Brief explanation of why you identified this room type",
+  "roomTypeConfidence": "high",
+  "roomTypeReasoning": "Identified by sink, cooktop, and cabinet layout typical of kitchen",
+  "scaleDetected": "1:50",
+  "scaleSource": "Scale bar in bottom right corner",
   "pieces": [
     {
-      "description": "Main Benchtop",
-      "lengthMm": 3000,
+      "description": "Main Benchtop - L-shaped",
+      "lengthMm": 3200,
       "widthMm": 600,
       "thicknessMm": 20,
-      "notes": "L-shaped configuration"
+      "dimensionConfidence": "scaled",
+      "pieceType": "benchtop",
+      "isComplexShape": true,
+      "edgeProfile": "square",
+      "notes": "L-shaped configuration, may need to be fabricated as 2 pieces"
+    },
+    {
+      "description": "Full Height Splashback",
+      "lengthMm": 2400,
+      "widthMm": 600,
+      "thicknessMm": 20,
+      "dimensionConfidence": "scaled",
+      "pieceType": "splashback",
+      "isComplexShape": false,
+      "edgeProfile": null,
+      "notes": "Behind cooktop area"
     }
   ],
-  "drawingNotes": "Any other relevant observations about the drawing"
+  "cutouts": [
+    {
+      "type": "sink",
+      "subtype": "undermount",
+      "quantity": 1,
+      "associatedPiece": "Main Benchtop - L-shaped",
+      "notes": "Standard undermount sink"
+    },
+    {
+      "type": "cooktop",
+      "subtype": "induction",
+      "quantity": 1,
+      "associatedPiece": "Main Benchtop - L-shaped",
+      "notes": "900mm cooktop"
+    },
+    {
+      "type": "tapHole",
+      "subtype": null,
+      "quantity": 1,
+      "associatedPiece": "Main Benchtop - L-shaped",
+      "notes": null
+    }
+  ],
+  "edgeProfiles": [
+    {
+      "profile": "waterfall",
+      "location": "Island bench - left end",
+      "lengthMm": 900
+    }
+  ],
+  "drawingNotes": "Clear floor plan with good dimension annotations. Scale bar provided.",
+  "warnings": ["L-shaped benchtop exceeds standard slab width, will require join"]
 }`,
             },
           ],
