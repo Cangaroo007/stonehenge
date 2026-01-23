@@ -50,41 +50,33 @@ DRAWING TYPES YOU MAY RECEIVE:
 WHAT TO EXTRACT:
 
 Job Metadata (if visible):
-- Job Number (look for "Job No." field)
+- Job Number
 - Default Thickness (usually 20mm or 40mm)
 - Default Overhang (usually 10mm)
 - Material/Color if specified
 
 For Each Stone Piece:
-- Piece number if marked (circled numbers like 1, 2, 3, 4)
+- Piece number if marked (circled numbers like 1, 2, 3)
 - Room/area label (Kitchen, Bathroom, Pantry, Laundry, TV Unit, Island, etc.)
 - Length in millimeters (typically 1500-4000mm for benchtops)
 - Width in millimeters (typically 400-900mm for benchtops)
 - Shape: rectangular, L-shaped, U-shaped, or irregular
-- For L-shaped: report bounding dimensions AND describe the shape
-- Cutouts if marked: HP=hotplate, UMS=undermount sink, SR=drop-in sink
-
-HOW TO READ DIMENSIONS:
-- Numbers are in millimeters (2615.0 = 2615mm = 2.615m)
-- Dimension lines have arrows/ticks at each end
-- CAD drawings have precise decimals (2615.0)
-- Hand-drawn may have rounded numbers (2600)
+- Cutouts if marked: HP/hotplate, UMS/undermount sink, SR/drop-in sink, tap holes
 
 CONFIDENCE SCORING:
 - 0.9-1.0: Clear CAD with measurement lines
 - 0.7-0.89: Visible but some ambiguity
 - 0.5-0.69: Estimated from context
-- Below 0.5: Guessing - flag for verification
+- Below 0.5: Flag for manual verification
 
-OUTPUT FORMAT - Return ONLY valid JSON (no markdown, no explanation):
+OUTPUT FORMAT - Return ONLY valid JSON:
 {
   "success": true,
-  "drawingType": "cad_professional" | "job_sheet" | "hand_drawn" | "architectural",
+  "drawingType": "cad_professional" or "job_sheet" or "hand_drawn" or "architectural",
   "metadata": {
     "jobNumber": "string or null",
     "defaultThickness": 20,
-    "defaultOverhang": 10,
-    "material": "string or null"
+    "defaultOverhang": 10
   },
   "rooms": [
     {
@@ -98,16 +90,15 @@ OUTPUT FORMAT - Return ONLY valid JSON (no markdown, no explanation):
           "length": 3600,
           "width": 900,
           "thickness": 20,
-          "shapeNotes": "null or description for complex shapes",
-          "cutouts": [{"type": "sink", "notes": "undermount"}],
+          "cutouts": [{"type": "hotplate"}, {"type": "sink"}],
           "notes": "any observations",
           "confidence": 0.85
         }
       ]
     }
   ],
-  "warnings": ["list any issues or uncertainties"],
-  "questionsForUser": ["questions needing human clarification"]
+  "warnings": ["list any issues"],
+  "questionsForUser": ["questions needing clarification"]
 }`;
 
 export async function POST(request: NextRequest) {

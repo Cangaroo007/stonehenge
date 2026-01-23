@@ -2,33 +2,64 @@
 
 import { useState, useCallback } from 'react';
 
+// API response types matching the new prompt format
+interface AnalysisPiece {
+  pieceNumber?: number;
+  name: string;
+  pieceType?: string;
+  shape?: string;
+  length: number;
+  width: number;
+  thickness: number;
+  cutouts?: Array<{ type: string; notes?: string }>;
+  notes?: string;
+  confidence: number;
+}
+
+interface AnalysisRoom {
+  name: string;
+  pieces: AnalysisPiece[];
+}
+
+interface AnalysisMetadata {
+  jobNumber?: string | null;
+  defaultThickness?: number;
+  defaultOverhang?: number;
+}
+
+interface AnalysisResult {
+  success: boolean;
+  drawingType?: 'cad_professional' | 'job_sheet' | 'hand_drawn' | 'architectural';
+  metadata?: AnalysisMetadata;
+  rooms: AnalysisRoom[];
+  warnings?: string[];
+  questionsForUser?: string[];
+}
+
+// UI types for editable pieces
 interface ExtractedPiece {
+  roomName: string;
   description: string;
   lengthMm: number;
   widthMm: number;
   thicknessMm: number;
+  shape?: string;
+  cutouts?: string;
   notes?: string;
+  confidence: number;
   selected: boolean;
-}
-
-interface AnalysisResult {
-  roomType: string;
-  confidence: 'high' | 'medium' | 'low';
-  roomTypeReasoning?: string;
-  pieces: Array<{
-    description: string;
-    lengthMm: number;
-    widthMm: number;
-    thicknessMm: number;
-    notes?: string;
-  }>;
-  drawingNotes?: string;
 }
 
 interface DrawingUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddPieces: (roomName: string, pieces: ExtractedPiece[]) => void;
+  onAddPieces: (roomName: string, pieces: Array<{
+    description: string;
+    lengthMm: number;
+    widthMm: number;
+    thicknessMm: number;
+    selected: boolean;
+  }>) => void;
   existingRoomNames: string[];
 }
 
@@ -40,8 +71,22 @@ const ROOM_TYPES = [
   'Pantry',
   "Butler's Pantry",
   'Powder Room',
+  'Island',
+  'TV Unit',
   'Other',
 ];
+
+function getConfidenceLevel(confidence: number): 'high' | 'medium' | 'low' {
+  if (confidence >= 0.7) return 'high';
+  if (confidence >= 0.5) return 'medium';
+  return 'low';
+}
+
+function getConfidenceColor(confidence: number): string {
+  if (confidence >= 0.7) return 'text-green-600';
+  if (confidence >= 0.5) return 'text-yellow-600';
+  return 'text-red-600';
+}
 
 export default function DrawingUploadModal({
   isOpen,
@@ -54,11 +99,9 @@ export default function DrawingUploadModal({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPdfFile, setIsPdfFile] = useState(false);
-  
+
   // Analysis results
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [selectedRoomType, setSelectedRoomType] = useState('');
-  const [customRoomName, setCustomRoomName] = useState('');
   const [extractedPieces, setExtractedPieces] = useState<ExtractedPiece[]>([]);
 
   const resetState = useCallback(() => {
@@ -67,8 +110,6 @@ export default function DrawingUploadModal({
     setError(null);
     setIsPdfFile(false);
     setAnalysis(null);
-    setSelectedRoomType('');
-    setCustomRoomName('');
     setExtractedPieces([]);
   }, []);
 
@@ -91,14 +132,14 @@ export default function DrawingUploadModal({
     // Validate file type
     const isImage = file.type.startsWith('image/');
     const isPdf = file.type === 'application/pdf';
-    
+
     if (!isImage && !isPdf) {
       setError('Please upload an image file (JPEG, PNG, GIF, WebP) or PDF');
       return;
     }
 
     setIsPdfFile(isPdf);
-    
+
     // Create preview (use placeholder for PDFs)
     if (isImage) {
       const url = URL.createObjectURL(file);
@@ -106,7 +147,7 @@ export default function DrawingUploadModal({
     } else {
       setPreviewUrl(null); // Will show PDF placeholder
     }
-    
+
     setError(null);
     setStep('analyzing');
 
@@ -122,18 +163,36 @@ export default function DrawingUploadModal({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to analyze drawing');
+        throw new Error(data.error || data.details || 'Failed to analyze drawing');
       }
 
       if (data.success && data.analysis) {
-        setAnalysis(data.analysis);
-        setSelectedRoomType(data.analysis.roomType);
-        setExtractedPieces(
-          data.analysis.pieces.map((p: AnalysisResult['pieces'][0]) => ({
-            ...p,
-            selected: true,
-          }))
-        );
+        const analysisData = data.analysis as AnalysisResult;
+        setAnalysis(analysisData);
+
+        // Flatten rooms into editable pieces
+        const pieces: ExtractedPiece[] = [];
+        if (analysisData.rooms && Array.isArray(analysisData.rooms)) {
+          for (const room of analysisData.rooms) {
+            for (const piece of room.pieces) {
+              const cutoutsStr = piece.cutouts?.map(c => c.type).join(', ') || '';
+              pieces.push({
+                roomName: room.name,
+                description: piece.name || `Piece ${piece.pieceNumber || pieces.length + 1}`,
+                lengthMm: piece.length,
+                widthMm: piece.width,
+                thicknessMm: piece.thickness || analysisData.metadata?.defaultThickness || 20,
+                shape: piece.shape,
+                cutouts: cutoutsStr,
+                notes: piece.notes,
+                confidence: piece.confidence,
+                selected: true,
+              });
+            }
+          }
+        }
+
+        setExtractedPieces(pieces);
         setStep('review');
       } else {
         throw new Error('Invalid response from server');
@@ -186,24 +245,46 @@ export default function DrawingUploadModal({
       return;
     }
 
-    // Determine room name
-    let roomName = selectedRoomType;
-    if (selectedRoomType === 'Other' || selectedRoomType === 'Unknown') {
-      roomName = customRoomName || 'Room';
-    }
-
-    // Handle duplicate room names
-    if (existingRoomNames.includes(roomName)) {
-      let counter = 2;
-      while (existingRoomNames.includes(`${roomName} ${counter}`)) {
-        counter++;
+    // Group pieces by room name
+    const piecesByRoom: Record<string, ExtractedPiece[]> = {};
+    for (const piece of selectedPieces) {
+      const roomName = piece.roomName || 'Room';
+      if (!piecesByRoom[roomName]) {
+        piecesByRoom[roomName] = [];
       }
-      roomName = `${roomName} ${counter}`;
+      piecesByRoom[roomName].push(piece);
     }
 
-    onAddPieces(roomName, selectedPieces);
+    // Add pieces for each room
+    for (const [baseName, roomPieces] of Object.entries(piecesByRoom)) {
+      let roomName = baseName;
+
+      // Handle duplicate room names
+      if (existingRoomNames.includes(roomName)) {
+        let counter = 2;
+        while (existingRoomNames.includes(`${baseName} ${counter}`)) {
+          counter++;
+        }
+        roomName = `${baseName} ${counter}`;
+      }
+
+      onAddPieces(
+        roomName,
+        roomPieces.map((p) => ({
+          description: p.description,
+          lengthMm: p.lengthMm,
+          widthMm: p.widthMm,
+          thicknessMm: p.thicknessMm,
+          selected: true,
+        }))
+      );
+    }
+
     handleClose();
   };
+
+  // Get unique room names from extracted pieces
+  const roomNames = Array.from(new Set(extractedPieces.map((p) => p.roomName)));
 
   if (!isOpen) return null;
 
@@ -214,7 +295,7 @@ export default function DrawingUploadModal({
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+        <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
           {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-900">
@@ -334,7 +415,7 @@ export default function DrawingUploadModal({
             {/* Review Step */}
             {step === 'review' && analysis && (
               <div className="space-y-6">
-                {/* Preview and Room Type */}
+                {/* Drawing Preview and Metadata */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     {previewUrl ? (
@@ -352,136 +433,213 @@ export default function DrawingUploadModal({
                       </div>
                     ) : null}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Room Type
-                    </label>
-                    <select
-                      className="input w-full"
-                      value={selectedRoomType}
-                      onChange={(e) => setSelectedRoomType(e.target.value)}
-                    >
-                      {ROOM_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                      {!ROOM_TYPES.includes(analysis.roomType) && (
-                        <option value={analysis.roomType}>{analysis.roomType}</option>
-                      )}
-                    </select>
-                    {(selectedRoomType === 'Other' || selectedRoomType === 'Unknown') && (
-                      <input
-                        type="text"
-                        className="input w-full mt-2"
-                        placeholder="Enter room name"
-                        value={customRoomName}
-                        onChange={(e) => setCustomRoomName(e.target.value)}
-                      />
-                    )}
-                    {analysis.confidence && (
-                      <p className="mt-2 text-sm text-gray-500">
-                        Detection confidence:{' '}
-                        <span
-                          className={`font-medium ${
-                            analysis.confidence === 'high'
-                              ? 'text-green-600'
-                              : analysis.confidence === 'medium'
-                              ? 'text-yellow-600'
-                              : 'text-red-600'
-                          }`}
-                        >
-                          {analysis.confidence}
+                  <div className="space-y-3">
+                    {/* Drawing Type */}
+                    {analysis.drawingType && (
+                      <div className="text-sm">
+                        <span className="text-gray-500">Drawing Type: </span>
+                        <span className="font-medium text-gray-700">
+                          {analysis.drawingType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                         </span>
-                      </p>
+                      </div>
                     )}
-                    {analysis.roomTypeReasoning && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        {analysis.roomTypeReasoning}
-                      </p>
+
+                    {/* Job Number */}
+                    {analysis.metadata?.jobNumber && (
+                      <div className="text-sm">
+                        <span className="text-gray-500">Job Number: </span>
+                        <span className="font-medium text-gray-700">{analysis.metadata.jobNumber}</span>
+                      </div>
                     )}
+
+                    {/* Default Settings */}
+                    {analysis.metadata && (
+                      <div className="text-sm">
+                        <span className="text-gray-500">Defaults: </span>
+                        <span className="font-medium text-gray-700">
+                          {analysis.metadata.defaultThickness || 20}mm thick
+                          {analysis.metadata.defaultOverhang && `, ${analysis.metadata.defaultOverhang}mm overhang`}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Room Summary */}
+                    <div className="text-sm">
+                      <span className="text-gray-500">Detected: </span>
+                      <span className="font-medium text-gray-700">
+                        {roomNames.length} room{roomNames.length !== 1 ? 's' : ''}, {extractedPieces.length} piece{extractedPieces.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Drawing Notes */}
-                {analysis.drawingNotes && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-                    <strong>AI Notes:</strong> {analysis.drawingNotes}
+                {/* Warnings */}
+                {analysis.warnings && analysis.warnings.length > 0 && (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
+                    <strong>Warnings:</strong>
+                    <ul className="mt-1 list-disc list-inside">
+                      {analysis.warnings.map((warning, i) => (
+                        <li key={i}>{warning}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
 
-                {/* Extracted Pieces */}
+                {/* Questions for User */}
+                {analysis.questionsForUser && analysis.questionsForUser.length > 0 && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                    <strong>Questions:</strong>
+                    <ul className="mt-1 list-disc list-inside">
+                      {analysis.questionsForUser.map((question, i) => (
+                        <li key={i}>{question}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Extracted Pieces by Room */}
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 mb-3">
-                    Extracted Pieces ({extractedPieces.filter((p) => p.selected).length} selected)
+                    Detected Pieces ({extractedPieces.filter((p) => p.selected).length} of {extractedPieces.length} selected)
                   </h3>
-                  <div className="space-y-3">
-                    {extractedPieces.map((piece, index) => (
-                      <div
-                        key={index}
-                        className={`border rounded-lg p-4 transition-colors ${
-                          piece.selected
-                            ? 'border-primary-300 bg-primary-50'
-                            : 'border-gray-200 bg-gray-50'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={piece.selected}
-                            onChange={() => togglePieceSelection(index)}
-                            className="mt-1 h-4 w-4 text-primary-600 rounded"
-                          />
-                          <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <div className="md:col-span-2">
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Description
-                              </label>
-                              <input
-                                type="text"
-                                className="input w-full text-sm"
-                                value={piece.description}
-                                onChange={(e) =>
-                                  updatePiece(index, { description: e.target.value })
-                                }
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Length (mm)
-                              </label>
-                              <input
-                                type="number"
-                                className="input w-full text-sm"
-                                value={piece.lengthMm}
-                                onChange={(e) =>
-                                  updatePiece(index, { lengthMm: Number(e.target.value) })
-                                }
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">
-                                Width (mm)
-                              </label>
-                              <input
-                                type="number"
-                                className="input w-full text-sm"
-                                value={piece.widthMm}
-                                onChange={(e) =>
-                                  updatePiece(index, { widthMm: Number(e.target.value) })
-                                }
-                              />
-                            </div>
-                          </div>
+
+                  {roomNames.map((roomName) => {
+                    const roomPieces = extractedPieces.filter((p) => p.roomName === roomName);
+                    const roomPiecesWithIndices = roomPieces.map((p) => ({
+                      piece: p,
+                      index: extractedPieces.indexOf(p),
+                    }));
+
+                    return (
+                      <div key={roomName} className="mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="text-sm font-medium text-gray-600">{roomName}</h4>
+                          <span className="text-xs text-gray-400">
+                            ({roomPieces.filter((p) => p.selected).length} of {roomPieces.length} selected)
+                          </span>
+                          {/* Room type selector */}
+                          <select
+                            className="ml-auto text-xs border-gray-200 rounded py-1"
+                            value={roomPieces[0]?.roomName || roomName}
+                            onChange={(e) => {
+                              roomPiecesWithIndices.forEach(({ index }) => {
+                                updatePiece(index, { roomName: e.target.value });
+                              });
+                            }}
+                          >
+                            {ROOM_TYPES.map((type) => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ))}
+                            {!ROOM_TYPES.includes(roomName) && (
+                              <option value={roomName}>{roomName}</option>
+                            )}
+                          </select>
                         </div>
-                        {piece.notes && (
-                          <p className="mt-2 ml-7 text-xs text-gray-500">
-                            <em>{piece.notes}</em>
-                          </p>
-                        )}
+
+                        <div className="space-y-2">
+                          {roomPiecesWithIndices.map(({ piece, index }) => (
+                            <div
+                              key={index}
+                              className={`border rounded-lg p-3 transition-colors ${
+                                piece.selected
+                                  ? 'border-primary-300 bg-primary-50'
+                                  : 'border-gray-200 bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={piece.selected}
+                                  onChange={() => togglePieceSelection(index)}
+                                  className="mt-1 h-4 w-4 text-primary-600 rounded"
+                                />
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-2">
+                                  <div className="md:col-span-2">
+                                    <label className="block text-xs text-gray-500 mb-1">
+                                      Description
+                                    </label>
+                                    <input
+                                      type="text"
+                                      className="input w-full text-sm py-1"
+                                      value={piece.description}
+                                      onChange={(e) =>
+                                        updatePiece(index, { description: e.target.value })
+                                      }
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-500 mb-1">
+                                      Length (mm)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className="input w-full text-sm py-1"
+                                      value={piece.lengthMm}
+                                      onChange={(e) =>
+                                        updatePiece(index, { lengthMm: Number(e.target.value) })
+                                      }
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-500 mb-1">
+                                      Width (mm)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className="input w-full text-sm py-1"
+                                      value={piece.widthMm}
+                                      onChange={(e) =>
+                                        updatePiece(index, { widthMm: Number(e.target.value) })
+                                      }
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-500 mb-1">
+                                      Thick (mm)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className="input w-full text-sm py-1"
+                                      value={piece.thicknessMm}
+                                      onChange={(e) =>
+                                        updatePiece(index, { thicknessMm: Number(e.target.value) })
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <span className={`text-xs font-medium ${getConfidenceColor(piece.confidence)}`}>
+                                    {Math.round(piece.confidence * 100)}%
+                                  </span>
+                                </div>
+                              </div>
+                              {/* Additional info row */}
+                              {(piece.shape || piece.cutouts || piece.notes) && (
+                                <div className="mt-2 ml-7 text-xs text-gray-500 flex flex-wrap gap-3">
+                                  {piece.shape && (
+                                    <span>
+                                      <strong>Shape:</strong> {piece.shape}
+                                    </span>
+                                  )}
+                                  {piece.cutouts && (
+                                    <span>
+                                      <strong>Cutouts:</strong> {piece.cutouts}
+                                    </span>
+                                  )}
+                                  {piece.notes && (
+                                    <span className="italic">{piece.notes}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
+
                   {extractedPieces.length === 0 && (
                     <p className="text-center text-gray-500 py-4">
                       No pieces could be extracted from this drawing.

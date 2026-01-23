@@ -201,6 +201,7 @@ model QuoteFile {
   filePath     String   @map("file_path")
   fileType     String?  @map("file_type")
   fileSize     Int?     @map("file_size")
+  analysisJson Json?    @map("analysis_json")
   uploadedAt   DateTime @default(now()) @map("uploaded_at")
 
   @@map("quote_files")
