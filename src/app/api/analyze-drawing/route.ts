@@ -5,137 +5,150 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+const SYSTEM_PROMPT = `You are an expert stone benchtop fabricator analyzing drawings to extract piece specifications for quoting.
+
+DRAWING TYPES YOU MAY RECEIVE:
+1. Professional CAD Drawings - Clean technical drawings with precise dimension lines
+2. FileMaker Job Sheets - Form-style pages with CAD drawings, site photos, and metadata fields (Job No., Thickness, etc.)
+3. Hand-Drawn Sketches - Rough sketches with handwritten measurements
+4. Architectural Plans - Building floor plans with stone areas marked
+
+WHAT TO EXTRACT:
+
+Job Metadata (if visible):
+- Job Number (look for "Job No." field)
+- Default Thickness (usually 20mm or 40mm)
+- Default Overhang (usually 10mm)
+- Material/Color if specified
+
+For Each Stone Piece:
+- Piece number if marked (circled numbers like 1, 2, 3, 4)
+- Room/area label (Kitchen, Bathroom, Pantry, Laundry, TV Unit, Island, etc.)
+- Length in millimeters (typically 1500-4000mm for benchtops)
+- Width in millimeters (typically 400-900mm for benchtops)
+- Shape: rectangular, L-shaped, U-shaped, or irregular
+- For L-shaped: report bounding dimensions AND describe the shape
+- Cutouts if marked: HP=hotplate, UMS=undermount sink, SR=drop-in sink
+
+HOW TO READ DIMENSIONS:
+- Numbers are in millimeters (2615.0 = 2615mm = 2.615m)
+- Dimension lines have arrows/ticks at each end
+- CAD drawings have precise decimals (2615.0)
+- Hand-drawn may have rounded numbers (2600)
+
+CONFIDENCE SCORING:
+- 0.9-1.0: Clear CAD with measurement lines
+- 0.7-0.89: Visible but some ambiguity
+- 0.5-0.69: Estimated from context
+- Below 0.5: Guessing - flag for verification
+
+OUTPUT FORMAT - Return ONLY valid JSON (no markdown, no explanation):
+{
+  "success": true,
+  "drawingType": "cad_professional" | "job_sheet" | "hand_drawn" | "architectural",
+  "metadata": {
+    "jobNumber": "string or null",
+    "defaultThickness": 20,
+    "defaultOverhang": 10,
+    "material": "string or null"
+  },
+  "rooms": [
+    {
+      "name": "Kitchen",
+      "pieces": [
+        {
+          "pieceNumber": 1,
+          "name": "Island Bench",
+          "pieceType": "benchtop",
+          "shape": "rectangular",
+          "length": 3600,
+          "width": 900,
+          "thickness": 20,
+          "shapeNotes": "null or description for complex shapes",
+          "cutouts": [{"type": "sink", "notes": "undermount"}],
+          "notes": "any observations",
+          "confidence": 0.85
+        }
+      ]
+    }
+  ],
+  "warnings": ["list any issues or uncertainties"],
+  "questionsForUser": ["questions needing human clarification"]
+}`;
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    
+
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
     // Convert file to base64
     const bytes = await file.arrayBuffer();
-    const base64 = Buffer.from(bytes).toString('base64');
-    
-    // Determine media type and content type
-    const mediaType = file.type;
-    const isPdf = mediaType === 'application/pdf';
-    const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mediaType);
-    
-    if (!isPdf && !isImage) {
-      return NextResponse.json(
-        { error: 'Invalid file type. Please upload a PDF, JPEG, PNG, GIF, or WebP file.' },
-        { status: 400 }
-      );
-    }
+    const buffer = Buffer.from(bytes);
+    const base64Image = buffer.toString('base64');
 
-    // Build the content block based on file type
-    const fileContent = isPdf
-      ? {
-          type: 'document' as const,
-          source: {
-            type: 'base64' as const,
-            media_type: 'application/pdf' as const,
-            data: base64,
-          },
-        }
-      : {
-          type: 'image' as const,
-          source: {
-            type: 'base64' as const,
-            media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-            data: base64,
-          },
-        };
+    // Determine media type
+    const mimeType = file.type || 'image/png';
+    const mediaType = mimeType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
 
-    // Call Claude API to analyze the drawing
+    // Call Claude API
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
+      system: SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
           content: [
-            fileContent,
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: base64Image,
+              },
+            },
             {
               type: 'text',
-              text: `You are analyzing an architectural drawing or floor plan for a stone benchtop fabrication quote. 
-
-Please extract the following information and return it as JSON:
-
-1. **roomType**: The type of room shown (Kitchen, Bathroom, Ensuite, Laundry, Pantry, Butler's Pantry, Powder Room, or "Unknown" if unclear)
-2. **confidence**: Your confidence in the room type detection ("high", "medium", or "low")
-3. **pieces**: An array of stone benchtop pieces you can identify. For each piece include:
-   - description: What the piece is (e.g., "Main Benchtop", "Island Bench", "Splashback", "Vanity Top")
-   - lengthMm: Length in millimeters (estimate from drawing scale if shown, otherwise use reasonable default like 2000mm for kitchen benchtops, 900mm for vanities)
-   - widthMm: Width/depth in millimeters (typically 600mm for kitchen benchtops, 500mm for vanities, 100mm for splashbacks)
-   - thicknessMm: Suggested thickness (20, 30, or 40mm - default 20mm)
-   - notes: Any relevant notes about the piece
-
-Look for:
-- Benchtop outlines and dimensions
-- Islands or peninsulas
-- Splashbacks
-- Vanity tops
-- Any dimension annotations on the drawing
-
-If you cannot identify specific dimensions, make reasonable estimates based on typical Australian residential standards.
-
-Return ONLY valid JSON in this exact format:
-{
-  "roomType": "Kitchen",
-  "confidence": "high",
-  "roomTypeReasoning": "Brief explanation of why you identified this room type",
-  "pieces": [
-    {
-      "description": "Main Benchtop",
-      "lengthMm": 3000,
-      "widthMm": 600,
-      "thicknessMm": 20,
-      "notes": "L-shaped configuration"
-    }
-  ],
-  "drawingNotes": "Any other relevant observations about the drawing"
-}`,
+              text: 'Analyze this stone fabrication drawing and extract all piece specifications. Return only valid JSON.',
             },
           ],
         },
       ],
     });
 
-    // Extract the text response
-    const textContent = response.content.find((block) => block.type === 'text');
+    // Extract text response
+    const textContent = response.content.find(c => c.type === 'text');
     if (!textContent || textContent.type !== 'text') {
-      return NextResponse.json({ error: 'No response from AI' }, { status: 500 });
+      throw new Error('No text response from Claude');
     }
 
-    // Parse the JSON response
-    let analysisResult;
-    try {
-      // Extract JSON from the response (handle potential markdown code blocks)
-      let jsonStr = textContent.text;
-      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        jsonStr = jsonMatch[1];
-      }
-      analysisResult = JSON.parse(jsonStr);
-    } catch {
-      console.error('Failed to parse AI response:', textContent.text);
-      return NextResponse.json(
-        { error: 'Failed to parse AI response', rawResponse: textContent.text },
-        { status: 500 }
-      );
+    // Parse JSON from response (handle markdown code blocks)
+    let jsonStr = textContent.text;
+    if (jsonStr.includes('```json')) {
+      jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+    } else if (jsonStr.includes('```')) {
+      jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
     }
+
+    const analysis = JSON.parse(jsonStr);
 
     return NextResponse.json({
       success: true,
-      analysis: analysisResult,
+      analysis,
+      tokensUsed: {
+        input: response.usage.input_tokens,
+        output: response.usage.output_tokens,
+      },
     });
+
   } catch (error) {
     console.error('Drawing analysis error:', error);
     return NextResponse.json(
-      { error: 'Failed to analyze drawing' },
+      { error: 'Failed to analyze drawing', details: String(error) },
       { status: 500 }
     );
   }
