@@ -48,14 +48,14 @@ async function main() {
   console.log('✅ Created', materials.length, 'materials');
 
   // ============================================
-  // CREATE PRICING RULES
+  // CREATE FEATURE PRICING (Simple key-value pricing)
   // ============================================
-  const pricingRules = [
+  const featurePricing = [
     // Thickness multipliers
     { category: 'thickness', name: '20mm', price: 1.0, priceType: 'multiplier', description: 'Standard 20mm thickness' },
     { category: 'thickness', name: '30mm', price: 1.3, priceType: 'multiplier', description: '30mm thickness' },
     { category: 'thickness', name: '40mm', price: 1.5, priceType: 'multiplier', description: '40mm thickness (mitered)' },
-    
+
     // Edge profiles
     { category: 'edge', name: 'Pencil Round', price: 0, priceType: 'per_meter', description: 'Standard pencil round edge' },
     { category: 'edge', name: 'Bullnose', price: 45, priceType: 'per_meter', description: 'Full bullnose edge' },
@@ -63,7 +63,7 @@ async function main() {
     { category: 'edge', name: 'Ogee', price: 65, priceType: 'per_meter', description: 'Decorative ogee profile' },
     { category: 'edge', name: 'Square/Eased', price: 0, priceType: 'per_meter', description: 'Square edge with slight ease' },
     { category: 'edge', name: 'Mitered', price: 85, priceType: 'per_meter', description: 'Mitered edge for thick appearance' },
-    
+
     // Cutouts
     { category: 'cutout', name: 'Undermount Sink Cutout', price: 180, priceType: 'fixed', description: 'Cutout for undermount sink' },
     { category: 'cutout', name: 'Drop-in Sink Cutout', price: 120, priceType: 'fixed', description: 'Cutout for drop-in sink' },
@@ -71,7 +71,7 @@ async function main() {
     { category: 'cutout', name: 'Basin Cutout', price: 95, priceType: 'fixed', description: 'Cutout for basin' },
     { category: 'cutout', name: 'Tap Hole', price: 35, priceType: 'fixed', description: 'Single tap hole' },
     { category: 'cutout', name: 'GPO/Powerpoint Cutout', price: 45, priceType: 'fixed', description: 'Cutout for electrical outlet' },
-    
+
     // Features
     { category: 'feature', name: 'Waterfall End', price: 350, priceType: 'fixed', description: 'Waterfall return on island end' },
     { category: 'feature', name: 'Splashback (per sqm)', price: 380, priceType: 'per_sqm', description: 'Matching stone splashback' },
@@ -80,14 +80,14 @@ async function main() {
     { category: 'feature', name: 'Radius Corner', price: 65, priceType: 'fixed', description: 'Rounded corner' },
   ];
 
-  for (const rule of pricingRules) {
-    await prisma.pricingRule.upsert({
-      where: { id: pricingRules.indexOf(rule) + 1 },
-      update: rule,
-      create: rule,
+  for (const pricing of featurePricing) {
+    await prisma.featurePricing.upsert({
+      where: { id: featurePricing.indexOf(pricing) + 1 },
+      update: pricing,
+      create: pricing,
     });
   }
-  console.log('✅ Created', pricingRules.length, 'pricing rules');
+  console.log('✅ Created', featurePricing.length, 'feature pricing entries');
 
   // ============================================
   // CREATE DEMO CUSTOMERS

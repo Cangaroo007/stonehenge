@@ -88,7 +88,7 @@ async function getData(quoteId: number) {
     }),
     prisma.customer.findMany({ orderBy: { name: 'asc' } }),
     prisma.material.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
-    prisma.pricingRule.findMany({ where: { isActive: true }, orderBy: { category: 'asc' } }),
+    prisma.featurePricing.findMany({ where: { isActive: true }, orderBy: { category: 'asc' } }),
   ]);
 
   return JSON.parse(JSON.stringify({ quote, customers, materials, pricingRules }));

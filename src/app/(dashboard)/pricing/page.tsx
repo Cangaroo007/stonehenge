@@ -5,7 +5,7 @@ import PricingRuleForm from '@/components/PricingRuleForm';
 export const dynamic = 'force-dynamic';
 
 async function getPricingRules() {
-  return prisma.pricingRule.findMany({
+  return prisma.featurePricing.findMany({
     orderBy: [{ category: 'asc' }, { name: 'asc' }],
   });
 }

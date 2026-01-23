@@ -93,9 +93,114 @@ async function seedPricingEntities() {
   console.log('Pricing entities seeded successfully!')
 }
 
-seedPricingEntities()
+async function seedPricingRules() {
+  console.log('Seeding pricing rules...')
+
+  // Get references
+  const cabinetMaker = await prisma.clientType.findUnique({ where: { name: 'Cabinet Maker' } })
+  const tier1 = await prisma.clientTier.findUnique({ where: { name: 'Tier 1' } })
+  const tier2 = await prisma.clientTier.findUnique({ where: { name: 'Tier 2' } })
+  const pencilRound = await prisma.edgeType.findUnique({ where: { name: 'Pencil Round' } })
+
+  if (!cabinetMaker || !tier1 || !tier2) {
+    console.log('⚠️ Skipping pricing rules - base entities not found')
+    return
+  }
+
+  // Rule 1: Tier 1 gets 15% off everything
+  await prisma.pricingRule.upsert({
+    where: { id: 'rule-tier1-discount' },
+    update: {},
+    create: {
+      id: 'rule-tier1-discount',
+      name: 'Tier 1 - 15% Discount',
+      description: 'Premium partners receive 15% off all pricing',
+      priority: 100,
+      clientTierId: tier1.id,
+      adjustmentType: 'percentage',
+      adjustmentValue: new Prisma.Decimal(-15.00),
+      appliesTo: 'all',
+    },
+  })
+
+  // Rule 2: Tier 2 gets 10% off materials only
+  await prisma.pricingRule.upsert({
+    where: { id: 'rule-tier2-materials' },
+    update: {},
+    create: {
+      id: 'rule-tier2-materials',
+      name: 'Tier 2 - 10% Off Materials',
+      description: 'Regular clients receive 10% off material costs',
+      priority: 50,
+      clientTierId: tier2.id,
+      adjustmentType: 'percentage',
+      adjustmentValue: new Prisma.Decimal(-10.00),
+      appliesTo: 'materials',
+    },
+  })
+
+  // Rule 3: Cabinet Makers get special edge pricing
+  if (pencilRound) {
+    const cmRule = await prisma.pricingRule.upsert({
+      where: { id: 'rule-cm-edges' },
+      update: {},
+      create: {
+        id: 'rule-cm-edges',
+        name: 'Cabinet Maker - Edge Discount',
+        description: 'Cabinet makers get reduced edge polish rates',
+        priority: 50,
+        clientTypeId: cabinetMaker.id,
+        adjustmentType: 'percentage',
+        adjustmentValue: new Prisma.Decimal(0), // No general adjustment
+        appliesTo: 'edges',
+      },
+    })
+
+    // Add specific edge override: Pencil Round at $30/lm instead of $35
+    await prisma.pricingRuleEdge.upsert({
+      where: {
+        pricingRuleId_edgeTypeId: {
+          pricingRuleId: cmRule.id,
+          edgeTypeId: pencilRound.id,
+        },
+      },
+      update: {},
+      create: {
+        pricingRuleId: cmRule.id,
+        edgeTypeId: pencilRound.id,
+        customRate: new Prisma.Decimal(30.00),
+      },
+    })
+  }
+
+  // Rule 4: Large quotes get additional discount
+  await prisma.pricingRule.upsert({
+    where: { id: 'rule-large-quote' },
+    update: {},
+    create: {
+      id: 'rule-large-quote',
+      name: 'Large Quote Discount',
+      description: 'Quotes over $10,000 receive 5% additional discount',
+      priority: 25,
+      minQuoteValue: new Prisma.Decimal(10000.00),
+      adjustmentType: 'percentage',
+      adjustmentValue: new Prisma.Decimal(-5.00),
+      appliesTo: 'all',
+    },
+  })
+
+  console.log('✓ Seeded 4 pricing rules')
+}
+
+// Run both seeders
+async function main() {
+  await seedPricingEntities()
+  await seedPricingRules()
+}
+
+main()
   .catch((e) => {
-    console.error('Error seeding pricing entities:', e)
+    console.error('Error seeding:', e)
     process.exit(1)
   })
   .finally(async () => {

@@ -47,7 +47,8 @@ model Customer {
   clientTierId  String?     @map("client_tier_id")
   clientTier    ClientTier? @relation(fields: [clientTierId], references: [id])
 
-  quotes    Quote[]
+  quotes       Quote[]
+  pricingRules PricingRule[]
 
   @@map("customers")
 }
@@ -66,16 +67,17 @@ model Material {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  pieces      QuotePiece[]
+  pieces               QuotePiece[]
+  pricingRuleMaterials PricingRuleMaterial[]
 
   @@map("materials")
 }
 
 // ============================================
-// PRICING RULES
+// FEATURE PRICING (Simple key-value pricing)
 // ============================================
 
-model PricingRule {
+model FeaturePricing {
   id          Int       @id @default(autoincrement())
   category    String    // 'thickness', 'edge', 'cutout', 'feature'
   name        String
@@ -180,17 +182,17 @@ model QuotePiece {
 }
 
 model PieceFeature {
-  id            Int          @id @default(autoincrement())
-  pieceId       Int          @map("piece_id")
-  piece         QuotePiece   @relation(fields: [pieceId], references: [id], onDelete: Cascade)
-  
-  pricingRuleId Int?         @map("pricing_rule_id")
-  pricingRule   PricingRule? @relation(fields: [pricingRuleId], references: [id])
-  
-  name          String
-  quantity      Int          @default(1)
-  unitPrice     Decimal      @map("unit_price") @db.Decimal(10, 2)
-  totalPrice    Decimal      @map("total_price") @db.Decimal(10, 2)
+  id               Int             @id @default(autoincrement())
+  pieceId          Int             @map("piece_id")
+  piece            QuotePiece      @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+
+  featurePricingId Int?            @map("pricing_rule_id")
+  featurePricing   FeaturePricing? @relation(fields: [featurePricingId], references: [id])
+
+  name             String
+  quantity         Int             @default(1)
+  unitPrice        Decimal         @map("unit_price") @db.Decimal(10, 2)
+  totalPrice       Decimal         @map("total_price") @db.Decimal(10, 2)
 
   @@map("piece_features")
 }
@@ -247,6 +249,8 @@ model EdgeType {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  pricingRuleEdges PricingRuleEdge[]
+
   @@map("edge_types")
 }
 
@@ -259,6 +263,8 @@ model CutoutType {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  pricingRuleCutouts PricingRuleCutout[]
 
   @@map("cutout_types")
 }
@@ -286,6 +292,7 @@ model ClientType {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   customers   Customer[]
+  pricingRules PricingRule[]
 
   @@map("client_types")
 }
@@ -300,9 +307,98 @@ model ClientTier {
   sortOrder   Int        @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-  customers   Customer[]
+  customers    Customer[]
+  pricingRules PricingRule[]
 
   @@map("client_tiers")
+}
+
+// ============================================
+// PRICING RULES ENGINE
+// ============================================
+
+model PricingRule {
+  id              String   @id @default(cuid())
+  name            String   // "Tier 1 Cabinet Maker Discount"
+  description     String?
+  priority        Int      @default(0)  // Higher priority wins when multiple rules match
+
+  // === CONDITIONS (IF) ===
+  // All non-null conditions must match (AND logic)
+  clientTypeId    String?  // IF client type matches
+  clientType      ClientType? @relation(fields: [clientTypeId], references: [id])
+  clientTierId    String?  // IF client tier matches
+  clientTier      ClientTier? @relation(fields: [clientTierId], references: [id])
+  customerId      Int?     // IF specific customer (highest priority)
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  minQuoteValue   Decimal? @db.Decimal(10, 2)  // IF quote total >= this
+  maxQuoteValue   Decimal? @db.Decimal(10, 2)  // IF quote total <= this
+  thicknessValue  Int?     // IF thickness matches (20 or 40)
+
+  // === OUTCOME (THEN) ===
+  adjustmentType  String   // "percentage" or "fixed_amount"
+  adjustmentValue Decimal  @db.Decimal(10, 4)  // -15.00 for 15% off, or -5.00 for $5 off
+  appliesTo       String   // "all", "materials", "edges", "cutouts"
+
+  // === SPECIFIC OVERRIDES ===
+  // These allow setting specific rates for individual items
+  edgeOverrides     PricingRuleEdge[]
+  cutoutOverrides   PricingRuleCutout[]
+  materialOverrides PricingRuleMaterial[]
+
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("pricing_rules_engine")
+}
+
+model PricingRuleEdge {
+  id              String      @id @default(cuid())
+  pricingRuleId   String
+  pricingRule     PricingRule @relation(fields: [pricingRuleId], references: [id], onDelete: Cascade)
+  edgeTypeId      String
+  edgeType        EdgeType    @relation(fields: [edgeTypeId], references: [id])
+
+  // Either set a custom flat rate OR an adjustment
+  customRate      Decimal?    @db.Decimal(10, 2)  // $30/lm instead of base rate
+  adjustmentType  String?     // "percentage" or "fixed_amount"
+  adjustmentValue Decimal?    @db.Decimal(10, 4)  // -10.00 for 10% off
+
+  @@unique([pricingRuleId, edgeTypeId])
+  @@map("pricing_rule_edges")
+}
+
+model PricingRuleCutout {
+  id              String      @id @default(cuid())
+  pricingRuleId   String
+  pricingRule     PricingRule @relation(fields: [pricingRuleId], references: [id], onDelete: Cascade)
+  cutoutTypeId    String
+  cutoutType      CutoutType  @relation(fields: [cutoutTypeId], references: [id])
+
+  // Either set a custom flat rate OR an adjustment
+  customRate      Decimal?    @db.Decimal(10, 2)  // $180 instead of $220
+  adjustmentType  String?     // "percentage" or "fixed_amount"
+  adjustmentValue Decimal?    @db.Decimal(10, 4)
+
+  @@unique([pricingRuleId, cutoutTypeId])
+  @@map("pricing_rule_cutouts")
+}
+
+model PricingRuleMaterial {
+  id              String      @id @default(cuid())
+  pricingRuleId   String
+  pricingRule     PricingRule @relation(fields: [pricingRuleId], references: [id], onDelete: Cascade)
+  materialId      Int
+  material        Material    @relation(fields: [materialId], references: [id])
+
+  // Either set a custom flat rate OR an adjustment
+  customRate      Decimal?    @db.Decimal(10, 2)  // $120/m² instead of $140
+  adjustmentType  String?     // "percentage" or "fixed_amount"
+  adjustmentValue Decimal?    @db.Decimal(10, 4)
+
+  @@unique([pricingRuleId, materialId])
+  @@map("pricing_rule_materials")
 }
 
 // ============================================

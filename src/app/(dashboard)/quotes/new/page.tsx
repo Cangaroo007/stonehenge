@@ -9,7 +9,7 @@ async function getData() {
   const [customers, materials, pricingRules, lastQuote] = await Promise.all([
     prisma.customer.findMany({ orderBy: { name: 'asc' } }),
     prisma.material.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
-    prisma.pricingRule.findMany({ where: { isActive: true }, orderBy: { category: 'asc' } }),
+    prisma.featurePricing.findMany({ where: { isActive: true }, orderBy: { category: 'asc' } }),
     prisma.quote.findFirst({ orderBy: { quoteNumber: 'desc' } }),
   ]);
 
