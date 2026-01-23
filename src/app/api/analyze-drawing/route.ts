@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     // Convert file to buffer
     const bytes = await file.arrayBuffer();
-    let buffer = Buffer.from(bytes);
+    let buffer: Buffer = Buffer.from(bytes);
     let mimeType = file.type || 'image/png';
 
     console.log(`Received image: ${file.name}, size: ${buffer.length} bytes, type: ${mimeType}`);
