@@ -9,7 +9,7 @@
     "lint": "next lint",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "seed:pricing": "npx ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed-pricing.ts"
+    "seed:pricing": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed-pricing.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
