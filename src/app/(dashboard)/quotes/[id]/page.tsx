@@ -6,6 +6,28 @@ import DeleteQuoteButton from '@/components/DeleteQuoteButton';
 
 export const dynamic = 'force-dynamic';
 
+interface AnalysisRoom {
+  name: string;
+  pieces: Array<{
+    pieceNumber?: number;
+    name: string;
+    length: number;
+    width: number;
+    thickness: number;
+    confidence: number;
+  }>;
+}
+
+interface RawResults {
+  drawingType?: string;
+  metadata?: {
+    jobNumber?: string | null;
+    defaultThickness?: number;
+  };
+  rooms?: AnalysisRoom[];
+  warnings?: string[];
+}
+
 async function getQuote(id: number) {
   return prisma.quote.findUnique({
     where: { id },
@@ -23,6 +45,7 @@ async function getQuote(id: number) {
           },
         },
       },
+      drawingAnalysis: true,
     },
   });
 }
@@ -38,6 +61,9 @@ export default async function QuoteDetailPage({
   if (!quote) {
     notFound();
   }
+
+  // Parse drawing analysis results if available
+  const analysisResults = quote.drawingAnalysis?.rawResults as RawResults | null;
 
   return (
     <div className="space-y-6">
@@ -88,9 +114,116 @@ export default async function QuoteDetailPage({
         </div>
       </div>
 
+      {/* Drawing Analysis Section */}
+      {quote.drawingAnalysis && (
+        <div className="card">
+          <div className="p-4 border-b border-gray-200 bg-gray-50 rounded-t-xl flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <h3 className="text-lg font-semibold">Drawing Analysis</h3>
+            </div>
+            <span className="text-sm text-gray-500">
+              Analyzed {formatDate(quote.drawingAnalysis.analyzedAt)}
+            </span>
+          </div>
+          <div className="p-6">
+            {/* Analysis Metadata */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div>
+                <span className="text-xs text-gray-500 block">Filename</span>
+                <span className="font-medium text-gray-900 truncate block" title={quote.drawingAnalysis.filename}>
+                  {quote.drawingAnalysis.filename}
+                </span>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500 block">Drawing Type</span>
+                <span className="font-medium text-gray-900">
+                  {quote.drawingAnalysis.drawingType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                </span>
+              </div>
+              {analysisResults?.metadata?.jobNumber && (
+                <div>
+                  <span className="text-xs text-gray-500 block">Job Number</span>
+                  <span className="font-medium text-gray-900">{analysisResults.metadata.jobNumber}</span>
+                </div>
+              )}
+              {analysisResults?.metadata?.defaultThickness && (
+                <div>
+                  <span className="text-xs text-gray-500 block">Default Thickness</span>
+                  <span className="font-medium text-gray-900">{analysisResults.metadata.defaultThickness}mm</span>
+                </div>
+              )}
+            </div>
+
+            {/* Warnings from analysis */}
+            {analysisResults?.warnings && analysisResults.warnings.length > 0 && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
+                <div className="flex items-start gap-2">
+                  <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <strong>Analysis Warnings:</strong>
+                    <ul className="list-disc list-inside mt-1">
+                      {analysisResults.warnings.map((warning, i) => (
+                        <li key={i}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Detected pieces summary */}
+            {analysisResults?.rooms && analysisResults.rooms.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Originally Detected Pieces</h4>
+                <div className="space-y-3">
+                  {analysisResults.rooms.map((room, roomIndex) => (
+                    <div key={roomIndex} className="border border-gray-200 rounded-lg p-3">
+                      <h5 className="text-sm font-medium text-gray-600 mb-2">
+                        {room.name} ({room.pieces.length} piece{room.pieces.length !== 1 ? 's' : ''})
+                      </h5>
+                      <div className="space-y-1">
+                        {room.pieces.map((piece, pieceIndex) => (
+                          <div
+                            key={pieceIndex}
+                            className="flex items-center justify-between text-sm bg-gray-50 rounded px-3 py-2"
+                          >
+                            <span className="text-gray-700">
+                              {piece.pieceNumber ? `#${piece.pieceNumber} ` : ''}{piece.name}
+                            </span>
+                            <span className="text-gray-500">
+                              {piece.length} × {piece.width}mm
+                              <span
+                                className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
+                                  piece.confidence >= 0.7
+                                    ? 'bg-green-100 text-green-700'
+                                    : piece.confidence >= 0.5
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : 'bg-red-100 text-red-700'
+                                }`}
+                              >
+                                {Math.round(piece.confidence * 100)}%
+                              </span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Rooms and Pieces */}
       <div className="space-y-4">
-        {quote.rooms.map((room) => (
+        {quote.rooms.map((room: { id: number; name: string; pieces: Array<{ id: number; description: string | null; lengthMm: number; widthMm: number; thicknessMm: number; areaSqm: string | number; materialName: string | null; totalCost: string | number; features: Array<{ id: number; name: string; quantity: number }> }> }) => (
           <div key={room.id} className="card">
             <div className="p-4 border-b border-gray-200 bg-gray-50 rounded-t-xl">
               <h3 className="text-lg font-semibold">{room.name}</h3>
@@ -107,7 +240,7 @@ export default async function QuoteDetailPage({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {room.pieces.map((piece) => (
+                  {room.pieces.map((piece: { id: number; description: string | null; lengthMm: number; widthMm: number; thicknessMm: number; areaSqm: string | number; materialName: string | null; totalCost: string | number; features: Array<{ id: number; name: string; quantity: number }> }) => (
                     <tr key={piece.id}>
                       <td className="table-cell font-medium">
                         {piece.description || 'Unnamed piece'}
@@ -123,7 +256,7 @@ export default async function QuoteDetailPage({
                       <td className="table-cell">
                         {piece.features.length > 0 ? (
                           <ul className="text-sm">
-                            {piece.features.map((f) => (
+                            {piece.features.map((f: { id: number; name: string; quantity: number }) => (
                               <li key={f.id}>
                                 {f.quantity}× {f.name}
                               </li>

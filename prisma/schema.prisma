@@ -123,8 +123,9 @@ model Quote {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   
   // Relations
-  rooms          QuoteRoom[]
-  files          QuoteFile[]
+  rooms           QuoteRoom[]
+  files           QuoteFile[]
+  drawingAnalysis QuoteDrawingAnalysis?
 
   @@map("quotes")
 }
@@ -205,6 +206,24 @@ model QuoteFile {
   uploadedAt   DateTime @default(now()) @map("uploaded_at")
 
   @@map("quote_files")
+}
+
+// ============================================
+// DRAWING ANALYSIS
+// ============================================
+
+model QuoteDrawingAnalysis {
+  id             Int      @id @default(autoincrement())
+  quoteId        Int      @unique @map("quote_id")
+  quote          Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  filename       String
+  analyzedAt     DateTime @default(now()) @map("analyzed_at")
+  drawingType    String   @map("drawing_type") // "job_sheet", "cad_professional", etc.
+  rawResults     Json     @map("raw_results") // Full API response
+  metadata       Json?    // Extracted job number, thickness, etc.
+  importedPieces String[] @map("imported_pieces") // IDs of pieces created from this analysis
+
+  @@map("quote_drawing_analyses")
 }
 
 // ============================================

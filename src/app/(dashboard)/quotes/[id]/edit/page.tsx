@@ -5,6 +5,70 @@ import QuoteForm from '@/components/QuoteForm';
 
 export const dynamic = 'force-dynamic';
 
+interface RoomData {
+  id: number;
+  name: string;
+  pieces: PieceData[];
+}
+
+interface PieceData {
+  id: number;
+  description: string | null;
+  lengthMm: number;
+  widthMm: number;
+  thicknessMm: number;
+  materialId: number | null;
+  features: FeatureData[];
+}
+
+interface FeatureData {
+  id: number;
+  name: string;
+  quantity: number;
+  unitPrice: string | number;
+}
+
+interface AnalysisMetadata {
+  jobNumber?: string | null;
+  defaultThickness?: number;
+  defaultOverhang?: number;
+}
+
+interface AnalysisPiece {
+  pieceNumber?: number;
+  name: string;
+  shape?: string;
+  length: number;
+  width: number;
+  thickness: number;
+  cutouts?: Array<{ type: string; notes?: string }>;
+  notes?: string;
+  confidence: number;
+}
+
+interface AnalysisRoom {
+  name: string;
+  pieces: AnalysisPiece[];
+}
+
+interface AnalysisResult {
+  success: boolean;
+  drawingType?: 'cad_professional' | 'job_sheet' | 'hand_drawn' | 'architectural';
+  metadata?: AnalysisMetadata;
+  rooms: AnalysisRoom[];
+  warnings?: string[];
+  questionsForUser?: string[];
+}
+
+interface DrawingAnalysisData {
+  id: number;
+  filename: string;
+  analyzedAt: string;
+  drawingType: string;
+  rawResults: AnalysisResult;
+  metadata: AnalysisMetadata | null;
+}
+
 async function getData(quoteId: number) {
   const [quote, customers, materials, pricingRules] = await Promise.all([
     prisma.quote.findUnique({
@@ -19,6 +83,7 @@ async function getData(quoteId: number) {
             },
           },
         },
+        drawingAnalysis: true,
       },
     }),
     prisma.customer.findMany({ orderBy: { name: 'asc' } }),
@@ -36,7 +101,7 @@ export default async function EditQuotePage({
 }) {
   const { id } = await params;
   const quoteId = parseInt(id);
-  
+
   const [data, user] = await Promise.all([
     getData(quoteId),
     getCurrentUser(),
@@ -45,6 +110,18 @@ export default async function EditQuotePage({
   if (!data.quote) {
     notFound();
   }
+
+  // Prepare drawing analysis for the form if it exists
+  const drawingAnalysis: DrawingAnalysisData | null = data.quote.drawingAnalysis
+    ? {
+        id: data.quote.drawingAnalysis.id,
+        filename: data.quote.drawingAnalysis.filename,
+        analyzedAt: data.quote.drawingAnalysis.analyzedAt,
+        drawingType: data.quote.drawingAnalysis.drawingType,
+        rawResults: data.quote.drawingAnalysis.rawResults,
+        metadata: data.quote.drawingAnalysis.metadata,
+      }
+    : null;
 
   return (
     <div className="space-y-6">
@@ -67,17 +144,17 @@ export default async function EditQuotePage({
           projectName: data.quote.projectName,
           projectAddress: data.quote.projectAddress,
           notes: data.quote.notes,
-          rooms: data.quote.rooms.map((r: any) => ({
+          rooms: data.quote.rooms.map((r: RoomData) => ({
             id: r.id,
             name: r.name,
-            pieces: r.pieces.map((p: any) => ({
+            pieces: r.pieces.map((p: PieceData) => ({
               id: p.id,
               description: p.description,
               lengthMm: p.lengthMm,
               widthMm: p.widthMm,
               thicknessMm: p.thicknessMm,
               materialId: p.materialId,
-              features: p.features.map((f: any) => ({
+              features: p.features.map((f: FeatureData) => ({
                 id: f.id,
                 name: f.name,
                 quantity: f.quantity,
@@ -85,6 +162,7 @@ export default async function EditQuotePage({
               })),
             })),
           })),
+          drawingAnalysis,
         }}
       />
     </div>

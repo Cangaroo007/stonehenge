@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { formatCurrency, calculateArea } from '@/lib/utils';
-import DrawingUploadModal from './DrawingUploadModal';
 
 interface Customer {
   id: number;
@@ -50,6 +49,60 @@ interface PieceFeature {
   unitPrice: number;
 }
 
+// Drawing Analysis Types
+interface AnalysisPiece {
+  pieceNumber?: number;
+  name: string;
+  shape?: string;
+  length: number;
+  width: number;
+  thickness: number;
+  cutouts?: Array<{ type: string; notes?: string }>;
+  notes?: string;
+  confidence: number;
+}
+
+interface AnalysisRoom {
+  name: string;
+  pieces: AnalysisPiece[];
+}
+
+interface AnalysisMetadata {
+  jobNumber?: string | null;
+  defaultThickness?: number;
+  defaultOverhang?: number;
+}
+
+interface AnalysisResult {
+  success: boolean;
+  drawingType?: 'cad_professional' | 'job_sheet' | 'hand_drawn' | 'architectural';
+  metadata?: AnalysisMetadata;
+  rooms: AnalysisRoom[];
+  warnings?: string[];
+  questionsForUser?: string[];
+}
+
+interface ExtractedPiece {
+  roomName: string;
+  description: string;
+  lengthMm: number;
+  widthMm: number;
+  thicknessMm: number;
+  shape?: string;
+  cutouts?: string;
+  notes?: string;
+  confidence: number;
+  selected: boolean;
+}
+
+interface DrawingAnalysisData {
+  filename: string;
+  analyzedAt: string;
+  drawingType: string;
+  rawResults: AnalysisResult;
+  metadata: AnalysisMetadata | null;
+}
+
 interface QuoteFormProps {
   customers: Customer[];
   materials: Material[];
@@ -81,7 +134,40 @@ interface QuoteFormProps {
         }>;
       }>;
     }>;
+    drawingAnalysis?: {
+      id: number;
+      filename: string;
+      analyzedAt: string;
+      drawingType: string;
+      rawResults: AnalysisResult;
+      metadata: AnalysisMetadata | null;
+    } | null;
   };
+}
+
+const ROOM_TYPES = [
+  'Kitchen',
+  'Bathroom',
+  'Ensuite',
+  'Laundry',
+  'Pantry',
+  "Butler's Pantry",
+  'Powder Room',
+  'Island',
+  'TV Unit',
+  'Other',
+];
+
+function getConfidenceColor(confidence: number): string {
+  if (confidence >= 0.7) return 'text-green-600';
+  if (confidence >= 0.5) return 'text-yellow-600';
+  return 'text-red-600';
+}
+
+function getConfidenceBgColor(confidence: number): string {
+  if (confidence >= 0.7) return 'bg-green-100';
+  if (confidence >= 0.5) return 'bg-yellow-100';
+  return 'bg-red-100';
 }
 
 export default function QuoteForm({
@@ -94,6 +180,7 @@ export default function QuoteForm({
 }: QuoteFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const piecesSectionRef = useRef<HTMLDivElement>(null);
 
   // Form state
   const [customerId, setCustomerId] = useState<number | null>(initialData?.customerId || null);
@@ -121,8 +208,28 @@ export default function QuoteForm({
     })) || []
   );
 
+  // Drawing Analysis State
+  const [analysisExpanded, setAnalysisExpanded] = useState(!initialData || rooms.length === 0);
+  const [dragActive, setDragActive] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPdfFile, setIsPdfFile] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    initialData?.drawingAnalysis?.rawResults || null
+  );
+  const [extractedPieces, setExtractedPieces] = useState<ExtractedPiece[]>([]);
+  const [analysisData, setAnalysisData] = useState<DrawingAnalysisData | null>(
+    initialData?.drawingAnalysis ? {
+      filename: initialData.drawingAnalysis.filename,
+      analyzedAt: initialData.drawingAnalysis.analyzedAt,
+      drawingType: initialData.drawingAnalysis.drawingType,
+      rawResults: initialData.drawingAnalysis.rawResults,
+      metadata: initialData.drawingAnalysis.metadata,
+    } : null
+  );
+
   // Modal states
-  const [showUploadModal, setShowUploadModal] = useState(false);
   const [showRoomSelector, setShowRoomSelector] = useState(false);
 
   const taxRate = 10;
@@ -177,7 +284,7 @@ export default function QuoteForm({
   function addRoomWithType(roomType: string) {
     const usedNames = rooms.map((r) => r.name);
     let newName = roomType;
-    
+
     // Handle duplicate names
     if (usedNames.includes(newName)) {
       let counter = 2;
@@ -196,36 +303,6 @@ export default function QuoteForm({
       },
     ]);
     setShowRoomSelector(false);
-  }
-
-  // Handle pieces from drawing upload
-  function handleAddPiecesFromDrawing(
-    roomName: string,
-    pieces: Array<{
-      description: string;
-      lengthMm: number;
-      widthMm: number;
-      thicknessMm: number;
-      selected: boolean;
-    }>
-  ) {
-    const newRoom: QuoteRoom = {
-      id: `new-${Date.now()}`,
-      name: roomName,
-      pieces: pieces
-        .filter((p) => p.selected)
-        .map((p, index) => ({
-          id: `new-${Date.now()}-${index}`,
-          description: p.description,
-          lengthMm: p.lengthMm,
-          widthMm: p.widthMm,
-          thicknessMm: p.thicknessMm,
-          materialId: materials[0]?.id || null,
-          features: [],
-        })),
-    };
-    setRooms([...rooms, newRoom]);
-    toast.success(`Added ${roomName} with ${newRoom.pieces.length} piece(s)`);
   }
 
   function removeRoom(roomId: string) {
@@ -370,6 +447,212 @@ export default function QuoteForm({
     });
   }
 
+  // Drawing Analysis Functions
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  }, []);
+
+  const processFile = useCallback(async (file: File) => {
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf';
+
+    if (!isImage && !isPdf) {
+      setAnalysisError('Please upload an image file (JPEG, PNG, GIF, WebP) or PDF');
+      return;
+    }
+
+    setIsPdfFile(isPdf);
+
+    if (isImage) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl(null);
+    }
+
+    setAnalysisError(null);
+    setAnalyzing(true);
+    setAnalysisResult(null);
+    setExtractedPieces([]);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/analyze-drawing', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.details || 'Failed to analyze drawing');
+      }
+
+      if (data.success && data.analysis) {
+        const analysisData = data.analysis as AnalysisResult;
+        setAnalysisResult(analysisData);
+
+        // Store analysis data for saving
+        setAnalysisData({
+          filename: file.name,
+          analyzedAt: new Date().toISOString(),
+          drawingType: analysisData.drawingType || 'unknown',
+          rawResults: analysisData,
+          metadata: analysisData.metadata || null,
+        });
+
+        // Flatten rooms into editable pieces
+        const pieces: ExtractedPiece[] = [];
+        if (analysisData.rooms && Array.isArray(analysisData.rooms)) {
+          for (const room of analysisData.rooms) {
+            for (const piece of room.pieces) {
+              const cutoutsStr = piece.cutouts?.map(c => c.type).join(', ') || '';
+              pieces.push({
+                roomName: room.name,
+                description: piece.name || `Piece ${piece.pieceNumber || pieces.length + 1}`,
+                lengthMm: piece.length,
+                widthMm: piece.width,
+                thicknessMm: piece.thickness || analysisData.metadata?.defaultThickness || 20,
+                shape: piece.shape,
+                cutouts: cutoutsStr,
+                notes: piece.notes,
+                confidence: piece.confidence,
+                selected: true,
+              });
+            }
+          }
+        }
+
+        setExtractedPieces(pieces);
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (err) {
+      console.error('Analysis error:', err);
+      setAnalysisError(err instanceof Error ? err.message : 'Failed to analyze drawing');
+    } finally {
+      setAnalyzing(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragActive(false);
+
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        processFile(e.dataTransfer.files[0]);
+      }
+    },
+    [processFile]
+  );
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+        processFile(e.target.files[0]);
+      }
+    },
+    [processFile]
+  );
+
+  const togglePieceSelection = (index: number) => {
+    setExtractedPieces((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, selected: !p.selected } : p))
+    );
+  };
+
+  const updateExtractedPiece = (index: number, updates: Partial<ExtractedPiece>) => {
+    setExtractedPieces((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, ...updates } : p))
+    );
+  };
+
+  const handleImportSelectedPieces = () => {
+    const selectedPieces = extractedPieces.filter((p) => p.selected);
+    if (selectedPieces.length === 0) {
+      toast.error('Please select at least one piece to import');
+      return;
+    }
+
+    // Group pieces by room name
+    const piecesByRoom: Record<string, ExtractedPiece[]> = {};
+    for (const piece of selectedPieces) {
+      const roomName = piece.roomName || 'Room';
+      if (!piecesByRoom[roomName]) {
+        piecesByRoom[roomName] = [];
+      }
+      piecesByRoom[roomName].push(piece);
+    }
+
+    const existingRoomNames = rooms.map((r) => r.name);
+    const newRooms: QuoteRoom[] = [];
+    let totalPiecesImported = 0;
+
+    // Create rooms and pieces
+    for (const [baseName, roomPieces] of Object.entries(piecesByRoom)) {
+      let roomName = baseName;
+
+      // Handle duplicate room names
+      if (existingRoomNames.includes(roomName)) {
+        let counter = 2;
+        while (existingRoomNames.includes(`${baseName} ${counter}`)) {
+          counter++;
+        }
+        roomName = `${baseName} ${counter}`;
+      }
+      existingRoomNames.push(roomName);
+
+      const newRoom: QuoteRoom = {
+        id: `new-${Date.now()}-${roomName}`,
+        name: roomName,
+        pieces: roomPieces.map((p, index) => ({
+          id: `new-${Date.now()}-${index}`,
+          description: p.description,
+          lengthMm: p.lengthMm,
+          widthMm: p.widthMm,
+          thicknessMm: p.thicknessMm,
+          materialId: materials[0]?.id || null,
+          features: [],
+        })),
+      };
+      newRooms.push(newRoom);
+      totalPiecesImported += roomPieces.length;
+    }
+
+    setRooms([...rooms, ...newRooms]);
+    setExtractedPieces([]);
+    setAnalysisResult(null);
+    setAnalysisExpanded(false);
+    toast.success(`Imported ${totalPiecesImported} pieces from drawing analysis`);
+
+    // Scroll to pieces section
+    setTimeout(() => {
+      piecesSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  const resetAnalysis = () => {
+    setPreviewUrl(null);
+    setIsPdfFile(false);
+    setAnalysisResult(null);
+    setExtractedPieces([]);
+    setAnalysisError(null);
+    setAnalysisData(null);
+  };
+
+  // Get unique room names from extracted pieces
+  const extractedRoomNames = Array.from(new Set(extractedPieces.map((p) => p.roomName)));
+
   // Save quote
   async function handleSave(status: string = 'draft') {
     setSaving(true);
@@ -413,6 +696,7 @@ export default function QuoteForm({
         taxAmount: totals.taxAmount,
         total: totals.total,
         createdBy: userId,
+        drawingAnalysis: analysisData,
       };
 
       const url = initialData ? `/api/quotes/${initialData.id}` : '/api/quotes';
@@ -493,8 +777,417 @@ export default function QuoteForm({
         </div>
       </div>
 
+      {/* Drawing Analysis Section */}
+      <div className="card">
+        <button
+          type="button"
+          onClick={() => setAnalysisExpanded(!analysisExpanded)}
+          className="w-full p-4 flex items-center justify-between bg-gray-50 rounded-t-xl hover:bg-gray-100 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span className="text-lg font-semibold text-gray-900">Drawing Analysis</span>
+            <span className="text-sm text-gray-500">(Optional)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {analysisData && !analysisResult && (
+              <span className="text-sm text-green-600 flex items-center gap-1">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Analysis stored
+              </span>
+            )}
+            <svg
+              className={`h-5 w-5 text-gray-500 transition-transform ${analysisExpanded ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+
+        {analysisExpanded && (
+          <div className="p-6 border-t border-gray-200">
+            {/* Error message */}
+            {analysisError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">
+                <svg className="h-5 w-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <p>{analysisError}</p>
+                  <button
+                    type="button"
+                    onClick={resetAnalysis}
+                    className="mt-2 text-red-800 underline hover:no-underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Upload Zone - Show when no analysis */}
+            {!analyzing && !analysisResult && (
+              <div
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                  dragActive
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+              >
+                <svg
+                  className="mx-auto h-12 w-12 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <p className="mt-4 text-sm text-gray-600">
+                  Drop drawing here or{' '}
+                  <label className="text-primary-600 hover:text-primary-700 cursor-pointer font-medium">
+                    click to browse
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*,.pdf,application/pdf"
+                      onChange={handleFileSelect}
+                    />
+                  </label>
+                </p>
+                <p className="mt-2 text-xs text-gray-500">
+                  Supports: PNG, JPG, PDF
+                </p>
+              </div>
+            )}
+
+            {/* Analyzing State */}
+            {analyzing && (
+              <div className="text-center py-8">
+                <div className="mb-6">
+                  {previewUrl ? (
+                    <img
+                      src={previewUrl}
+                      alt="Uploaded drawing"
+                      className="max-h-48 mx-auto rounded-lg shadow-md"
+                    />
+                  ) : isPdfFile ? (
+                    <div className="mx-auto w-24 h-32 bg-red-50 border border-red-200 rounded-lg flex items-center justify-center">
+                      <svg className="w-12 h-12 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4z"/>
+                      </svg>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex items-center justify-center gap-3">
+                  <svg
+                    className="animate-spin h-6 w-6 text-primary-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  <span className="text-gray-600">Analyzing drawing...</span>
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  This may take a few seconds
+                </p>
+              </div>
+            )}
+
+            {/* Analysis Results */}
+            {analysisResult && extractedPieces.length > 0 && (
+              <div className="space-y-6">
+                {/* Header with actions */}
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Analysis Results</h3>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={resetAnalysis}
+                      className="btn-secondary text-sm"
+                    >
+                      Re-analyze
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetAnalysis}
+                      className="text-gray-400 hover:text-gray-500"
+                    >
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Metadata row */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+                  {analysisResult.drawingType && (
+                    <div>
+                      <span className="text-xs text-gray-500 block">Drawing Type</span>
+                      <span className="font-medium text-gray-900">
+                        {analysisResult.drawingType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </span>
+                    </div>
+                  )}
+                  {analysisResult.metadata?.jobNumber && (
+                    <div>
+                      <span className="text-xs text-gray-500 block">Job #</span>
+                      <span className="font-medium text-gray-900">{analysisResult.metadata.jobNumber}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-xs text-gray-500 block">Thickness</span>
+                    <span className="font-medium text-gray-900">
+                      {analysisResult.metadata?.defaultThickness || 20}mm
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 block">Detected</span>
+                    <span className="font-medium text-gray-900">
+                      {extractedRoomNames.length} room{extractedRoomNames.length !== 1 ? 's' : ''}, {extractedPieces.length} piece{extractedPieces.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Warnings */}
+                {analysisResult.warnings && analysisResult.warnings.length > 0 && (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
+                    <div className="flex items-start gap-2">
+                      <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <ul className="list-disc list-inside">
+                        {analysisResult.warnings.map((warning, i) => (
+                          <li key={i}>{warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* Detected Pieces by Room */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">
+                    Detected Pieces ({extractedPieces.filter((p) => p.selected).length} of {extractedPieces.length} selected)
+                  </h4>
+
+                  {extractedRoomNames.map((roomName) => {
+                    const roomPieces = extractedPieces.filter((p) => p.roomName === roomName);
+                    const roomPiecesWithIndices = roomPieces.map((p) => ({
+                      piece: p,
+                      index: extractedPieces.indexOf(p),
+                    }));
+
+                    return (
+                      <div key={roomName} className="mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <input
+                            type="checkbox"
+                            checked={roomPieces.every((p) => p.selected)}
+                            onChange={(e) => {
+                              roomPiecesWithIndices.forEach(({ index }) => {
+                                updateExtractedPiece(index, { selected: e.target.checked });
+                              });
+                            }}
+                            className="h-4 w-4 text-primary-600 rounded"
+                          />
+                          <h5 className="text-sm font-medium text-gray-600">{roomName}</h5>
+                          <span className="text-xs text-gray-400">
+                            ({roomPieces.filter((p) => p.selected).length} of {roomPieces.length})
+                          </span>
+                          <select
+                            className="ml-auto text-xs border-gray-200 rounded py-1 px-2"
+                            value={roomPieces[0]?.roomName || roomName}
+                            onChange={(e) => {
+                              roomPiecesWithIndices.forEach(({ index }) => {
+                                updateExtractedPiece(index, { roomName: e.target.value });
+                              });
+                            }}
+                          >
+                            {ROOM_TYPES.map((type) => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ))}
+                            {!ROOM_TYPES.includes(roomName) && (
+                              <option value={roomName}>{roomName}</option>
+                            )}
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          {roomPiecesWithIndices.map(({ piece, index }) => (
+                            <div
+                              key={index}
+                              className={`border rounded-lg p-3 transition-colors ${
+                                piece.selected
+                                  ? 'border-primary-300 bg-primary-50'
+                                  : 'border-gray-200 bg-gray-50'
+                              } ${piece.confidence < 0.5 ? 'border-orange-300' : ''}`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={piece.selected}
+                                  onChange={() => togglePieceSelection(index)}
+                                  className="mt-1 h-4 w-4 text-primary-600 rounded"
+                                />
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-2">
+                                  <div className="md:col-span-2">
+                                    <label className="block text-xs text-gray-500 mb-1">
+                                      Description
+                                    </label>
+                                    <input
+                                      type="text"
+                                      className="input w-full text-sm py-1"
+                                      value={piece.description}
+                                      onChange={(e) =>
+                                        updateExtractedPiece(index, { description: e.target.value })
+                                      }
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-500 mb-1">
+                                      Length (mm)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className="input w-full text-sm py-1"
+                                      value={piece.lengthMm}
+                                      onChange={(e) =>
+                                        updateExtractedPiece(index, { lengthMm: Number(e.target.value) })
+                                      }
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-500 mb-1">
+                                      Width (mm)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className="input w-full text-sm py-1"
+                                      value={piece.widthMm}
+                                      onChange={(e) =>
+                                        updateExtractedPiece(index, { widthMm: Number(e.target.value) })
+                                      }
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-500 mb-1">
+                                      Thick (mm)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      className="input w-full text-sm py-1"
+                                      value={piece.thicknessMm}
+                                      onChange={(e) =>
+                                        updateExtractedPiece(index, { thicknessMm: Number(e.target.value) })
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <span
+                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getConfidenceColor(piece.confidence)} ${getConfidenceBgColor(piece.confidence)}`}
+                                    title={piece.confidence < 0.5 ? 'Low confidence - verify dimensions' : ''}
+                                  >
+                                    {Math.round(piece.confidence * 100)}%
+                                  </span>
+                                </div>
+                              </div>
+                              {/* Additional info */}
+                              {(piece.shape || piece.cutouts || piece.notes) && (
+                                <div className="mt-2 ml-7 text-xs text-gray-500 flex flex-wrap gap-3">
+                                  {piece.shape && (
+                                    <span>
+                                      <strong>Shape:</strong> {piece.shape}
+                                    </span>
+                                  )}
+                                  {piece.cutouts && (
+                                    <span>
+                                      <strong>Cutouts:</strong> {piece.cutouts}
+                                    </span>
+                                  )}
+                                  {piece.notes && (
+                                    <span className="italic">{piece.notes}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Import Button */}
+                <button
+                  type="button"
+                  onClick={handleImportSelectedPieces}
+                  className="btn-primary w-full"
+                  disabled={extractedPieces.filter((p) => p.selected).length === 0}
+                >
+                  Import {extractedPieces.filter((p) => p.selected).length} Selected Piece
+                  {extractedPieces.filter((p) => p.selected).length !== 1 ? 's' : ''} to Quote
+                </button>
+              </div>
+            )}
+
+            {/* No pieces detected */}
+            {analysisResult && extractedPieces.length === 0 && (
+              <div className="text-center py-8">
+                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No pieces detected</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Try uploading a clearer image or add pieces manually.
+                </p>
+                <button
+                  type="button"
+                  onClick={resetAnalysis}
+                  className="mt-4 btn-secondary"
+                >
+                  Try another image
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Rooms and Pieces */}
-      <div className="space-y-4">
+      <div className="space-y-4" ref={piecesSectionRef}>
         {rooms.map((room) => (
           <div key={room.id} className="card">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50 rounded-t-xl">
@@ -726,26 +1419,6 @@ export default function QuoteForm({
             </div>
           </div>
         )}
-
-        {/* Upload Drawing Button */}
-        <button
-          type="button"
-          onClick={() => setShowUploadModal(true)}
-          className="btn-primary w-full flex items-center justify-center gap-2"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          Upload Drawing (AI Extract)
-        </button>
-
-        {/* Drawing Upload Modal */}
-        <DrawingUploadModal
-          isOpen={showUploadModal}
-          onClose={() => setShowUploadModal(false)}
-          onAddPieces={handleAddPiecesFromDrawing}
-          existingRoomNames={rooms.map((r) => r.name)}
-        />
       </div>
 
       {/* Notes */}

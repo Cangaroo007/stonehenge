@@ -1,6 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 
+interface RoomData {
+  name: string;
+  sortOrder: number;
+  pieces: PieceData[];
+}
+
+interface PieceData {
+  description: string;
+  lengthMm: number;
+  widthMm: number;
+  thicknessMm: number;
+  materialId: number | null;
+  materialName: string | null;
+  areaSqm: number;
+  materialCost: number;
+  featuresCost: number;
+  totalCost: number;
+  sortOrder: number;
+  features: FeatureData[];
+}
+
+interface FeatureData {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+interface DrawingAnalysisData {
+  filename: string;
+  analyzedAt: string;
+  drawingType: string;
+  rawResults: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
+}
+
+interface QuoteUpdateData {
+  customerId: number | null;
+  projectName: string | null;
+  projectAddress: string | null;
+  status?: string;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  notes: string | null;
+  rooms: RoomData[];
+  drawingAnalysis?: DrawingAnalysisData | null;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,6 +74,7 @@ export async function GET(
           },
         },
         files: true,
+        drawingAnalysis: true,
       },
     });
 
@@ -45,12 +96,35 @@ export async function PUT(
   try {
     const { id } = await params;
     const quoteId = parseInt(id);
-    const data = await request.json();
+    const data: QuoteUpdateData = await request.json();
 
     // Delete existing rooms (cascade deletes pieces and features)
     await prisma.quoteRoom.deleteMany({
       where: { quoteId },
     });
+
+    // Handle drawing analysis - upsert or delete
+    if (data.drawingAnalysis) {
+      await prisma.quoteDrawingAnalysis.upsert({
+        where: { quoteId },
+        create: {
+          quoteId,
+          filename: data.drawingAnalysis.filename,
+          analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
+          drawingType: data.drawingAnalysis.drawingType,
+          rawResults: data.drawingAnalysis.rawResults,
+          metadata: data.drawingAnalysis.metadata,
+          importedPieces: [],
+        },
+        update: {
+          filename: data.drawingAnalysis.filename,
+          analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
+          drawingType: data.drawingAnalysis.drawingType,
+          rawResults: data.drawingAnalysis.rawResults,
+          metadata: data.drawingAnalysis.metadata,
+        },
+      });
+    }
 
     // Update quote with new rooms
     const quote = await prisma.quote.update({
@@ -66,11 +140,11 @@ export async function PUT(
         total: data.total,
         notes: data.notes,
         rooms: {
-          create: data.rooms.map((room: any) => ({
+          create: data.rooms.map((room: RoomData) => ({
             name: room.name,
             sortOrder: room.sortOrder,
             pieces: {
-              create: room.pieces.map((piece: any) => ({
+              create: room.pieces.map((piece: PieceData) => ({
                 description: piece.description,
                 lengthMm: piece.lengthMm,
                 widthMm: piece.widthMm,
@@ -83,7 +157,7 @@ export async function PUT(
                 totalCost: piece.totalCost,
                 sortOrder: piece.sortOrder,
                 features: {
-                  create: piece.features.map((feature: any) => ({
+                  create: piece.features.map((feature: FeatureData) => ({
                     name: feature.name,
                     quantity: feature.quantity,
                     unitPrice: feature.unitPrice,
@@ -94,6 +168,9 @@ export async function PUT(
             },
           })),
         },
+      },
+      include: {
+        drawingAnalysis: true,
       },
     });
 

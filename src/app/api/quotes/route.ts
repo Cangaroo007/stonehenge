@@ -1,6 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 
+interface RoomData {
+  name: string;
+  sortOrder: number;
+  pieces: PieceData[];
+}
+
+interface PieceData {
+  description: string;
+  lengthMm: number;
+  widthMm: number;
+  thicknessMm: number;
+  materialId: number | null;
+  materialName: string | null;
+  areaSqm: number;
+  materialCost: number;
+  featuresCost: number;
+  totalCost: number;
+  sortOrder: number;
+  features: FeatureData[];
+}
+
+interface FeatureData {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+interface DrawingAnalysisData {
+  filename: string;
+  analyzedAt: string;
+  drawingType: string;
+  rawResults: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
+}
+
+interface QuoteCreateData {
+  quoteNumber: string;
+  customerId: number | null;
+  projectName: string | null;
+  projectAddress: string | null;
+  status?: string;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  notes: string | null;
+  createdBy: number | null;
+  rooms: RoomData[];
+  drawingAnalysis?: DrawingAnalysisData | null;
+}
+
 export async function GET() {
   try {
     const quotes = await prisma.quote.findMany({
@@ -16,7 +68,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json();
+    const data: QuoteCreateData = await request.json();
 
     // Create the quote with rooms and pieces
     const quote = await prisma.quote.create({
@@ -34,11 +86,11 @@ export async function POST(request: NextRequest) {
         validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         createdBy: data.createdBy,
         rooms: {
-          create: data.rooms.map((room: any) => ({
+          create: data.rooms.map((room: RoomData) => ({
             name: room.name,
             sortOrder: room.sortOrder,
             pieces: {
-              create: room.pieces.map((piece: any) => ({
+              create: room.pieces.map((piece: PieceData) => ({
                 description: piece.description,
                 lengthMm: piece.lengthMm,
                 widthMm: piece.widthMm,
@@ -51,7 +103,7 @@ export async function POST(request: NextRequest) {
                 totalCost: piece.totalCost,
                 sortOrder: piece.sortOrder,
                 features: {
-                  create: piece.features.map((feature: any) => ({
+                  create: piece.features.map((feature: FeatureData) => ({
                     name: feature.name,
                     quantity: feature.quantity,
                     unitPrice: feature.unitPrice,
@@ -62,6 +114,19 @@ export async function POST(request: NextRequest) {
             },
           })),
         },
+        // Create drawing analysis if provided
+        ...(data.drawingAnalysis && {
+          drawingAnalysis: {
+            create: {
+              filename: data.drawingAnalysis.filename,
+              analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
+              drawingType: data.drawingAnalysis.drawingType,
+              rawResults: data.drawingAnalysis.rawResults,
+              metadata: data.drawingAnalysis.metadata,
+              importedPieces: [],
+            },
+          },
+        }),
       },
     });
 
