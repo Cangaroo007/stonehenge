@@ -223,7 +223,7 @@ export default async function QuoteDetailPage({
 
       {/* Rooms and Pieces */}
       <div className="space-y-4">
-        {quote.rooms.map((room: { id: number; name: string; pieces: Array<{ id: number; description: string | null; lengthMm: number; widthMm: number; thicknessMm: number; areaSqm: string | number; materialName: string | null; totalCost: string | number; features: Array<{ id: number; name: string; quantity: number }> }> }) => (
+        {quote.rooms.map((room) => (
           <div key={room.id} className="card">
             <div className="p-4 border-b border-gray-200 bg-gray-50 rounded-t-xl">
               <h3 className="text-lg font-semibold">{room.name}</h3>
@@ -240,7 +240,7 @@ export default async function QuoteDetailPage({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {room.pieces.map((piece: { id: number; description: string | null; lengthMm: number; widthMm: number; thicknessMm: number; areaSqm: string | number; materialName: string | null; totalCost: string | number; features: Array<{ id: number; name: string; quantity: number }> }) => (
+                  {room.pieces.map((piece) => (
                     <tr key={piece.id}>
                       <td className="table-cell font-medium">
                         {piece.description || 'Unnamed piece'}
@@ -256,7 +256,7 @@ export default async function QuoteDetailPage({
                       <td className="table-cell">
                         {piece.features.length > 0 ? (
                           <ul className="text-sm">
-                            {piece.features.map((f: { id: number; name: string; quantity: number }) => (
+                            {piece.features.map((f) => (
                               <li key={f.id}>
                                 {f.quantity}× {f.name}
                               </li>
