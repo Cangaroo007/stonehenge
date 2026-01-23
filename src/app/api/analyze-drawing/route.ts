@@ -1,9 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import sharp from 'sharp';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+// Anthropic's image size limit is 5MB
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+
+async function compressImage(buffer: Buffer, mimeType: string): Promise<{ data: Buffer; mediaType: string }> {
+  // Get image metadata to determine dimensions
+  const metadata = await sharp(buffer).metadata();
+
+  let sharpInstance = sharp(buffer);
+
+  // Calculate target dimensions - max 4096px on longest side while maintaining aspect ratio
+  const maxDimension = 4096;
+  if (metadata.width && metadata.height) {
+    const longestSide = Math.max(metadata.width, metadata.height);
+    if (longestSide > maxDimension) {
+      sharpInstance = sharpInstance.resize(maxDimension, maxDimension, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      });
+    }
+  }
+
+  // Convert to JPEG for better compression (unless it's a PNG with transparency we need to preserve)
+  // For technical drawings, JPEG at quality 85 provides good balance
+  const outputBuffer = await sharpInstance
+    .jpeg({ quality: 85, mozjpeg: true })
+    .toBuffer();
+
+  return {
+    data: outputBuffer,
+    mediaType: 'image/jpeg',
+  };
+}
 
 const SYSTEM_PROMPT = `You are an expert stone benchtop fabricator analyzing drawings to extract piece specifications for quoting.
 
@@ -85,13 +119,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Convert file to base64
+    // Convert file to buffer
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const base64Image = buffer.toString('base64');
+    let buffer = Buffer.from(bytes);
+    let mimeType = file.type || 'image/png';
 
-    // Determine media type
-    const mimeType = file.type || 'image/png';
+    console.log(`Received image: ${file.name}, size: ${buffer.length} bytes, type: ${mimeType}`);
+
+    // Check if compression is needed (>5MB or close to limit)
+    if (buffer.length > MAX_IMAGE_SIZE * 0.8) {
+      console.log(`Image size ${buffer.length} bytes exceeds threshold, compressing...`);
+      try {
+        const compressed = await compressImage(buffer, mimeType);
+        buffer = compressed.data;
+        mimeType = compressed.mediaType;
+        console.log(`Compressed to ${buffer.length} bytes`);
+      } catch (compressionError) {
+        console.error('Image compression failed:', compressionError);
+        return NextResponse.json(
+          {
+            error: 'Image too large and compression failed',
+            details: `Original size: ${(bytes.byteLength / 1024 / 1024).toFixed(1)}MB. Maximum allowed: 5MB. Please upload a smaller image or compress it before uploading.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Final size check after compression
+    if (buffer.length > MAX_IMAGE_SIZE) {
+      return NextResponse.json(
+        {
+          error: 'Image still too large after compression',
+          details: `Compressed size: ${(buffer.length / 1024 / 1024).toFixed(1)}MB. Maximum allowed: 5MB. Please upload a lower resolution image.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const base64Image = buffer.toString('base64');
     const mediaType = mimeType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
 
     // Call Claude API
@@ -147,8 +213,17 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Drawing analysis error:', error);
+
+    // More detailed error response
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
     return NextResponse.json(
-      { error: 'Failed to analyze drawing', details: String(error) },
+      {
+        error: 'Failed to analyze drawing',
+        details: errorMessage,
+        stack: process.env.NODE_ENV === 'development' ? errorStack : undefined
+      },
       { status: 500 }
     );
   }
