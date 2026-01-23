@@ -121,19 +121,19 @@ export async function POST(request: NextRequest) {
 
     // Convert file to buffer
     const bytes = await file.arrayBuffer();
-    let buffer = Buffer.from(bytes);
+    let imageBuffer: Buffer = Buffer.from(bytes);
     let mimeType = file.type || 'image/png';
 
-    console.log(`Received image: ${file.name}, size: ${buffer.length} bytes, type: ${mimeType}`);
+    console.log(`Received image: ${file.name}, size: ${imageBuffer.length} bytes, type: ${mimeType}`);
 
     // Check if compression is needed (>5MB or close to limit)
-    if (buffer.length > MAX_IMAGE_SIZE * 0.8) {
-      console.log(`Image size ${buffer.length} bytes exceeds threshold, compressing...`);
+    if (imageBuffer.length > MAX_IMAGE_SIZE * 0.8) {
+      console.log(`Image size ${imageBuffer.length} bytes exceeds threshold, compressing...`);
       try {
-        const compressed = await compressImage(buffer, mimeType);
-        buffer = compressed.data;
+        const compressed = await compressImage(imageBuffer, mimeType);
+        imageBuffer = Buffer.from(compressed.data);
         mimeType = compressed.mediaType;
-        console.log(`Compressed to ${buffer.length} bytes`);
+        console.log(`Compressed to ${imageBuffer.length} bytes`);
       } catch (compressionError) {
         console.error('Image compression failed:', compressionError);
         return NextResponse.json(
@@ -147,17 +147,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Final size check after compression
-    if (buffer.length > MAX_IMAGE_SIZE) {
+    if (imageBuffer.length > MAX_IMAGE_SIZE) {
       return NextResponse.json(
         {
           error: 'Image still too large after compression',
-          details: `Compressed size: ${(buffer.length / 1024 / 1024).toFixed(1)}MB. Maximum allowed: 5MB. Please upload a lower resolution image.`,
+          details: `Compressed size: ${(imageBuffer.length / 1024 / 1024).toFixed(1)}MB. Maximum allowed: 5MB. Please upload a lower resolution image.`,
         },
         { status: 400 }
       );
     }
 
-    const base64Image = buffer.toString('base64');
+    const base64Image = imageBuffer.toString('base64');
     const mediaType = mimeType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
 
     // Call Claude API
