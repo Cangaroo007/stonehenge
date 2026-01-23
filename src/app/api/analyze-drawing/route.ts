@@ -6,6 +6,134 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+// Type definitions for the new analysis format
+interface AnalysisCutout {
+  type: string;
+  notes?: string;
+}
+
+interface AnalysisPiece {
+  pieceNumber?: number;
+  name: string;
+  pieceType?: string;
+  shape?: string;
+  length: number;
+  width: number;
+  thickness?: number;
+  cutouts?: AnalysisCutout[];
+  notes?: string;
+  confidence: number;
+}
+
+interface AnalysisRoom {
+  name: string;
+  pieces: AnalysisPiece[];
+}
+
+interface AnalysisMetadata {
+  jobNumber: string | null;
+  defaultThickness: number;
+  defaultOverhang: number;
+}
+
+interface RawAnalysis {
+  success: boolean;
+  drawingType: 'cad_professional' | 'job_sheet' | 'hand_drawn' | 'architectural';
+  metadata: AnalysisMetadata;
+  rooms: AnalysisRoom[];
+  warnings?: string[];
+  questionsForUser?: string[];
+}
+
+// Legacy format for frontend compatibility
+interface LegacyPiece {
+  description: string;
+  lengthMm: number;
+  widthMm: number;
+  thicknessMm: number;
+  notes?: string;
+}
+
+interface LegacyAnalysis {
+  roomType: string;
+  confidence: 'high' | 'medium' | 'low';
+  roomTypeReasoning?: string;
+  pieces: LegacyPiece[];
+  drawingNotes?: string;
+}
+
+// Transform new format to legacy format for frontend compatibility
+function transformToLegacyFormat(raw: RawAnalysis): LegacyAnalysis {
+  // Get the first room (primary room) or use a default
+  const primaryRoom = raw.rooms[0] ?? { name: 'Unknown', pieces: [] };
+
+  // Calculate average confidence across all pieces
+  const allPieces = raw.rooms.flatMap(r => r.pieces);
+  const avgConfidence = allPieces.length > 0
+    ? allPieces.reduce((sum, p) => sum + p.confidence, 0) / allPieces.length
+    : 0.5;
+
+  // Map confidence number to category
+  let confidenceLevel: 'high' | 'medium' | 'low';
+  if (avgConfidence >= 0.8) {
+    confidenceLevel = 'high';
+  } else if (avgConfidence >= 0.6) {
+    confidenceLevel = 'medium';
+  } else {
+    confidenceLevel = 'low';
+  }
+
+  // Transform pieces from all rooms to legacy format
+  const legacyPieces: LegacyPiece[] = [];
+  for (const room of raw.rooms) {
+    for (const piece of room.pieces) {
+      // Build description from piece name and cutouts
+      let description = piece.name;
+      if (piece.cutouts && piece.cutouts.length > 0) {
+        const cutoutDesc = piece.cutouts.map(c => c.type).join(', ');
+        description += ` (${cutoutDesc})`;
+      }
+
+      // Build notes including shape and any original notes
+      const noteParts: string[] = [];
+      if (piece.shape && piece.shape !== 'rectangular') {
+        noteParts.push(`Shape: ${piece.shape}`);
+      }
+      if (piece.notes) {
+        noteParts.push(piece.notes);
+      }
+      if (raw.rooms.length > 1) {
+        noteParts.push(`Room: ${room.name}`);
+      }
+
+      legacyPieces.push({
+        description,
+        lengthMm: piece.length,
+        widthMm: piece.width,
+        thicknessMm: piece.thickness ?? raw.metadata.defaultThickness ?? 20,
+        notes: noteParts.length > 0 ? noteParts.join('. ') : undefined,
+      });
+    }
+  }
+
+  // Build drawing notes from warnings and questions
+  const drawingNotes: string[] = [];
+  if (raw.warnings && raw.warnings.length > 0) {
+    drawingNotes.push(`Warnings: ${raw.warnings.join('; ')}`);
+  }
+  if (raw.questionsForUser && raw.questionsForUser.length > 0) {
+    drawingNotes.push(`Questions: ${raw.questionsForUser.join('; ')}`);
+  }
+
+  return {
+    roomType: primaryRoom.name,
+    confidence: confidenceLevel,
+    roomTypeReasoning: `Drawing type: ${raw.drawingType}. Found ${raw.rooms.length} room(s) with ${allPieces.length} piece(s).`,
+    pieces: legacyPieces,
+    drawingNotes: drawingNotes.length > 0 ? drawingNotes.join(' ') : undefined,
+  };
+}
+
 // Anthropic's image size limit is 5MB
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 
@@ -50,41 +178,33 @@ DRAWING TYPES YOU MAY RECEIVE:
 WHAT TO EXTRACT:
 
 Job Metadata (if visible):
-- Job Number (look for "Job No." field)
+- Job Number
 - Default Thickness (usually 20mm or 40mm)
 - Default Overhang (usually 10mm)
 - Material/Color if specified
 
 For Each Stone Piece:
-- Piece number if marked (circled numbers like 1, 2, 3, 4)
+- Piece number if marked (circled numbers like 1, 2, 3)
 - Room/area label (Kitchen, Bathroom, Pantry, Laundry, TV Unit, Island, etc.)
 - Length in millimeters (typically 1500-4000mm for benchtops)
 - Width in millimeters (typically 400-900mm for benchtops)
 - Shape: rectangular, L-shaped, U-shaped, or irregular
-- For L-shaped: report bounding dimensions AND describe the shape
-- Cutouts if marked: HP=hotplate, UMS=undermount sink, SR=drop-in sink
-
-HOW TO READ DIMENSIONS:
-- Numbers are in millimeters (2615.0 = 2615mm = 2.615m)
-- Dimension lines have arrows/ticks at each end
-- CAD drawings have precise decimals (2615.0)
-- Hand-drawn may have rounded numbers (2600)
+- Cutouts if marked: HP/hotplate, UMS/undermount sink, SR/drop-in sink, tap holes
 
 CONFIDENCE SCORING:
 - 0.9-1.0: Clear CAD with measurement lines
 - 0.7-0.89: Visible but some ambiguity
 - 0.5-0.69: Estimated from context
-- Below 0.5: Guessing - flag for verification
+- Below 0.5: Flag for manual verification
 
-OUTPUT FORMAT - Return ONLY valid JSON (no markdown, no explanation):
+OUTPUT FORMAT - Return ONLY valid JSON:
 {
   "success": true,
-  "drawingType": "cad_professional" | "job_sheet" | "hand_drawn" | "architectural",
+  "drawingType": "cad_professional" or "job_sheet" or "hand_drawn" or "architectural",
   "metadata": {
     "jobNumber": "string or null",
     "defaultThickness": 20,
-    "defaultOverhang": 10,
-    "material": "string or null"
+    "defaultOverhang": 10
   },
   "rooms": [
     {
@@ -98,16 +218,15 @@ OUTPUT FORMAT - Return ONLY valid JSON (no markdown, no explanation):
           "length": 3600,
           "width": 900,
           "thickness": 20,
-          "shapeNotes": "null or description for complex shapes",
-          "cutouts": [{"type": "sink", "notes": "undermount"}],
+          "cutouts": [{"type": "hotplate"}, {"type": "sink"}],
           "notes": "any observations",
           "confidence": 0.85
         }
       ]
     }
   ],
-  "warnings": ["list any issues or uncertainties"],
-  "questionsForUser": ["questions needing human clarification"]
+  "warnings": ["list any issues"],
+  "questionsForUser": ["questions needing clarification"]
 }`;
 
 export async function POST(request: NextRequest) {
@@ -121,7 +240,7 @@ export async function POST(request: NextRequest) {
 
     // Convert file to buffer
     const bytes = await file.arrayBuffer();
-    let buffer = Buffer.from(bytes);
+    let buffer: Buffer = Buffer.from(bytes);
     let mimeType = file.type || 'image/png';
 
     console.log(`Received image: ${file.name}, size: ${buffer.length} bytes, type: ${mimeType}`);
@@ -200,11 +319,17 @@ export async function POST(request: NextRequest) {
       jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
     }
 
-    const analysis = JSON.parse(jsonStr);
+    const rawAnalysis = JSON.parse(jsonStr) as RawAnalysis;
+
+    // Transform to legacy format for frontend compatibility
+    const legacyAnalysis = transformToLegacyFormat(rawAnalysis);
 
     return NextResponse.json({
       success: true,
-      analysis,
+      // Legacy format for current frontend
+      analysis: legacyAnalysis,
+      // Full analysis with new format (includes metadata, all rooms, warnings, questions)
+      fullAnalysis: rawAnalysis,
       tokensUsed: {
         input: response.usage.input_tokens,
         output: response.usage.output_tokens,
