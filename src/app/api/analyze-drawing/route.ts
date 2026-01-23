@@ -147,8 +147,17 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Drawing analysis error:', error);
+
+    // More detailed error response
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
     return NextResponse.json(
-      { error: 'Failed to analyze drawing', details: String(error) },
+      {
+        error: 'Failed to analyze drawing',
+        details: errorMessage,
+        stack: process.env.NODE_ENV === 'development' ? errorStack : undefined
+      },
       { status: 500 }
     );
   }
