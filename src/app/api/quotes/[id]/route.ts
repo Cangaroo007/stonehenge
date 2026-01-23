@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
 
 interface RoomData {
@@ -112,16 +113,16 @@ export async function PUT(
           filename: data.drawingAnalysis.filename,
           analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
           drawingType: data.drawingAnalysis.drawingType,
-          rawResults: data.drawingAnalysis.rawResults,
-          metadata: data.drawingAnalysis.metadata,
+          rawResults: data.drawingAnalysis.rawResults as Prisma.InputJsonValue,
+          metadata: data.drawingAnalysis.metadata as Prisma.InputJsonValue,
           importedPieces: [],
         },
         update: {
           filename: data.drawingAnalysis.filename,
           analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
           drawingType: data.drawingAnalysis.drawingType,
-          rawResults: data.drawingAnalysis.rawResults,
-          metadata: data.drawingAnalysis.metadata,
+          rawResults: data.drawingAnalysis.rawResults as Prisma.InputJsonValue,
+          metadata: data.drawingAnalysis.metadata as Prisma.InputJsonValue,
         },
       });
     }
