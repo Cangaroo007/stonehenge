@@ -41,6 +41,12 @@ model Customer {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
+  // Pricing classification
+  clientTypeId  String?     @map("client_type_id")
+  clientType    ClientType? @relation(fields: [clientTypeId], references: [id])
+  clientTierId  String?     @map("client_tier_id")
+  clientTier    ClientTier? @relation(fields: [clientTierId], references: [id])
+
   quotes    Quote[]
 
   @@map("customers")
@@ -224,6 +230,79 @@ model QuoteDrawingAnalysis {
   importedPieces String[] @map("imported_pieces") // IDs of pieces created from this analysis
 
   @@map("quote_drawing_analyses")
+}
+
+// ============================================
+// PRICING ENTITIES
+// ============================================
+
+model EdgeType {
+  id          String   @id @default(cuid())
+  name        String   @unique  // "Pencil Round", "Bullnose", etc.
+  description String?
+  category    String   @default("polish")  // "polish", "waterfall", "apron"
+  baseRate    Decimal  @db.Decimal(10, 2)  // $ per linear meter
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("edge_types")
+}
+
+model CutoutType {
+  id          String   @id @default(cuid())
+  name        String   @unique  // "Undermount Sink", "Tap Hole", etc.
+  description String?
+  baseRate    Decimal  @db.Decimal(10, 2)  // $ per cutout (fixed price)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("cutout_types")
+}
+
+model ThicknessOption {
+  id          String   @id @default(cuid())
+  name        String   @unique  // "20mm", "40mm"
+  value       Int      // 20, 40 (actual mm)
+  multiplier  Decimal  @db.Decimal(5, 2) @default(1.00)  // 1.0 for 20mm, 1.3 for 40mm
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("thickness_options")
+}
+
+model ClientType {
+  id          String     @id @default(cuid())
+  name        String     @unique  // "Cabinet Maker", "Builder", etc.
+  description String?
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  customers   Customer[]
+
+  @@map("client_types")
+}
+
+model ClientTier {
+  id          String     @id @default(cuid())
+  name        String     @unique  // "Tier 1", "Tier 2", "Tier 3"
+  description String?
+  priority    Int        @default(0)  // Higher = better pricing, used for rule matching
+  isDefault   Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  customers   Customer[]
+
+  @@map("client_tiers")
 }
 
 // ============================================
