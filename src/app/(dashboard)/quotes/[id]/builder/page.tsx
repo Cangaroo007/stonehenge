@@ -587,6 +587,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
       {showDrawingImport && (
         <DrawingImport
           quoteId={quoteId}
+          edgeTypes={edgeTypes}
           onImportComplete={handleImportComplete}
           onClose={() => setShowDrawingImport(false)}
         />

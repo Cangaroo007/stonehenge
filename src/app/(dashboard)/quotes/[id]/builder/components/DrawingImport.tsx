@@ -1,9 +1,28 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import EdgeSelector from './EdgeSelector';
+
+interface EdgeType {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  baseRate: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface EdgeSelections {
+  edgeTop: string | null;
+  edgeBottom: string | null;
+  edgeLeft: string | null;
+  edgeRight: string | null;
+}
 
 interface DrawingImportProps {
   quoteId: string;
+  edgeTypes: EdgeType[];
   onImportComplete: (count: number) => void;
   onClose: () => void;
 }
@@ -20,6 +39,7 @@ interface ExtractedPiece {
   notes: string | null;
   cutouts: { type: string }[];
   isEditing: boolean;
+  edgeSelections: EdgeSelections;
 }
 
 interface AnalysisResult {
@@ -64,7 +84,14 @@ const STANDARD_ROOMS = [
   'Other',
 ];
 
-export default function DrawingImport({ quoteId, onImportComplete, onClose }: DrawingImportProps) {
+const DEFAULT_EDGE_SELECTIONS: EdgeSelections = {
+  edgeTop: null,
+  edgeBottom: null,
+  edgeLeft: null,
+  edgeRight: null,
+};
+
+export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, onClose }: DrawingImportProps) {
   const [step, setStep] = useState<Step>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -147,6 +174,7 @@ export default function DrawingImport({ quoteId, onImportComplete, onClose }: Dr
             notes: piece.notes || null,
             cutouts: piece.cutouts || [],
             isEditing: false,
+            edgeSelections: { ...DEFAULT_EDGE_SELECTIONS },
           });
         }
       }
@@ -250,6 +278,13 @@ export default function DrawingImport({ quoteId, onImportComplete, onClose }: Dr
     );
   }, []);
 
+  // Update piece edge selections
+  const updatePieceEdges = useCallback((id: string, edges: EdgeSelections) => {
+    setExtractedPieces(prev =>
+      prev.map(p => (p.id === id ? { ...p, edgeSelections: edges } : p))
+    );
+  }, []);
+
   // Import selected pieces
   const handleImport = useCallback(async () => {
     const selectedPieces = extractedPieces.filter(p => selectedIds.has(p.id));
@@ -274,6 +309,10 @@ export default function DrawingImport({ quoteId, onImportComplete, onClose }: Dr
             thickness: p.thickness,
             room: p.room,
             notes: p.notes,
+            edgeTop: p.edgeSelections.edgeTop,
+            edgeBottom: p.edgeSelections.edgeBottom,
+            edgeLeft: p.edgeSelections.edgeLeft,
+            edgeRight: p.edgeSelections.edgeRight,
           })),
         }),
       });
@@ -303,6 +342,16 @@ export default function DrawingImport({ quoteId, onImportComplete, onClose }: Dr
     } else {
       return { color: 'text-red-600', bg: 'bg-red-100', icon: '?', label: 'Low' };
     }
+  };
+
+  // Check if piece has any edges selected
+  const hasEdgesSelected = (piece: ExtractedPiece): boolean => {
+    return !!(
+      piece.edgeSelections.edgeTop ||
+      piece.edgeSelections.edgeBottom ||
+      piece.edgeSelections.edgeLeft ||
+      piece.edgeSelections.edgeRight
+    );
   };
 
   // Render upload step
@@ -446,7 +495,7 @@ export default function DrawingImport({ quoteId, onImportComplete, onClose }: Dr
       )}
 
       <p className="text-sm text-gray-600 mb-4">
-        Found {extractedPieces.length} pieces in drawing
+        Found {extractedPieces.length} pieces in drawing. Click a piece name to edit details and set edge polishing.
       </p>
 
       {/* Selection controls */}
@@ -460,93 +509,106 @@ export default function DrawingImport({ quoteId, onImportComplete, onClose }: Dr
         </button>
       </div>
 
-      {/* Pieces table */}
-      <div className="border rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
-                <span className="sr-only">Select</span>
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Dimensions
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Room
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
-                Conf.
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {extractedPieces.map(piece => {
-              const confidence = getConfidenceIndicator(piece.confidence);
-              return (
-                <tr key={piece.id} className="group">
-                  <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(piece.id)}
-                      onChange={() => toggleSelection(piece.id)}
-                      className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    {piece.isEditing ? (
+      {/* Pieces list */}
+      <div className="space-y-3">
+        {extractedPieces.map(piece => {
+          const confidence = getConfidenceIndicator(piece.confidence);
+          const hasEdges = hasEdgesSelected(piece);
+
+          return (
+            <div key={piece.id} className="border rounded-lg overflow-hidden">
+              {/* Piece header row */}
+              <div
+                className={`flex items-center gap-4 p-4 ${piece.isEditing ? 'bg-primary-50 border-b' : 'bg-white hover:bg-gray-50'}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(piece.id)}
+                  onChange={() => toggleSelection(piece.id)}
+                  className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                />
+
+                <button
+                  onClick={() => toggleEditing(piece.id)}
+                  className="flex-1 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium text-gray-900">{piece.name}</span>
+                    <span className="text-sm text-gray-500">
+                      {piece.length} × {piece.width}mm
+                    </span>
+                    <span className="text-sm text-gray-500">{piece.room}</span>
+                    {hasEdges && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                        Edges set
+                      </span>
+                    )}
+                  </div>
+                  {piece.notes && (
+                    <p className="text-xs text-gray-500 mt-1">AI note: {piece.notes}</p>
+                  )}
+                </button>
+
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${confidence.bg} ${confidence.color}`}
+                  title={`${Math.round(piece.confidence * 100)}% confidence`}
+                >
+                  {Math.round(piece.confidence * 100)}%
+                </span>
+
+                <button
+                  onClick={() => toggleEditing(piece.id)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg
+                    className={`h-5 w-5 transition-transform ${piece.isEditing ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Expanded edit panel */}
+              {piece.isEditing && (
+                <div className="p-4 bg-white space-y-4">
+                  {/* Basic info row */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                       <input
                         type="text"
                         value={piece.name}
                         onChange={(e) => updatePiece(piece.id, 'name', e.target.value)}
-                        className="w-full px-2 py-1 border rounded text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
                       />
-                    ) : (
-                      <button
-                        onClick={() => toggleEditing(piece.id)}
-                        className="text-sm font-medium text-gray-900 hover:text-primary-600"
-                      >
-                        {piece.name}
-                      </button>
-                    )}
-                    {piece.notes && !piece.isEditing && (
-                      <p className="text-xs text-gray-500 mt-1">AI note: {piece.notes}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {piece.isEditing ? (
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          value={piece.length}
-                          onChange={(e) => updatePiece(piece.id, 'length', parseInt(e.target.value) || 0)}
-                          className="w-20 px-2 py-1 border rounded text-sm"
-                          placeholder="Length"
-                        />
-                        <span className="text-gray-400">×</span>
-                        <input
-                          type="number"
-                          value={piece.width}
-                          onChange={(e) => updatePiece(piece.id, 'width', parseInt(e.target.value) || 0)}
-                          className="w-20 px-2 py-1 border rounded text-sm"
-                          placeholder="Width"
-                        />
-                        <span className="text-gray-500 text-sm">mm</span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-gray-600">
-                        {piece.length} × {piece.width}mm
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {piece.isEditing ? (
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Length (mm)</label>
+                      <input
+                        type="number"
+                        value={piece.length}
+                        onChange={(e) => updatePiece(piece.id, 'length', parseInt(e.target.value) || 0)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Width (mm)</label>
+                      <input
+                        type="number"
+                        value={piece.width}
+                        onChange={(e) => updatePiece(piece.id, 'width', parseInt(e.target.value) || 0)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Room</label>
                       <select
                         value={piece.room}
                         onChange={(e) => updatePiece(piece.id, 'room', e.target.value)}
-                        className="w-full px-2 py-1 border rounded text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
                       >
                         {STANDARD_ROOMS.map(room => (
                           <option key={room} value={room}>
@@ -554,23 +616,33 @@ export default function DrawingImport({ quoteId, onImportComplete, onClose }: Dr
                           </option>
                         ))}
                       </select>
-                    ) : (
-                      <span className="text-sm text-gray-600">{piece.room}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${confidence.bg} ${confidence.color}`}
-                      title={`${Math.round(piece.confidence * 100)}% confidence`}
+                    </div>
+                  </div>
+
+                  {/* Edge Selector */}
+                  {piece.length > 0 && piece.width > 0 && (
+                    <EdgeSelector
+                      lengthMm={piece.length}
+                      widthMm={piece.width}
+                      edgeSelections={piece.edgeSelections}
+                      edgeTypes={edgeTypes}
+                      onChange={(edges) => updatePieceEdges(piece.id, edges)}
+                    />
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => toggleEditing(piece.id)}
+                      className="btn-primary text-sm"
                     >
-                      {Math.round(piece.confidence * 100)}%
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Legend */}
