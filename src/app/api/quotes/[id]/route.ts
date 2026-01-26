@@ -189,16 +189,16 @@ export async function PUT(
             filename: data.drawingAnalysis.filename,
             analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
             drawingType: data.drawingAnalysis.drawingType,
-            rawResults: data.drawingAnalysis.rawResults as Prisma.InputJsonValue,
-            metadata: data.drawingAnalysis.metadata as Prisma.InputJsonValue,
+            rawResults: data.drawingAnalysis.rawResults as unknown as Prisma.InputJsonValue,
+            metadata: data.drawingAnalysis.metadata as unknown as Prisma.InputJsonValue,
             importedPieces: [],
           },
           update: {
             filename: data.drawingAnalysis.filename,
             analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
             drawingType: data.drawingAnalysis.drawingType,
-            rawResults: data.drawingAnalysis.rawResults as Prisma.InputJsonValue,
-            metadata: data.drawingAnalysis.metadata as Prisma.InputJsonValue,
+            rawResults: data.drawingAnalysis.rawResults as unknown as Prisma.InputJsonValue,
+            metadata: data.drawingAnalysis.metadata as unknown as Prisma.InputJsonValue,
           },
         });
       }
