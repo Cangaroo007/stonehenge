@@ -80,9 +80,6 @@ export default async function QuoteDetailPage({
         </div>
         <div className="flex gap-3">
           <Link href={`/quotes/${quote.id}/builder`} className="btn-primary">
-            Open Builder
-          </Link>
-          <Link href={`/quotes/${quote.id}/edit`} className="btn-secondary">
             Edit Quote
           </Link>
           <Link href={`/api/quotes/${quote.id}/pdf`} target="_blank" className="btn-secondary">
