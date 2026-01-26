@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import EdgeSelector from './EdgeSelector';
 
 interface QuotePiece {
   id: number;
@@ -11,6 +12,10 @@ interface QuotePiece {
   thicknessMm: number;
   materialId: number | null;
   materialName: string | null;
+  edgeTop: string | null;
+  edgeBottom: string | null;
+  edgeLeft: string | null;
+  edgeRight: string | null;
   room: {
     id: number;
     name: string;
@@ -24,9 +29,27 @@ interface Material {
   pricePerSqm: number;
 }
 
+interface EdgeType {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  baseRate: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface EdgeSelections {
+  edgeTop: string | null;
+  edgeBottom: string | null;
+  edgeLeft: string | null;
+  edgeRight: string | null;
+}
+
 interface PieceFormProps {
   piece?: QuotePiece;
   materials: Material[];
+  edgeTypes: EdgeType[];
   roomNames: string[];
   onSave: (data: Partial<QuotePiece>, roomName: string) => void;
   onCancel: () => void;
@@ -42,6 +65,7 @@ const THICKNESS_OPTIONS = [
 export default function PieceForm({
   piece,
   materials,
+  edgeTypes,
   roomNames,
   onSave,
   onCancel,
@@ -54,6 +78,12 @@ export default function PieceForm({
   const [thicknessMm, setThicknessMm] = useState(piece?.thicknessMm || 20);
   const [materialId, setMaterialId] = useState<number | null>(piece?.materialId || null);
   const [roomName, setRoomName] = useState(piece?.room?.name || 'Kitchen');
+  const [edgeSelections, setEdgeSelections] = useState<EdgeSelections>({
+    edgeTop: piece?.edgeTop || null,
+    edgeBottom: piece?.edgeBottom || null,
+    edgeLeft: piece?.edgeLeft || null,
+    edgeRight: piece?.edgeRight || null,
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Update form when piece changes
@@ -66,6 +96,12 @@ export default function PieceForm({
       setThicknessMm(piece.thicknessMm);
       setMaterialId(piece.materialId);
       setRoomName(piece.room.name);
+      setEdgeSelections({
+        edgeTop: piece.edgeTop || null,
+        edgeBottom: piece.edgeBottom || null,
+        edgeLeft: piece.edgeLeft || null,
+        edgeRight: piece.edgeRight || null,
+      });
     } else {
       setName('');
       setDescription('');
@@ -74,6 +110,12 @@ export default function PieceForm({
       setThicknessMm(20);
       setMaterialId(null);
       setRoomName('Kitchen');
+      setEdgeSelections({
+        edgeTop: null,
+        edgeBottom: null,
+        edgeLeft: null,
+        edgeRight: null,
+      });
     }
     setErrors({});
   }, [piece]);
@@ -118,6 +160,10 @@ export default function PieceForm({
         thicknessMm,
         materialId,
         materialName: selectedMaterial?.name || null,
+        edgeTop: edgeSelections.edgeTop,
+        edgeBottom: edgeSelections.edgeBottom,
+        edgeLeft: edgeSelections.edgeLeft,
+        edgeRight: edgeSelections.edgeRight,
       },
       roomName
     );
@@ -191,6 +237,17 @@ export default function PieceForm({
         <span className="text-gray-600">Calculated Area: </span>
         <span className="font-medium">{area} m²</span>
       </div>
+
+      {/* Edge Selector */}
+      {lengthMm && widthMm && parseInt(lengthMm) > 0 && parseInt(widthMm) > 0 && (
+        <EdgeSelector
+          lengthMm={parseInt(lengthMm)}
+          widthMm={parseInt(widthMm)}
+          edgeSelections={edgeSelections}
+          edgeTypes={edgeTypes}
+          onChange={setEdgeSelections}
+        />
+      )}
 
       {/* Thickness */}
       <div>

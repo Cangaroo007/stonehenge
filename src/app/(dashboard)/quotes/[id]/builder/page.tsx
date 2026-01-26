@@ -59,6 +59,16 @@ interface Material {
   pricePerSqm: number;
 }
 
+interface EdgeType {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  baseRate: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export default function QuoteBuilderPage() {
   const params = useParams();
   const router = useRouter();
@@ -67,6 +77,7 @@ export default function QuoteBuilderPage() {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [pieces, setPieces] = useState<QuotePiece[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [edgeTypes, setEdgeTypes] = useState<EdgeType[]>([]);
   const [rooms, setRooms] = useState<QuoteRoom[]>([]);
   const [selectedPieceId, setSelectedPieceId] = useState<number | null>(null);
   const [isAddingPiece, setIsAddingPiece] = useState(false);
@@ -110,15 +121,28 @@ export default function QuoteBuilderPage() {
     }
   }, []);
 
+  // Fetch edge types
+  const fetchEdgeTypes = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/pricing/edge-types');
+      if (!response.ok) throw new Error('Failed to fetch edge types');
+      const data = await response.json();
+      // Filter to only active edge types
+      setEdgeTypes(data.filter((e: EdgeType) => e.isActive));
+    } catch (err) {
+      console.error('Error fetching edge types:', err);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchQuote(), fetchMaterials()]);
+      await Promise.all([fetchQuote(), fetchMaterials(), fetchEdgeTypes()]);
       setLoading(false);
     };
     loadData();
-  }, [fetchQuote, fetchMaterials]);
+  }, [fetchQuote, fetchMaterials, fetchEdgeTypes]);
 
   // Handle piece selection
   const handleSelectPiece = (pieceId: number) => {
@@ -318,6 +342,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
               <PieceForm
                 piece={selectedPiece || undefined}
                 materials={materials}
+                edgeTypes={edgeTypes}
                 roomNames={roomNames}
                 onSave={handleSavePiece}
                 onCancel={handleCancelForm}
@@ -349,7 +374,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                * Final pricing calculated in Prompts 3.2-3.4 with edges and cutouts
+                * Edge pricing included. Cutout pricing in next phase.
               </p>
             </div>
           </div>

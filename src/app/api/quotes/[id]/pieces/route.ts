@@ -66,6 +66,10 @@ export async function POST(
       materialId,
       materialName,
       roomName = 'Kitchen',
+      edgeTop,
+      edgeBottom,
+      edgeLeft,
+      edgeRight,
     } = data;
 
     // Validate required fields
@@ -136,6 +140,10 @@ export async function POST(
         totalCost: materialCost,
         sortOrder: (maxPiece?.sortOrder ?? -1) + 1,
         cutouts: [],
+        edgeTop: edgeTop || null,
+        edgeBottom: edgeBottom || null,
+        edgeLeft: edgeLeft || null,
+        edgeRight: edgeRight || null,
       },
       include: {
         material: true,
