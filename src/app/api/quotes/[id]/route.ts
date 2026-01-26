@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
-
-// Type alias for JSON input values
-type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
 
 interface RoomData {
   name: string;
@@ -134,7 +132,7 @@ export async function PUT(
         data: {
           calculatedTotal: grandTotal,
           calculatedAt: new Date(data.calculation.calculatedAt),
-          calculationBreakdown: data.calculation as unknown as JsonValue,
+          calculationBreakdown: data.calculation as Prisma.InputJsonValue,
           // Also update the totals on the quote
           subtotal: data.calculation.total,
           taxAmount: gst,
@@ -191,16 +189,16 @@ export async function PUT(
             filename: data.drawingAnalysis.filename,
             analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
             drawingType: data.drawingAnalysis.drawingType,
-            rawResults: data.drawingAnalysis.rawResults as JsonValue,
-            metadata: data.drawingAnalysis.metadata as JsonValue,
+            rawResults: data.drawingAnalysis.rawResults as Prisma.InputJsonValue,
+            metadata: data.drawingAnalysis.metadata as Prisma.InputJsonValue,
             importedPieces: [],
           },
           update: {
             filename: data.drawingAnalysis.filename,
             analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
             drawingType: data.drawingAnalysis.drawingType,
-            rawResults: data.drawingAnalysis.rawResults as JsonValue,
-            metadata: data.drawingAnalysis.metadata as JsonValue,
+            rawResults: data.drawingAnalysis.rawResults as Prisma.InputJsonValue,
+            metadata: data.drawingAnalysis.metadata as Prisma.InputJsonValue,
           },
         });
       }
