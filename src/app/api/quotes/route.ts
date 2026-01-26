@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
+
+// Type alias for JSON input values
+type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
 
 interface RoomData {
   name: string;
@@ -122,8 +124,8 @@ export async function POST(request: NextRequest) {
               filename: data.drawingAnalysis.filename,
               analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
               drawingType: data.drawingAnalysis.drawingType,
-              rawResults: data.drawingAnalysis.rawResults as Prisma.InputJsonValue,
-              metadata: data.drawingAnalysis.metadata as Prisma.InputJsonValue,
+              rawResults: data.drawingAnalysis.rawResults as JsonValue,
+              metadata: data.drawingAnalysis.metadata as JsonValue,
               importedPieces: [],
             },
           },

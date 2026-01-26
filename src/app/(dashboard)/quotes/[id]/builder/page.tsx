@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import QuoteHeader from './components/QuoteHeader';
 import PieceList from './components/PieceList';
 import RoomGrouping from './components/RoomGrouping';
 import PieceForm from './components/PieceForm';
-import { formatCurrency } from '@/lib/utils';
+import PricingSummary from './components/PricingSummary';
+import QuoteActions from './components/QuoteActions';
 import { CutoutType, PieceCutout } from './components/CutoutSelector';
+import type { CalculationResult } from '@/lib/types/pricing';
 
 interface QuotePiece {
   id: number;
@@ -50,7 +52,10 @@ interface Quote {
     id: number;
     name: string;
     company: string | null;
+    clientType?: { id: string; name: string } | null;
+    clientTier?: { id: string; name: string } | null;
   } | null;
+  priceBook?: { id: string; name: string } | null;
   rooms: QuoteRoom[];
 }
 
@@ -88,6 +93,20 @@ export default function QuoteBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'rooms'>('list');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [calculation, setCalculation] = useState<CalculationResult | null>(null);
+  const calculationRef = useRef<CalculationResult | null>(null);
+
+  // Trigger recalculation after piece changes
+  const triggerRecalculate = useCallback(() => {
+    setRefreshTrigger(n => n + 1);
+  }, []);
+
+  // Store calculation result for QuoteActions
+  const handleCalculationUpdate = useCallback((result: CalculationResult | null) => {
+    setCalculation(result);
+    calculationRef.current = result;
+  }, []);
 
   // Flatten pieces from all rooms
   const flattenPieces = useCallback((quoteRooms: QuoteRoom[]): QuotePiece[] => {
@@ -204,6 +223,8 @@ export default function QuoteBuilderPage() {
       await fetchQuote();
       setSelectedPieceId(null);
       setIsAddingPiece(false);
+      // Trigger pricing recalculation
+      triggerRecalculate();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save piece');
     } finally {
@@ -228,6 +249,8 @@ export default function QuoteBuilderPage() {
       if (selectedPieceId === pieceId) {
         setSelectedPieceId(null);
       }
+      // Trigger pricing recalculation
+      triggerRecalculate();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete piece');
     } finally {
@@ -254,6 +277,8 @@ export default function QuoteBuilderPage() {
       await fetchQuote();
       setSelectedPieceId(newPiece.id);
       setIsAddingPiece(false);
+      // Trigger pricing recalculation
+      triggerRecalculate();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to duplicate piece');
     } finally {
@@ -288,9 +313,51 @@ export default function QuoteBuilderPage() {
     }
   };
 
-  // Calculate totals
-  const calculateTotal = () => {
-    return pieces.reduce((sum, piece) => sum + Number(piece.totalCost || 0), 0);
+  // Save quote with calculation
+  const handleSaveQuote = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          saveCalculation: true,
+          calculation: calculationRef.current,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save quote');
+      }
+
+      await fetchQuote();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save quote');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle status change
+  const handleStatusChange = async (newStatus: string) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update status');
+      }
+
+      await fetchQuote();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update status');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Get selected piece
@@ -348,6 +415,16 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
       <QuoteHeader
         quote={quote}
         onBack={() => router.push(`/quotes/${quoteId}`)}
+        saving={saving}
+      />
+
+      {/* Quote Actions */}
+      <QuoteActions
+        quoteId={quoteId}
+        quoteStatus={quote.status}
+        calculation={calculation}
+        onSave={handleSaveQuote}
+        onStatusChange={handleStatusChange}
         saving={saving}
       />
 
@@ -431,31 +508,35 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
             </div>
           )}
 
-          {/* Summary */}
-          <div className="card p-6">
-            <h3 className="text-lg font-semibold mb-4">Summary</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
+          {/* Pricing Summary */}
+          <PricingSummary
+            quoteId={quoteId}
+            refreshTrigger={refreshTrigger}
+            customerName={quote.customer?.company || quote.customer?.name}
+            customerTier={quote.customer?.clientTier?.name}
+            customerType={quote.customer?.clientType?.name}
+            priceBookName={quote.priceBook?.name}
+            onCalculationComplete={handleCalculationUpdate}
+          />
+
+          {/* Piece Stats */}
+          <div className="card p-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">Piece Statistics</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
                 <span className="text-gray-600">Total Pieces:</span>
                 <span className="font-medium">{pieces.length}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between">
                 <span className="text-gray-600">Total Area:</span>
                 <span className="font-medium">
                   {pieces.reduce((sum, p) => sum + (p.lengthMm * p.widthMm) / 1_000_000, 0).toFixed(2)} m²
                 </span>
               </div>
-              <div className="border-t pt-2 mt-2">
-                <div className="flex justify-between">
-                  <span className="font-semibold">Estimated Total:</span>
-                  <span className="font-bold text-primary-600">
-                    {formatCurrency(calculateTotal())}
-                  </span>
-                </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Rooms:</span>
+                <span className="font-medium">{rooms.length}</span>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                * Edge and cutout pricing included.
-              </p>
             </div>
           </div>
         </div>

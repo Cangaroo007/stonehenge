@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
+
+// Type alias for JSON input values
+type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
 
 interface RoomData {
   name: string;
@@ -38,18 +40,33 @@ interface DrawingAnalysisData {
   metadata: Record<string, unknown> | null;
 }
 
-interface QuoteUpdateData {
-  customerId: number | null;
-  projectName: string | null;
-  projectAddress: string | null;
-  status?: string;
+interface CalculationData {
+  quoteId: string;
   subtotal: number;
-  taxRate: number;
-  taxAmount: number;
+  totalDiscount: number;
   total: number;
-  notes: string | null;
-  rooms: RoomData[];
+  breakdown: Record<string, unknown>;
+  appliedRules: unknown[];
+  discounts: unknown[];
+  priceBook: { id: string; name: string } | null;
+  calculatedAt: string;
+}
+
+interface QuoteUpdateData {
+  customerId?: number | null;
+  projectName?: string | null;
+  projectAddress?: string | null;
+  status?: string;
+  subtotal?: number;
+  taxRate?: number;
+  taxAmount?: number;
+  total?: number;
+  notes?: string | null;
+  rooms?: RoomData[];
   drawingAnalysis?: DrawingAnalysisData | null;
+  // Calculation save support
+  saveCalculation?: boolean;
+  calculation?: CalculationData | null;
 }
 
 export async function GET(
@@ -61,7 +78,13 @@ export async function GET(
     const quote = await prisma.quote.findUnique({
       where: { id: parseInt(id) },
       include: {
-        customer: true,
+        customer: {
+          include: {
+            clientType: true,
+            clientTier: true,
+          },
+        },
+        priceBook: true,
         rooms: {
           orderBy: { sortOrder: 'asc' },
           include: {
@@ -99,83 +122,142 @@ export async function PUT(
     const quoteId = parseInt(id);
     const data: QuoteUpdateData = await request.json();
 
-    // Delete existing rooms (cascade deletes pieces and features)
-    await prisma.quoteRoom.deleteMany({
-      where: { quoteId },
-    });
+    // Handle calculation save (partial update)
+    if (data.saveCalculation && data.calculation) {
+      const GST_RATE = 0.10;
+      const subtotal = data.calculation.total;
+      const gst = subtotal * GST_RATE;
+      const grandTotal = subtotal + gst;
 
-    // Handle drawing analysis - upsert or delete
-    if (data.drawingAnalysis) {
-      await prisma.quoteDrawingAnalysis.upsert({
-        where: { quoteId },
-        create: {
-          quoteId,
-          filename: data.drawingAnalysis.filename,
-          analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
-          drawingType: data.drawingAnalysis.drawingType,
-          rawResults: data.drawingAnalysis.rawResults as Prisma.InputJsonValue,
-          metadata: data.drawingAnalysis.metadata as Prisma.InputJsonValue,
-          importedPieces: [],
+      const quote = await prisma.quote.update({
+        where: { id: quoteId },
+        data: {
+          calculatedTotal: grandTotal,
+          calculatedAt: new Date(data.calculation.calculatedAt),
+          calculationBreakdown: data.calculation as unknown as JsonValue,
+          // Also update the totals on the quote
+          subtotal: data.calculation.total,
+          taxAmount: gst,
+          total: grandTotal,
         },
-        update: {
-          filename: data.drawingAnalysis.filename,
-          analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
-          drawingType: data.drawingAnalysis.drawingType,
-          rawResults: data.drawingAnalysis.rawResults as Prisma.InputJsonValue,
-          metadata: data.drawingAnalysis.metadata as Prisma.InputJsonValue,
+        include: {
+          customer: {
+            include: {
+              clientType: true,
+              clientTier: true,
+            },
+          },
+          priceBook: true,
         },
       });
+
+      return NextResponse.json(quote);
     }
 
-    // Update quote with new rooms
-    const quote = await prisma.quote.update({
-      where: { id: quoteId },
-      data: {
-        customerId: data.customerId,
-        projectName: data.projectName,
-        projectAddress: data.projectAddress,
-        status: data.status,
-        subtotal: data.subtotal,
-        taxRate: data.taxRate,
-        taxAmount: data.taxAmount,
-        total: data.total,
-        notes: data.notes,
-        rooms: {
-          create: data.rooms.map((room: RoomData) => ({
-            name: room.name,
-            sortOrder: room.sortOrder,
-            pieces: {
-              create: room.pieces.map((piece: PieceData) => ({
-                description: piece.description,
-                lengthMm: piece.lengthMm,
-                widthMm: piece.widthMm,
-                thicknessMm: piece.thicknessMm,
-                materialId: piece.materialId,
-                materialName: piece.materialName,
-                areaSqm: piece.areaSqm,
-                materialCost: piece.materialCost,
-                featuresCost: piece.featuresCost,
-                totalCost: piece.totalCost,
-                sortOrder: piece.sortOrder,
-                features: {
-                  create: piece.features.map((feature: FeatureData) => ({
-                    name: feature.name,
-                    quantity: feature.quantity,
-                    unitPrice: feature.unitPrice,
-                    totalPrice: feature.totalPrice,
-                  })),
-                },
-              })),
-            },
-          })),
+    // Handle status-only update
+    if (data.status && !data.rooms) {
+      const quote = await prisma.quote.update({
+        where: { id: quoteId },
+        data: {
+          status: data.status,
         },
-      },
-      include: {
-        drawingAnalysis: true,
-      },
-    });
+        include: {
+          customer: {
+            include: {
+              clientType: true,
+              clientTier: true,
+            },
+          },
+          priceBook: true,
+        },
+      });
 
-    return NextResponse.json(quote);
+      return NextResponse.json(quote);
+    }
+
+    // Full update with rooms (original behavior)
+    if (data.rooms) {
+      // Delete existing rooms (cascade deletes pieces and features)
+      await prisma.quoteRoom.deleteMany({
+        where: { quoteId },
+      });
+
+      // Handle drawing analysis - upsert or delete
+      if (data.drawingAnalysis) {
+        await prisma.quoteDrawingAnalysis.upsert({
+          where: { quoteId },
+          create: {
+            quoteId,
+            filename: data.drawingAnalysis.filename,
+            analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
+            drawingType: data.drawingAnalysis.drawingType,
+            rawResults: data.drawingAnalysis.rawResults as JsonValue,
+            metadata: data.drawingAnalysis.metadata as JsonValue,
+            importedPieces: [],
+          },
+          update: {
+            filename: data.drawingAnalysis.filename,
+            analyzedAt: new Date(data.drawingAnalysis.analyzedAt),
+            drawingType: data.drawingAnalysis.drawingType,
+            rawResults: data.drawingAnalysis.rawResults as JsonValue,
+            metadata: data.drawingAnalysis.metadata as JsonValue,
+          },
+        });
+      }
+
+      // Update quote with new rooms
+      const quote = await prisma.quote.update({
+        where: { id: quoteId },
+        data: {
+          customerId: data.customerId,
+          projectName: data.projectName,
+          projectAddress: data.projectAddress,
+          status: data.status,
+          subtotal: data.subtotal,
+          taxRate: data.taxRate,
+          taxAmount: data.taxAmount,
+          total: data.total,
+          notes: data.notes,
+          rooms: {
+            create: data.rooms.map((room: RoomData) => ({
+              name: room.name,
+              sortOrder: room.sortOrder,
+              pieces: {
+                create: room.pieces.map((piece: PieceData) => ({
+                  description: piece.description,
+                  lengthMm: piece.lengthMm,
+                  widthMm: piece.widthMm,
+                  thicknessMm: piece.thicknessMm,
+                  materialId: piece.materialId,
+                  materialName: piece.materialName,
+                  areaSqm: piece.areaSqm,
+                  materialCost: piece.materialCost,
+                  featuresCost: piece.featuresCost,
+                  totalCost: piece.totalCost,
+                  sortOrder: piece.sortOrder,
+                  features: {
+                    create: piece.features.map((feature: FeatureData) => ({
+                      name: feature.name,
+                      quantity: feature.quantity,
+                      unitPrice: feature.unitPrice,
+                      totalPrice: feature.totalPrice,
+                    })),
+                  },
+                })),
+              },
+            })),
+          },
+        },
+        include: {
+          drawingAnalysis: true,
+        },
+      });
+
+      return NextResponse.json(quote);
+    }
+
+    // No valid update data provided
+    return NextResponse.json({ error: 'No valid update data provided' }, { status: 400 });
   } catch (error) {
     console.error('Error updating quote:', error);
     return NextResponse.json({ error: 'Failed to update quote' }, { status: 500 });
