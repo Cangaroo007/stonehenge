@@ -232,8 +232,7 @@ export default function QuoteBuilderPage() {
     : null;
 
   // Get unique room names
-  const roomNames = [...new Set(rooms.map(r => r.name))];
-
+const roomNames = Array.from(new Set(rooms.map(r => r.name)));
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
