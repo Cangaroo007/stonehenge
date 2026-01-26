@@ -58,6 +58,11 @@ interface QuotePiece {
   thicknessMm: number;
   materialId: number | null;
   features: PieceFeature[];
+  edgeTop: string | null;
+  edgeBottom: string | null;
+  edgeLeft: string | null;
+  edgeRight: string | null;
+  showEdgeSelector?: boolean;
 }
 
 interface PieceFeature {
@@ -213,7 +218,7 @@ export default function QuoteForm({
     initialData?.rooms.map((r) => ({
       id: String(r.id),
       name: r.name,
-      pieces: r.pieces.map((p) => ({
+      pieces: r.pieces.map((p: PieceData & { edgeTop?: string | null; edgeBottom?: string | null; edgeLeft?: string | null; edgeRight?: string | null }) => ({
         id: String(p.id),
         description: p.description || '',
         lengthMm: p.lengthMm,
@@ -226,6 +231,11 @@ export default function QuoteForm({
           quantity: f.quantity,
           unitPrice: Number(f.unitPrice),
         })),
+        edgeTop: p.edgeTop || null,
+        edgeBottom: p.edgeBottom || null,
+        edgeLeft: p.edgeLeft || null,
+        edgeRight: p.edgeRight || null,
+        showEdgeSelector: false,
       })),
     })) || []
   );
@@ -352,6 +362,11 @@ export default function QuoteForm({
                   thicknessMm: 20,
                   materialId: materials[0]?.id || null,
                   features: [],
+                  edgeTop: null,
+                  edgeBottom: null,
+                  edgeLeft: null,
+                  edgeRight: null,
+                  showEdgeSelector: false,
                 },
               ],
             }
@@ -664,6 +679,11 @@ export default function QuoteForm({
           thicknessMm: p.thicknessMm,
           materialId: materials[0]?.id || null,
           features: [],
+          edgeTop: p.edgeSelections.edgeTop,
+          edgeBottom: p.edgeSelections.edgeBottom,
+          edgeLeft: p.edgeSelections.edgeLeft,
+          edgeRight: p.edgeSelections.edgeRight,
+          showEdgeSelector: false,
         })),
       };
       newRooms.push(newRoom);
@@ -723,6 +743,10 @@ export default function QuoteForm({
               featuresCost: costs.featuresCost,
               totalCost: costs.total,
               sortOrder: pi,
+              edgeTop: p.edgeTop,
+              edgeBottom: p.edgeBottom,
+              edgeLeft: p.edgeLeft,
+              edgeRight: p.edgeRight,
               features: p.features.map((f) => ({
                 name: f.name,
                 quantity: f.quantity,
@@ -1442,6 +1466,63 @@ export default function QuoteForm({
                               </div>
                             ))}
                           </div>
+                        )}
+                      </div>
+
+                      {/* Edge Polish Selection */}
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700">Edge Polish</span>
+                          <button
+                            type="button"
+                            onClick={() => updatePiece(room.id, piece.id, { showEdgeSelector: !piece.showEdgeSelector })}
+                            className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+                          >
+                            {piece.showEdgeSelector ? (
+                              <>
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                </svg>
+                                Hide
+                              </>
+                            ) : (
+                              <>
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                                {(piece.edgeTop || piece.edgeBottom || piece.edgeLeft || piece.edgeRight) ? 'Edit Edges' : 'Add Edges'}
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        {!piece.showEdgeSelector && (piece.edgeTop || piece.edgeBottom || piece.edgeLeft || piece.edgeRight) && (
+                          <div className="text-sm text-gray-500">
+                            Edges: {[
+                              piece.edgeTop && 'Top',
+                              piece.edgeRight && 'Right',
+                              piece.edgeBottom && 'Bottom',
+                              piece.edgeLeft && 'Left'
+                            ].filter(Boolean).join(', ') || 'None'}
+                          </div>
+                        )}
+                        {piece.showEdgeSelector && piece.lengthMm > 0 && piece.widthMm > 0 && (
+                          <EdgeSelector
+                            lengthMm={piece.lengthMm}
+                            widthMm={piece.widthMm}
+                            edgeSelections={{
+                              edgeTop: piece.edgeTop,
+                              edgeBottom: piece.edgeBottom,
+                              edgeLeft: piece.edgeLeft,
+                              edgeRight: piece.edgeRight,
+                            }}
+                            edgeTypes={edgeTypes}
+                            onChange={(edges) => updatePiece(room.id, piece.id, {
+                              edgeTop: edges.edgeTop,
+                              edgeBottom: edges.edgeBottom,
+                              edgeLeft: edges.edgeLeft,
+                              edgeRight: edges.edgeRight,
+                            })}
+                          />
                         )}
                       </div>
 
