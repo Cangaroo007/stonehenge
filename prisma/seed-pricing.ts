@@ -192,10 +192,134 @@ async function seedPricingRules() {
   console.log('✓ Seeded 4 pricing rules')
 }
 
-// Run both seeders
+async function seedPriceBooks() {
+  console.log('Seeding price books...')
+
+  // Get pricing rules to link to price books
+  const tier1Rule = await prisma.pricingRule.findUnique({ where: { id: 'rule-tier1-discount' } })
+  const tier2Rule = await prisma.pricingRule.findUnique({ where: { id: 'rule-tier2-materials' } })
+  const cmEdgeRule = await prisma.pricingRule.findUnique({ where: { id: 'rule-cm-edges' } })
+  const largeQuoteRule = await prisma.pricingRule.findUnique({ where: { id: 'rule-large-quote' } })
+
+  // Create default price book (no rules - base pricing)
+  const defaultBook = await prisma.priceBook.upsert({
+    where: { name: 'Standard Pricing' },
+    update: {},
+    create: {
+      name: 'Standard Pricing',
+      description: 'Default pricing for new clients - no discounts applied',
+      category: 'general',
+      defaultThickness: 20,
+      isDefault: true,
+      sortOrder: 1,
+    },
+  })
+
+  // Create Tier 1 price book
+  const tier1Book = await prisma.priceBook.upsert({
+    where: { name: 'Tier 1 Partner Pricing' },
+    update: {},
+    create: {
+      name: 'Tier 1 Partner Pricing',
+      description: 'Premium partner pricing with 15% discount on all items',
+      category: 'trade',
+      defaultThickness: 20,
+      sortOrder: 2,
+    },
+  })
+
+  // Create Cabinet Maker price book
+  const cmBook = await prisma.priceBook.upsert({
+    where: { name: 'Cabinet Maker Pricing' },
+    update: {},
+    create: {
+      name: 'Cabinet Maker Pricing',
+      description: 'Special pricing for cabinet makers with edge discounts',
+      category: 'trade',
+      defaultThickness: 20,
+      sortOrder: 3,
+    },
+  })
+
+  // Link rules to price books
+  if (tier1Rule) {
+    await prisma.priceBookRule.upsert({
+      where: {
+        priceBookId_pricingRuleId: {
+          priceBookId: tier1Book.id,
+          pricingRuleId: tier1Rule.id,
+        },
+      },
+      update: {},
+      create: {
+        priceBookId: tier1Book.id,
+        pricingRuleId: tier1Rule.id,
+        sortOrder: 1,
+      },
+    })
+  }
+
+  if (largeQuoteRule) {
+    // Add large quote rule to Tier 1 book (can stack)
+    await prisma.priceBookRule.upsert({
+      where: {
+        priceBookId_pricingRuleId: {
+          priceBookId: tier1Book.id,
+          pricingRuleId: largeQuoteRule.id,
+        },
+      },
+      update: {},
+      create: {
+        priceBookId: tier1Book.id,
+        pricingRuleId: largeQuoteRule.id,
+        sortOrder: 2,
+      },
+    })
+  }
+
+  if (cmEdgeRule) {
+    await prisma.priceBookRule.upsert({
+      where: {
+        priceBookId_pricingRuleId: {
+          priceBookId: cmBook.id,
+          pricingRuleId: cmEdgeRule.id,
+        },
+      },
+      update: {},
+      create: {
+        priceBookId: cmBook.id,
+        pricingRuleId: cmEdgeRule.id,
+        sortOrder: 1,
+      },
+    })
+  }
+
+  if (tier2Rule) {
+    // Cabinet makers also get Tier 2 material discount
+    await prisma.priceBookRule.upsert({
+      where: {
+        priceBookId_pricingRuleId: {
+          priceBookId: cmBook.id,
+          pricingRuleId: tier2Rule.id,
+        },
+      },
+      update: {},
+      create: {
+        priceBookId: cmBook.id,
+        pricingRuleId: tier2Rule.id,
+        sortOrder: 2,
+      },
+    })
+  }
+
+  console.log('✓ Seeded 3 price books with rule associations')
+}
+
+// Run all seeders
 async function main() {
   await seedPricingEntities()
   await seedPricingRules()
+  await seedPriceBooks()
 }
 
 main()

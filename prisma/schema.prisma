@@ -135,6 +135,9 @@ model Quote {
   files           QuoteFile[]
   drawingAnalysis QuoteDrawingAnalysis?
 
+  priceBookId     String?     @map("price_book_id")
+  priceBook       PriceBook?  @relation(fields: [priceBookId], references: [id])
+
   @@map("quotes")
 }
 
@@ -350,6 +353,8 @@ model PricingRule {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  priceBookRules    PriceBookRule[]
+
   @@map("pricing_rules_engine")
 }
 
@@ -399,6 +404,39 @@ model PricingRuleMaterial {
 
   @@unique([pricingRuleId, materialId])
   @@map("pricing_rule_materials")
+}
+
+// ============================================
+// PRICE BOOKS
+// ============================================
+
+model PriceBook {
+  id               String          @id @default(cuid())
+  name             String          @unique
+  description      String?
+  category         String          @default("general")
+  defaultThickness Int             @default(20)
+  rules            PriceBookRule[]
+  quotes           Quote[]
+  isActive         Boolean         @default(true)
+  isDefault        Boolean         @default(false)
+  sortOrder        Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@map("price_books")
+}
+
+model PriceBookRule {
+  id            String      @id @default(cuid())
+  priceBookId   String      @map("price_book_id")
+  priceBook     PriceBook   @relation(fields: [priceBookId], references: [id], onDelete: Cascade)
+  pricingRuleId String      @map("pricing_rule_id")
+  pricingRule   PricingRule @relation(fields: [pricingRuleId], references: [id], onDelete: Cascade)
+  sortOrder     Int         @default(0)
+
+  @@unique([priceBookId, pricingRuleId])
+  @@map("price_book_rules")
 }
 
 // ============================================
