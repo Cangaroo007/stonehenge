@@ -159,28 +159,38 @@ model QuotePiece {
   id           Int       @id @default(autoincrement())
   roomId       Int       @map("room_id")
   room         QuoteRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  
+
+  // Name/Description
+  name         String    @default("Piece") // e.g., "Kitchen Island", "Sink Run"
+  description  String?
+
   // Material
   materialId   Int?      @map("material_id")
   material     Material? @relation(fields: [materialId], references: [id])
   materialName String?   @map("material_name") // Denormalized for display
-  
-  // Description
-  description  String?
-  
+
   // Dimensions
   lengthMm     Int       @map("length_mm")
   widthMm      Int       @map("width_mm")
   thicknessMm  Int       @map("thickness_mm")
   areaSqm      Decimal   @map("area_sqm") @db.Decimal(10, 4)
-  
+
+  // Edge selections (EdgeType id or null)
+  edgeTop      String?   @map("edge_top")
+  edgeBottom   String?   @map("edge_bottom")
+  edgeLeft     String?   @map("edge_left")
+  edgeRight    String?   @map("edge_right")
+
+  // Cutouts stored as JSON array
+  cutouts      Json      @default("[]")
+
   // Pricing
   materialCost Decimal   @default(0) @map("material_cost") @db.Decimal(10, 2)
   featuresCost Decimal   @default(0) @map("features_cost") @db.Decimal(10, 2)
   totalCost    Decimal   @default(0) @map("total_cost") @db.Decimal(10, 2)
-  
+
   sortOrder    Int       @default(0) @map("sort_order")
-  
+
   features     PieceFeature[]
 
   @@map("quote_pieces")

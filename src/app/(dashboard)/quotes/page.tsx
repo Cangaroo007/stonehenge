@@ -71,6 +71,12 @@ export default async function QuotesPage() {
                           View
                         </Link>
                         <Link
+                          href={`/quotes/${quote.id}/builder`}
+                          className="text-primary-600 hover:text-primary-700"
+                        >
+                          Builder
+                        </Link>
+                        <Link
                           href={`/quotes/${quote.id}/edit`}
                           className="text-gray-600 hover:text-gray-700"
                         >

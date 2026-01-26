@@ -79,10 +79,13 @@ export default async function QuoteDetailPage({
           <p className="text-gray-500 mt-1">{quote.projectName}</p>
         </div>
         <div className="flex gap-3">
+          <Link href={`/quotes/${quote.id}/builder`} className="btn-primary">
+            Open Builder
+          </Link>
           <Link href={`/quotes/${quote.id}/edit`} className="btn-secondary">
             Edit Quote
           </Link>
-          <Link href={`/api/quotes/${quote.id}/pdf`} target="_blank" className="btn-primary">
+          <Link href={`/api/quotes/${quote.id}/pdf`} target="_blank" className="btn-secondary">
             Download PDF
           </Link>
           <DeleteQuoteButton quoteId={quote.id} />
