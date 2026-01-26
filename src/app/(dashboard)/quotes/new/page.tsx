@@ -6,17 +6,18 @@ import QuoteForm from '@/components/QuoteForm';
 export const dynamic = 'force-dynamic';
 
 async function getData() {
-  const [customers, materials, pricingRules, lastQuote] = await Promise.all([
+  const [customers, materials, pricingRules, edgeTypes, lastQuote] = await Promise.all([
     prisma.customer.findMany({ orderBy: { name: 'asc' } }),
     prisma.material.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
     prisma.featurePricing.findMany({ where: { isActive: true }, orderBy: { category: 'asc' } }),
+    prisma.edgeType.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
     prisma.quote.findFirst({ orderBy: { quoteNumber: 'desc' } }),
   ]);
 
   const nextQuoteNumber = generateQuoteNumber(lastQuote?.quoteNumber || null);
 
-  const serialized = JSON.parse(JSON.stringify({ customers, materials, pricingRules }));
-  
+  const serialized = JSON.parse(JSON.stringify({ customers, materials, pricingRules, edgeTypes }));
+
   return { ...serialized, nextQuoteNumber };
 }
 
@@ -33,6 +34,7 @@ export default async function NewQuotePage() {
         customers={data.customers}
         materials={data.materials}
         pricingRules={data.pricingRules}
+        edgeTypes={data.edgeTypes}
         nextQuoteNumber={data.nextQuoteNumber}
         userId={user?.id}
       />

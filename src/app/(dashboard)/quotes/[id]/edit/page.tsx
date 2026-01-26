@@ -70,7 +70,7 @@ interface DrawingAnalysisData {
 }
 
 async function getData(quoteId: number) {
-  const [quote, customers, materials, pricingRules] = await Promise.all([
+  const [quote, customers, materials, pricingRules, edgeTypes] = await Promise.all([
     prisma.quote.findUnique({
       where: { id: quoteId },
       include: {
@@ -89,9 +89,10 @@ async function getData(quoteId: number) {
     prisma.customer.findMany({ orderBy: { name: 'asc' } }),
     prisma.material.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
     prisma.featurePricing.findMany({ where: { isActive: true }, orderBy: { category: 'asc' } }),
+    prisma.edgeType.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
   ]);
 
-  return JSON.parse(JSON.stringify({ quote, customers, materials, pricingRules }));
+  return JSON.parse(JSON.stringify({ quote, customers, materials, pricingRules, edgeTypes }));
 }
 
 export default async function EditQuotePage({
@@ -135,6 +136,7 @@ export default async function EditQuotePage({
         customers={data.customers}
         materials={data.materials}
         pricingRules={data.pricingRules}
+        edgeTypes={data.edgeTypes}
         nextQuoteNumber={data.quote.quoteNumber}
         userId={user?.id}
         initialData={{

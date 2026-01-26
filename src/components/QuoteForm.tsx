@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { formatCurrency, calculateArea } from '@/lib/utils';
+import EdgeSelector from '@/app/(dashboard)/quotes/[id]/builder/components/EdgeSelector';
 
 interface Customer {
   id: number;
@@ -24,6 +25,23 @@ interface PricingRule {
   name: string;
   price: string | number;
   priceType: string;
+}
+
+interface EdgeType {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  baseRate: number;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface EdgeSelections {
+  edgeTop: string | null;
+  edgeBottom: string | null;
+  edgeLeft: string | null;
+  edgeRight: string | null;
 }
 
 interface QuoteRoom {
@@ -93,6 +111,8 @@ interface ExtractedPiece {
   notes?: string;
   confidence: number;
   selected: boolean;
+  expanded: boolean;
+  edgeSelections: EdgeSelections;
 }
 
 interface DrawingAnalysisData {
@@ -107,6 +127,7 @@ interface QuoteFormProps {
   customers: Customer[];
   materials: Material[];
   pricingRules: PricingRule[];
+  edgeTypes: EdgeType[];
   nextQuoteNumber: string;
   userId?: number;
   initialData?: {
@@ -174,6 +195,7 @@ export default function QuoteForm({
   customers,
   materials,
   pricingRules,
+  edgeTypes,
   nextQuoteNumber,
   userId,
   initialData,
@@ -526,6 +548,13 @@ export default function QuoteForm({
                 notes: piece.notes,
                 confidence: piece.confidence,
                 selected: true,
+                expanded: false,
+                edgeSelections: {
+                  edgeTop: null,
+                  edgeBottom: null,
+                  edgeLeft: null,
+                  edgeRight: null,
+                },
               });
             }
           }
@@ -568,6 +597,18 @@ export default function QuoteForm({
   const togglePieceSelection = (index: number) => {
     setExtractedPieces((prev) =>
       prev.map((p, i) => (i === index ? { ...p, selected: !p.selected } : p))
+    );
+  };
+
+  const togglePieceExpanded = (index: number) => {
+    setExtractedPieces((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, expanded: !p.expanded } : { ...p, expanded: false }))
+    );
+  };
+
+  const updatePieceEdges = (index: number, edges: EdgeSelections) => {
+    setExtractedPieces((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, edgeSelections: edges } : p))
     );
   };
 
@@ -1045,105 +1086,151 @@ export default function QuoteForm({
                         </div>
 
                         <div className="space-y-2">
-                          {roomPiecesWithIndices.map(({ piece, index }) => (
+                          {roomPiecesWithIndices.map(({ piece, index }) => {
+                            const hasEdges = !!(piece.edgeSelections.edgeTop || piece.edgeSelections.edgeBottom || piece.edgeSelections.edgeLeft || piece.edgeSelections.edgeRight);
+                            return (
                             <div
                               key={index}
-                              className={`border rounded-lg p-3 transition-colors ${
+                              className={`border rounded-lg overflow-hidden transition-colors ${
                                 piece.selected
                                   ? 'border-primary-300 bg-primary-50'
                                   : 'border-gray-200 bg-gray-50'
                               } ${piece.confidence < 0.5 ? 'border-orange-300' : ''}`}
                             >
-                              <div className="flex items-start gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={piece.selected}
-                                  onChange={() => togglePieceSelection(index)}
-                                  className="mt-1 h-4 w-4 text-primary-600 rounded"
-                                />
-                                <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-2">
-                                  <div className="md:col-span-2">
-                                    <label className="block text-xs text-gray-500 mb-1">
-                                      Description
-                                    </label>
-                                    <input
-                                      type="text"
-                                      className="input w-full text-sm py-1"
-                                      value={piece.description}
-                                      onChange={(e) =>
-                                        updateExtractedPiece(index, { description: e.target.value })
-                                      }
-                                    />
+                              <div className="p-3">
+                                <div className="flex items-start gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={piece.selected}
+                                    onChange={() => togglePieceSelection(index)}
+                                    className="mt-1 h-4 w-4 text-primary-600 rounded"
+                                  />
+                                  <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-2">
+                                    <div className="md:col-span-2">
+                                      <label className="block text-xs text-gray-500 mb-1">
+                                        Description
+                                      </label>
+                                      <input
+                                        type="text"
+                                        className="input w-full text-sm py-1"
+                                        value={piece.description}
+                                        onChange={(e) =>
+                                          updateExtractedPiece(index, { description: e.target.value })
+                                        }
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">
+                                        Length (mm)
+                                      </label>
+                                      <input
+                                        type="number"
+                                        className="input w-full text-sm py-1"
+                                        value={piece.lengthMm}
+                                        onChange={(e) =>
+                                          updateExtractedPiece(index, { lengthMm: Number(e.target.value) })
+                                        }
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">
+                                        Width (mm)
+                                      </label>
+                                      <input
+                                        type="number"
+                                        className="input w-full text-sm py-1"
+                                        value={piece.widthMm}
+                                        onChange={(e) =>
+                                          updateExtractedPiece(index, { widthMm: Number(e.target.value) })
+                                        }
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">
+                                        Thick (mm)
+                                      </label>
+                                      <input
+                                        type="number"
+                                        className="input w-full text-sm py-1"
+                                        value={piece.thicknessMm}
+                                        onChange={(e) =>
+                                          updateExtractedPiece(index, { thicknessMm: Number(e.target.value) })
+                                        }
+                                      />
+                                    </div>
                                   </div>
-                                  <div>
-                                    <label className="block text-xs text-gray-500 mb-1">
-                                      Length (mm)
-                                    </label>
-                                    <input
-                                      type="number"
-                                      className="input w-full text-sm py-1"
-                                      value={piece.lengthMm}
-                                      onChange={(e) =>
-                                        updateExtractedPiece(index, { lengthMm: Number(e.target.value) })
-                                      }
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-gray-500 mb-1">
-                                      Width (mm)
-                                    </label>
-                                    <input
-                                      type="number"
-                                      className="input w-full text-sm py-1"
-                                      value={piece.widthMm}
-                                      onChange={(e) =>
-                                        updateExtractedPiece(index, { widthMm: Number(e.target.value) })
-                                      }
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-gray-500 mb-1">
-                                      Thick (mm)
-                                    </label>
-                                    <input
-                                      type="number"
-                                      className="input w-full text-sm py-1"
-                                      value={piece.thicknessMm}
-                                      onChange={(e) =>
-                                        updateExtractedPiece(index, { thicknessMm: Number(e.target.value) })
-                                      }
-                                    />
+                                  <div className="flex items-center gap-2">
+                                    {hasEdges && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                        Edges
+                                      </span>
+                                    )}
+                                    <span
+                                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getConfidenceColor(piece.confidence)} ${getConfidenceBgColor(piece.confidence)}`}
+                                      title={piece.confidence < 0.5 ? 'Low confidence - verify dimensions' : ''}
+                                    >
+                                      {Math.round(piece.confidence * 100)}%
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => togglePieceExpanded(index)}
+                                      className="text-gray-400 hover:text-gray-600"
+                                      title="Edit edge polishing"
+                                    >
+                                      <svg
+                                        className={`h-5 w-5 transition-transform ${piece.expanded ? 'rotate-180' : ''}`}
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                      </svg>
+                                    </button>
                                   </div>
                                 </div>
-                                <div className="text-right">
-                                  <span
-                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getConfidenceColor(piece.confidence)} ${getConfidenceBgColor(piece.confidence)}`}
-                                    title={piece.confidence < 0.5 ? 'Low confidence - verify dimensions' : ''}
-                                  >
-                                    {Math.round(piece.confidence * 100)}%
-                                  </span>
-                                </div>
+                                {/* Additional info */}
+                                {(piece.shape || piece.cutouts || piece.notes) && (
+                                  <div className="mt-2 ml-7 text-xs text-gray-500 flex flex-wrap gap-3">
+                                    {piece.shape && (
+                                      <span>
+                                        <strong>Shape:</strong> {piece.shape}
+                                      </span>
+                                    )}
+                                    {piece.cutouts && (
+                                      <span>
+                                        <strong>Cutouts:</strong> {piece.cutouts}
+                                      </span>
+                                    )}
+                                    {piece.notes && (
+                                      <span className="italic">{piece.notes}</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                              {/* Additional info */}
-                              {(piece.shape || piece.cutouts || piece.notes) && (
-                                <div className="mt-2 ml-7 text-xs text-gray-500 flex flex-wrap gap-3">
-                                  {piece.shape && (
-                                    <span>
-                                      <strong>Shape:</strong> {piece.shape}
-                                    </span>
-                                  )}
-                                  {piece.cutouts && (
-                                    <span>
-                                      <strong>Cutouts:</strong> {piece.cutouts}
-                                    </span>
-                                  )}
-                                  {piece.notes && (
-                                    <span className="italic">{piece.notes}</span>
-                                  )}
+                              {/* Edge Selector - Expanded */}
+                              {piece.expanded && piece.lengthMm > 0 && piece.widthMm > 0 && (
+                                <div className="p-4 bg-white border-t border-gray-200">
+                                  <EdgeSelector
+                                    lengthMm={piece.lengthMm}
+                                    widthMm={piece.widthMm}
+                                    edgeSelections={piece.edgeSelections}
+                                    edgeTypes={edgeTypes}
+                                    onChange={(edges) => updatePieceEdges(index, edges)}
+                                  />
+                                  <div className="mt-3 flex justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => togglePieceExpanded(index)}
+                                      className="btn-primary text-sm"
+                                    >
+                                      Done
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </div>
-                          ))}
+                          );
+                          })}
                         </div>
                       </div>
                     );
