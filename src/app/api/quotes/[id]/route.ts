@@ -132,7 +132,7 @@ export async function PUT(
         data: {
           calculatedTotal: grandTotal,
           calculatedAt: new Date(data.calculation.calculatedAt),
-          calculationBreakdown: data.calculation as Prisma.InputJsonValue,
+          calculationBreakdown: data.calculation as unknown as Prisma.InputJsonValue,
           // Also update the totals on the quote
           subtotal: data.calculation.total,
           taxAmount: gst,
