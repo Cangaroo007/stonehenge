@@ -135,6 +135,10 @@ model Quote {
   files           QuoteFile[]
   drawingAnalysis QuoteDrawingAnalysis?
 
+  // Price book for this quote
+  priceBookId     String?     @map("price_book_id")
+  priceBook       PriceBook?  @relation(fields: [priceBookId], references: [id])
+
   @@map("quotes")
 }
 
@@ -346,6 +350,9 @@ model PricingRule {
   cutoutOverrides   PricingRuleCutout[]
   materialOverrides PricingRuleMaterial[]
 
+  // Price books that include this rule
+  priceBookRules    PriceBookRule[]
+
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -399,6 +406,46 @@ model PricingRuleMaterial {
 
   @@unique([pricingRuleId, materialId])
   @@map("pricing_rule_materials")
+}
+
+// ============================================
+// PRICE BOOKS
+// ============================================
+
+model PriceBook {
+  id               String          @id @default(cuid())
+  name             String          @unique  // "Standard Retail", "Trade Pricing", etc.
+  description      String?
+  category         String          @default("general")  // "retail", "trade", "wholesale"
+
+  // Default settings for quotes using this price book
+  defaultThickness Int             @default(20)  // 20 or 40
+
+  // Rules included in this price book
+  rules            PriceBookRule[]
+
+  // Quotes using this price book
+  quotes           Quote[]
+
+  isActive         Boolean         @default(true)
+  isDefault        Boolean         @default(false)  // Only one can be default
+  sortOrder        Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@map("price_books")
+}
+
+model PriceBookRule {
+  id            String      @id @default(cuid())
+  priceBookId   String
+  priceBook     PriceBook   @relation(fields: [priceBookId], references: [id], onDelete: Cascade)
+  pricingRuleId String
+  pricingRule   PricingRule @relation(fields: [pricingRuleId], references: [id], onDelete: Cascade)
+  sortOrder     Int         @default(0)  // Order rules are applied
+
+  @@unique([priceBookId, pricingRuleId])
+  @@map("price_book_rules")
 }
 
 // ============================================

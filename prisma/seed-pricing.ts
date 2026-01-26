@@ -192,10 +192,124 @@ async function seedPricingRules() {
   console.log('✓ Seeded 4 pricing rules')
 }
 
-// Run both seeders
+async function seedPriceBooks() {
+  console.log('Seeding price books...')
+
+  // Get existing rules
+  const tier1Rule = await prisma.pricingRule.findUnique({ where: { id: 'rule-tier1-discount' } })
+  const tier2Rule = await prisma.pricingRule.findUnique({ where: { id: 'rule-tier2-materials' } })
+  const cmEdgeRule = await prisma.pricingRule.findUnique({ where: { id: 'rule-cm-edges' } })
+  const largeQuoteRule = await prisma.pricingRule.findUnique({ where: { id: 'rule-large-quote' } })
+
+  // Price Book 1: Standard Retail (no discounts)
+  const retailBook = await prisma.priceBook.upsert({
+    where: { name: 'Standard Retail' },
+    update: {},
+    create: {
+      name: 'Standard Retail',
+      description: 'Standard pricing for direct consumers and one-off jobs',
+      category: 'retail',
+      defaultThickness: 20,
+      isDefault: true,
+      sortOrder: 1,
+    },
+  })
+  console.log(`✓ Created price book: ${retailBook.name}`)
+
+  // Price Book 2: Trade Pricing (includes tier and type discounts)
+  const tradeBook = await prisma.priceBook.upsert({
+    where: { name: 'Trade Pricing' },
+    update: {},
+    create: {
+      name: 'Trade Pricing',
+      description: 'Pricing for cabinet makers, builders, and trade accounts',
+      category: 'trade',
+      defaultThickness: 20,
+      isDefault: false,
+      sortOrder: 2,
+    },
+  })
+
+  // Add rules to Trade Pricing book
+  const tradeRules = [tier1Rule, tier2Rule, cmEdgeRule, largeQuoteRule].filter(Boolean)
+  for (let i = 0; i < tradeRules.length; i++) {
+    const rule = tradeRules[i]
+    if (rule) {
+      await prisma.priceBookRule.upsert({
+        where: {
+          priceBookId_pricingRuleId: {
+            priceBookId: tradeBook.id,
+            pricingRuleId: rule.id,
+          },
+        },
+        update: { sortOrder: i + 1 },
+        create: {
+          priceBookId: tradeBook.id,
+          pricingRuleId: rule.id,
+          sortOrder: i + 1,
+        },
+      })
+    }
+  }
+  console.log(`✓ Created price book: ${tradeBook.name} with ${tradeRules.length} rules`)
+
+  // Price Book 3: Wholesale (for high-volume accounts)
+  const wholesaleBook = await prisma.priceBook.upsert({
+    where: { name: 'Wholesale' },
+    update: {},
+    create: {
+      name: 'Wholesale',
+      description: 'Maximum discounts for high-volume wholesale accounts',
+      category: 'wholesale',
+      defaultThickness: 20,
+      isDefault: false,
+      sortOrder: 3,
+    },
+  })
+
+  // Add tier 1 rule to wholesale (they get the best discount)
+  if (tier1Rule) {
+    await prisma.priceBookRule.upsert({
+      where: {
+        priceBookId_pricingRuleId: {
+          priceBookId: wholesaleBook.id,
+          pricingRuleId: tier1Rule.id,
+        },
+      },
+      update: { sortOrder: 1 },
+      create: {
+        priceBookId: wholesaleBook.id,
+        pricingRuleId: tier1Rule.id,
+        sortOrder: 1,
+      },
+    })
+  }
+  if (largeQuoteRule) {
+    await prisma.priceBookRule.upsert({
+      where: {
+        priceBookId_pricingRuleId: {
+          priceBookId: wholesaleBook.id,
+          pricingRuleId: largeQuoteRule.id,
+        },
+      },
+      update: { sortOrder: 2 },
+      create: {
+        priceBookId: wholesaleBook.id,
+        pricingRuleId: largeQuoteRule.id,
+        sortOrder: 2,
+      },
+    })
+  }
+  console.log(`✓ Created price book: ${wholesaleBook.name}`)
+
+  console.log('✓ Price books seeded successfully!')
+}
+
+// Run all seeders
 async function main() {
   await seedPricingEntities()
   await seedPricingRules()
+  await seedPriceBooks()
 }
 
 main()
