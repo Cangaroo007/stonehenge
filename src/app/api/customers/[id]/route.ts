@@ -9,6 +9,11 @@ export async function GET(
     const { id } = await params;
     const customer = await prisma.customer.findUnique({
       where: { id: parseInt(id) },
+      include: {
+        clientType: true,
+        clientTier: true,
+        defaultPriceBook: true,
+      },
     });
 
     if (!customer) {
@@ -39,6 +44,14 @@ export async function PUT(
         phone: data.phone || null,
         address: data.address || null,
         notes: data.notes || null,
+        clientTypeId: data.clientTypeId || null,
+        clientTierId: data.clientTierId || null,
+        defaultPriceBookId: data.defaultPriceBookId || null,
+      },
+      include: {
+        clientType: true,
+        clientTier: true,
+        defaultPriceBook: true,
       },
     });
 

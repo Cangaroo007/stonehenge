@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const clientTypeId = searchParams.get('clientTypeId');
+    const activeOnly = searchParams.get('activeOnly') !== 'false';
+
+    // Note: Tiers are universal across all client types in the current schema
+    // The clientTypeId param is accepted for API consistency but doesn't filter
     const clientTiers = await prisma.clientTier.findMany({
+      where: activeOnly ? { isActive: true } : undefined,
       orderBy: [{ sortOrder: 'asc' }, { priority: 'desc' }],
     });
     return NextResponse.json(clientTiers);

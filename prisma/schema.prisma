@@ -42,10 +42,12 @@ model Customer {
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   // Pricing classification
-  clientTypeId  String?     @map("client_type_id")
-  clientType    ClientType? @relation(fields: [clientTypeId], references: [id])
-  clientTierId  String?     @map("client_tier_id")
-  clientTier    ClientTier? @relation(fields: [clientTierId], references: [id])
+  clientTypeId       String?     @map("client_type_id")
+  clientType         ClientType? @relation(fields: [clientTypeId], references: [id])
+  clientTierId       String?     @map("client_tier_id")
+  clientTier         ClientTier? @relation(fields: [clientTierId], references: [id])
+  defaultPriceBookId String?     @map("default_price_book_id")
+  defaultPriceBook   PriceBook?  @relation("CustomerDefaultPriceBook", fields: [defaultPriceBookId], references: [id])
 
   quotes       Quote[]
   pricingRules PricingRule[]
@@ -411,18 +413,19 @@ model PricingRuleMaterial {
 // ============================================
 
 model PriceBook {
-  id               String          @id @default(cuid())
-  name             String          @unique
-  description      String?
-  category         String          @default("general")
-  defaultThickness Int             @default(20)
-  rules            PriceBookRule[]
-  quotes           Quote[]
-  isActive         Boolean         @default(true)
-  isDefault        Boolean         @default(false)
-  sortOrder        Int             @default(0)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id                  String          @id @default(cuid())
+  name                String          @unique
+  description         String?
+  category            String          @default("general")
+  defaultThickness    Int             @default(20)
+  rules               PriceBookRule[]
+  quotes              Quote[]
+  defaultForCustomers Customer[]      @relation("CustomerDefaultPriceBook")
+  isActive            Boolean         @default(true)
+  isDefault           Boolean         @default(false)
+  sortOrder           Int             @default(0)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
   @@map("price_books")
 }

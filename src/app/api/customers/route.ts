@@ -5,6 +5,11 @@ export async function GET() {
   try {
     const customers = await prisma.customer.findMany({
       orderBy: { name: 'asc' },
+      include: {
+        clientType: true,
+        clientTier: true,
+        defaultPriceBook: true,
+      },
     });
     return NextResponse.json(customers);
   } catch (error) {
@@ -25,6 +30,14 @@ export async function POST(request: NextRequest) {
         phone: data.phone || null,
         address: data.address || null,
         notes: data.notes || null,
+        clientTypeId: data.clientTypeId || null,
+        clientTierId: data.clientTierId || null,
+        defaultPriceBookId: data.defaultPriceBookId || null,
+      },
+      include: {
+        clientType: true,
+        clientTier: true,
+        defaultPriceBook: true,
       },
     });
 

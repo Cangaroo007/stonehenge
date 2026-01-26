@@ -9,6 +9,8 @@ async function getCustomers() {
     orderBy: { name: 'asc' },
     include: {
       _count: { select: { quotes: true } },
+      clientType: true,
+      clientTier: true,
     },
   });
 }
@@ -32,8 +34,8 @@ export default async function CustomersPage() {
               <tr>
                 <th className="table-header">Name</th>
                 <th className="table-header">Company</th>
-                <th className="table-header">Email</th>
-                <th className="table-header">Phone</th>
+                <th className="table-header">Client Type</th>
+                <th className="table-header">Tier</th>
                 <th className="table-header">Quotes</th>
                 <th className="table-header">Created</th>
                 <th className="table-header"></th>
@@ -54,8 +56,8 @@ export default async function CustomersPage() {
                   <tr key={customer.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{customer.name}</td>
                     <td className="table-cell">{customer.company || '-'}</td>
-                    <td className="table-cell">{customer.email || '-'}</td>
-                    <td className="table-cell">{customer.phone || '-'}</td>
+                    <td className="table-cell">{customer.clientType?.name || '-'}</td>
+                    <td className="table-cell">{customer.clientTier?.name || '-'}</td>
                     <td className="table-cell">{customer._count.quotes}</td>
                     <td className="table-cell">{formatDate(customer.createdAt)}</td>
                     <td className="table-cell">
