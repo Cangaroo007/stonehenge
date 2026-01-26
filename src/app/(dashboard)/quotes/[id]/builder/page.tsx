@@ -5,8 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import QuoteHeader from './components/QuoteHeader';
 import PieceList from './components/PieceList';
+import RoomGrouping from './components/RoomGrouping';
 import PieceForm from './components/PieceForm';
 import { formatCurrency } from '@/lib/utils';
+import { CutoutType, PieceCutout } from './components/CutoutSelector';
 
 interface QuotePiece {
   id: number;
@@ -21,7 +23,7 @@ interface QuotePiece {
   edgeBottom: string | null;
   edgeLeft: string | null;
   edgeRight: string | null;
-  cutouts: unknown[];
+  cutouts: PieceCutout[];
   sortOrder: number;
   totalCost: number;
   room: {
@@ -78,12 +80,14 @@ export default function QuoteBuilderPage() {
   const [pieces, setPieces] = useState<QuotePiece[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [edgeTypes, setEdgeTypes] = useState<EdgeType[]>([]);
+  const [cutoutTypes, setCutoutTypes] = useState<CutoutType[]>([]);
   const [rooms, setRooms] = useState<QuoteRoom[]>([]);
   const [selectedPieceId, setSelectedPieceId] = useState<number | null>(null);
   const [isAddingPiece, setIsAddingPiece] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'rooms'>('list');
 
   // Flatten pieces from all rooms
   const flattenPieces = useCallback((quoteRooms: QuoteRoom[]): QuotePiece[] => {
@@ -134,15 +138,28 @@ export default function QuoteBuilderPage() {
     }
   }, []);
 
+  // Fetch cutout types
+  const fetchCutoutTypes = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/pricing/cutout-types');
+      if (!response.ok) throw new Error('Failed to fetch cutout types');
+      const data = await response.json();
+      // Filter to only active cutout types
+      setCutoutTypes(data.filter((c: CutoutType) => c.isActive));
+    } catch (err) {
+      console.error('Error fetching cutout types:', err);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchQuote(), fetchMaterials(), fetchEdgeTypes()]);
+      await Promise.all([fetchQuote(), fetchMaterials(), fetchEdgeTypes(), fetchCutoutTypes()]);
       setLoading(false);
     };
     loadData();
-  }, [fetchQuote, fetchMaterials, fetchEdgeTypes]);
+  }, [fetchQuote, fetchMaterials, fetchEdgeTypes, fetchCutoutTypes]);
 
   // Handle piece selection
   const handleSelectPiece = (pieceId: number) => {
@@ -213,6 +230,32 @@ export default function QuoteBuilderPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete piece');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle duplicate piece
+  const handleDuplicatePiece = async (pieceId: number) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}/pieces/${pieceId}/duplicate`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to duplicate piece');
+      }
+
+      const newPiece = await response.json();
+
+      // Refresh quote data and select the new piece
+      await fetchQuote();
+      setSelectedPieceId(newPiece.id);
+      setIsAddingPiece(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to duplicate piece');
     } finally {
       setSaving(false);
     }
@@ -314,18 +357,54 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
         <div className="lg:col-span-2">
           <div className="card">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Pieces</h2>
+              <div className="flex items-center gap-4">
+                <h2 className="text-lg font-semibold">Pieces</h2>
+                {/* View Toggle */}
+                <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      viewMode === 'list'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    List
+                  </button>
+                  <button
+                    onClick={() => setViewMode('rooms')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      viewMode === 'rooms'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    By Room
+                  </button>
+                </div>
+              </div>
               <button onClick={handleAddPiece} className="btn-primary text-sm">
                 + Add Piece
               </button>
             </div>
-            <PieceList
-              pieces={pieces}
-              selectedPieceId={selectedPieceId}
-              onSelectPiece={handleSelectPiece}
-              onDeletePiece={handleDeletePiece}
-              onReorder={handleReorder}
-            />
+            {viewMode === 'list' ? (
+              <PieceList
+                pieces={pieces}
+                selectedPieceId={selectedPieceId}
+                onSelectPiece={handleSelectPiece}
+                onDeletePiece={handleDeletePiece}
+                onDuplicatePiece={handleDuplicatePiece}
+                onReorder={handleReorder}
+              />
+            ) : (
+              <RoomGrouping
+                pieces={pieces}
+                selectedPieceId={selectedPieceId}
+                onSelectPiece={handleSelectPiece}
+                onDeletePiece={handleDeletePiece}
+                onDuplicatePiece={handleDuplicatePiece}
+              />
+            )}
           </div>
         </div>
 
@@ -343,6 +422,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                 piece={selectedPiece || undefined}
                 materials={materials}
                 edgeTypes={edgeTypes}
+                cutoutTypes={cutoutTypes}
                 roomNames={roomNames}
                 onSave={handleSavePiece}
                 onCancel={handleCancelForm}
@@ -374,7 +454,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                * Edge pricing included. Cutout pricing in next phase.
+                * Edge and cutout pricing included.
               </p>
             </div>
           </div>

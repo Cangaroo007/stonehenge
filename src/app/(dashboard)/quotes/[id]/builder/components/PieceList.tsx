@@ -21,6 +21,7 @@ interface PieceListProps {
   selectedPieceId: number | null;
   onSelectPiece: (pieceId: number) => void;
   onDeletePiece: (pieceId: number) => void;
+  onDuplicatePiece: (pieceId: number) => void;
   onReorder: (pieces: { id: number; sortOrder: number }[]) => void;
 }
 
@@ -29,6 +30,7 @@ export default function PieceList({
   selectedPieceId,
   onSelectPiece,
   onDeletePiece,
+  onDuplicatePiece,
   onReorder,
 }: PieceListProps) {
   const handleMoveUp = (index: number, e: React.MouseEvent) => {
@@ -68,6 +70,11 @@ export default function PieceList({
   const handleDelete = (pieceId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     onDeletePiece(pieceId);
+  };
+
+  const handleDuplicate = (pieceId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDuplicatePiece(pieceId);
   };
 
   if (pieces.length === 0) {
@@ -170,6 +177,21 @@ export default function PieceList({
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {/* Duplicate */}
+                  <button
+                    onClick={(e) => handleDuplicate(piece.id, e)}
+                    className="p-1 text-gray-400 hover:text-gray-600"
+                    title="Duplicate piece"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
                     </svg>
                   </button>
                   {/* Delete */}

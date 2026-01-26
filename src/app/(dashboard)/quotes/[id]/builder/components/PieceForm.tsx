@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import EdgeSelector from './EdgeSelector';
+import CutoutSelector, { PieceCutout, CutoutType } from './CutoutSelector';
 
 interface QuotePiece {
   id: number;
@@ -16,6 +17,7 @@ interface QuotePiece {
   edgeBottom: string | null;
   edgeLeft: string | null;
   edgeRight: string | null;
+  cutouts: PieceCutout[];
   room: {
     id: number;
     name: string;
@@ -50,13 +52,23 @@ interface PieceFormProps {
   piece?: QuotePiece;
   materials: Material[];
   edgeTypes: EdgeType[];
+  cutoutTypes: CutoutType[];
   roomNames: string[];
   onSave: (data: Partial<QuotePiece>, roomName: string) => void;
   onCancel: () => void;
   saving: boolean;
 }
 
-const ROOM_OPTIONS = ['Kitchen', 'Bathroom', 'Ensuite', 'Laundry', 'Outdoor', 'Other'];
+const STANDARD_ROOMS = [
+  'Kitchen',
+  'Kitchen Island',
+  'Bathroom',
+  'Ensuite',
+  'Laundry',
+  'Outdoor Kitchen',
+  'Bar',
+  'Other',
+];
 const THICKNESS_OPTIONS = [
   { value: 20, label: '20mm' },
   { value: 40, label: '40mm' },
@@ -66,6 +78,7 @@ export default function PieceForm({
   piece,
   materials,
   edgeTypes,
+  cutoutTypes,
   roomNames,
   onSave,
   onCancel,
@@ -84,6 +97,9 @@ export default function PieceForm({
     edgeLeft: piece?.edgeLeft || null,
     edgeRight: piece?.edgeRight || null,
   });
+  const [cutouts, setCutouts] = useState<PieceCutout[]>(
+    Array.isArray(piece?.cutouts) ? piece.cutouts : []
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Update form when piece changes
@@ -102,6 +118,7 @@ export default function PieceForm({
         edgeLeft: piece.edgeLeft || null,
         edgeRight: piece.edgeRight || null,
       });
+      setCutouts(Array.isArray(piece.cutouts) ? piece.cutouts : []);
     } else {
       setName('');
       setDescription('');
@@ -116,12 +133,13 @@ export default function PieceForm({
         edgeLeft: null,
         edgeRight: null,
       });
+      setCutouts([]);
     }
     setErrors({});
   }, [piece]);
 
-  // Combine existing room names with default options
-  const allRoomOptions = Array.from(new Set([...ROOM_OPTIONS, ...roomNames]));
+  // Combine existing room names with standard options
+  const allRoomOptions = Array.from(new Set([...STANDARD_ROOMS, ...roomNames]));
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -164,6 +182,7 @@ export default function PieceForm({
         edgeBottom: edgeSelections.edgeBottom,
         edgeLeft: edgeSelections.edgeLeft,
         edgeRight: edgeSelections.edgeRight,
+        cutouts,
       },
       roomName
     );
@@ -246,6 +265,15 @@ export default function PieceForm({
           edgeSelections={edgeSelections}
           edgeTypes={edgeTypes}
           onChange={setEdgeSelections}
+        />
+      )}
+
+      {/* Cutout Selector */}
+      {cutoutTypes.length > 0 && (
+        <CutoutSelector
+          cutouts={cutouts}
+          cutoutTypes={cutoutTypes}
+          onChange={setCutouts}
         />
       )}
 
