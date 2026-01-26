@@ -79,7 +79,7 @@ export default function PieceForm({
   }, [piece]);
 
   // Combine existing room names with default options
-  const allRoomOptions = [...new Set([...ROOM_OPTIONS, ...roomNames])];
+  const allRoomOptions = Array.from(new Set([...ROOM_OPTIONS, ...roomNames]));
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
