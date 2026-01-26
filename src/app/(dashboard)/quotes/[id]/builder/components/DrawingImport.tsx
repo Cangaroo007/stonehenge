@@ -1,0 +1,631 @@
+'use client';
+
+import { useState, useCallback, useRef } from 'react';
+
+interface DrawingImportProps {
+  quoteId: string;
+  onImportComplete: (count: number) => void;
+  onClose: () => void;
+}
+
+interface ExtractedPiece {
+  id: string;
+  pieceNumber: number;
+  name: string;
+  length: number;
+  width: number;
+  thickness: number;
+  room: string;
+  confidence: number;
+  notes: string | null;
+  cutouts: { type: string }[];
+  isEditing: boolean;
+}
+
+interface AnalysisResult {
+  success: boolean;
+  drawingType: string;
+  metadata: {
+    jobNumber: string | null;
+    defaultThickness: number;
+    defaultOverhang: number;
+  };
+  rooms: {
+    name: string;
+    pieces: {
+      pieceNumber: number;
+      name: string;
+      pieceType: string;
+      shape: string;
+      length: number;
+      width: number;
+      thickness: number;
+      cutouts: { type: string }[];
+      notes: string | null;
+      confidence: number;
+    }[];
+  }[];
+  warnings: string[];
+  questionsForUser: string[];
+}
+
+type Step = 'upload' | 'analyzing' | 'review';
+
+const STANDARD_ROOMS = [
+  'Kitchen',
+  'Kitchen Island',
+  'Bathroom',
+  'Ensuite',
+  'Laundry',
+  'Outdoor Kitchen',
+  'Bar',
+  'Pantry',
+  'TV Unit',
+  'Other',
+];
+
+export default function DrawingImport({ quoteId, onImportComplete, onClose }: DrawingImportProps) {
+  const [step, setStep] = useState<Step>('upload');
+  const [file, setFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [extractedPieces, setExtractedPieces] = useState<ExtractedPiece[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isImporting, setIsImporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisSteps, setAnalysisSteps] = useState<{ label: string; done: boolean }[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle file selection
+  const handleFile = useCallback(async (selectedFile: File) => {
+    setFile(selectedFile);
+    setError(null);
+    setStep('analyzing');
+
+    // Initialize progress steps
+    setAnalysisSteps([
+      { label: 'Uploaded drawing', done: true },
+      { label: 'Detecting pieces', done: false },
+      { label: 'Extracting dimensions', done: false },
+      { label: 'Identifying rooms', done: false },
+    ]);
+    setAnalysisProgress(20);
+
+    try {
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setAnalysisProgress(prev => Math.min(prev + 10, 80));
+      }, 500);
+
+      setTimeout(() => {
+        setAnalysisSteps(prev => prev.map((s, i) => i === 1 ? { ...s, done: true } : s));
+      }, 800);
+
+      setTimeout(() => {
+        setAnalysisSteps(prev => prev.map((s, i) => i === 2 ? { ...s, done: true } : s));
+      }, 1600);
+
+      // Call the analyze-drawing API
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const response = await fetch('/api/analyze-drawing', {
+        method: 'POST',
+        body: formData,
+      });
+
+      clearInterval(progressInterval);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Analysis failed');
+      }
+
+      const data = await response.json();
+      const analysis: AnalysisResult = data.analysis;
+
+      setAnalysisProgress(100);
+      setAnalysisSteps(prev => prev.map(s => ({ ...s, done: true })));
+
+      // Transform analysis results to ExtractedPiece format
+      const pieces: ExtractedPiece[] = [];
+      let pieceIndex = 0;
+
+      for (const room of analysis.rooms || []) {
+        for (const piece of room.pieces || []) {
+          const id = `extracted-${pieceIndex++}`;
+          pieces.push({
+            id,
+            pieceNumber: piece.pieceNumber || pieceIndex,
+            name: piece.name || `Piece ${pieceIndex}`,
+            length: piece.length || 0,
+            width: piece.width || 0,
+            thickness: piece.thickness || analysis.metadata?.defaultThickness || 20,
+            room: room.name || 'Kitchen',
+            confidence: piece.confidence || 0.5,
+            notes: piece.notes || null,
+            cutouts: piece.cutouts || [],
+            isEditing: false,
+          });
+        }
+      }
+
+      if (pieces.length === 0) {
+        throw new Error("Couldn't detect any pieces. Try a clearer image or add pieces manually.");
+      }
+
+      setExtractedPieces(pieces);
+      setWarnings(analysis.warnings || []);
+
+      // Auto-select high confidence pieces (>= 70%)
+      const highConfidenceIds = new Set(
+        pieces.filter(p => p.confidence >= 0.7).map(p => p.id)
+      );
+      setSelectedIds(highConfidenceIds);
+
+      setStep('review');
+
+    } catch (err) {
+      console.error('Analysis error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to analyze drawing');
+      setStep('upload');
+      setFile(null);
+    }
+  }, []);
+
+  // Handle drag events
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  }, []);
+
+  // Handle drop
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (isValidFileType(droppedFile)) {
+        handleFile(droppedFile);
+      } else {
+        setError('Please upload a PDF, PNG, or JPG file.');
+      }
+    }
+  }, [handleFile]);
+
+  // Handle file input change
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFile(e.target.files[0]);
+    }
+  }, [handleFile]);
+
+  // Validate file type
+  const isValidFileType = (file: File): boolean => {
+    const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+    return validTypes.includes(file.type);
+  };
+
+  // Toggle piece selection
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Select/deselect all
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(extractedPieces.map(p => p.id)));
+  }, [extractedPieces]);
+
+  const deselectAll = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // Toggle piece editing
+  const toggleEditing = useCallback((id: string) => {
+    setExtractedPieces(prev =>
+      prev.map(p => (p.id === id ? { ...p, isEditing: !p.isEditing } : { ...p, isEditing: false }))
+    );
+  }, []);
+
+  // Update piece field
+  const updatePiece = useCallback((id: string, field: keyof ExtractedPiece, value: string | number) => {
+    setExtractedPieces(prev =>
+      prev.map(p => (p.id === id ? { ...p, [field]: value } : p))
+    );
+  }, []);
+
+  // Import selected pieces
+  const handleImport = useCallback(async () => {
+    const selectedPieces = extractedPieces.filter(p => selectedIds.has(p.id));
+
+    if (selectedPieces.length === 0) {
+      setError('Please select at least one piece to import.');
+      return;
+    }
+
+    setIsImporting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}/import-pieces`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pieces: selectedPieces.map(p => ({
+            name: p.name,
+            length: p.length,
+            width: p.width,
+            thickness: p.thickness,
+            room: p.room,
+            notes: p.notes,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to import pieces');
+      }
+
+      const result = await response.json();
+      onImportComplete(result.count);
+
+    } catch (err) {
+      console.error('Import error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to import pieces');
+    } finally {
+      setIsImporting(false);
+    }
+  }, [quoteId, extractedPieces, selectedIds, onImportComplete]);
+
+  // Get confidence indicator
+  const getConfidenceIndicator = (confidence: number) => {
+    if (confidence >= 0.9) {
+      return { color: 'text-green-600', bg: 'bg-green-100', icon: '✓', label: 'High' };
+    } else if (confidence >= 0.7) {
+      return { color: 'text-yellow-600', bg: 'bg-yellow-100', icon: '!', label: 'Medium' };
+    } else {
+      return { color: 'text-red-600', bg: 'bg-red-100', icon: '?', label: 'Low' };
+    }
+  };
+
+  // Render upload step
+  const renderUploadStep = () => (
+    <div className="p-6">
+      <h2 className="text-lg font-semibold mb-4">Import from Drawing</h2>
+
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      <div
+        className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+          dragActive
+            ? 'border-primary-500 bg-primary-50'
+            : 'border-gray-300 hover:border-primary-400 hover:bg-gray-50'
+        }`}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.png,.jpg,.jpeg"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        <svg
+          className="mx-auto h-12 w-12 text-gray-400 mb-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
+        </svg>
+
+        <p className="text-gray-600 mb-2">
+          Drop drawing here or <span className="text-primary-600 font-medium">click to upload</span>
+        </p>
+        <p className="text-sm text-gray-500">PDF, PNG, JPG (max 5MB)</p>
+      </div>
+
+      <p className="mt-4 text-sm text-gray-500">
+        Supported: CAD drawings, FileMaker job sheets, hand-drawn sketches with measurements
+      </p>
+
+      <div className="mt-6 flex justify-end">
+        <button onClick={onClose} className="btn-secondary">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+
+  // Render analyzing step
+  const renderAnalyzingStep = () => (
+    <div className="p-6">
+      <h2 className="text-lg font-semibold mb-4">Analyzing Drawing...</h2>
+
+      <div className="mb-6">
+        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary-600 transition-all duration-300"
+            style={{ width: `${analysisProgress}%` }}
+          />
+        </div>
+        <p className="text-right text-sm text-gray-500 mt-1">{analysisProgress}%</p>
+      </div>
+
+      <div className="space-y-3">
+        {analysisSteps.map((stepItem, index) => (
+          <div key={index} className="flex items-center gap-3">
+            {stepItem.done ? (
+              <svg className="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            ) : (
+              <div className="h-5 w-5 rounded-full border-2 border-gray-300 border-dashed flex items-center justify-center">
+                <div className="h-2 w-2 rounded-full bg-gray-300 animate-pulse" />
+              </div>
+            )}
+            <span className={stepItem.done ? 'text-gray-900' : 'text-gray-500'}>
+              {stepItem.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {file && (
+        <p className="mt-4 text-sm text-gray-500">
+          Analyzing: {file.name}
+        </p>
+      )}
+    </div>
+  );
+
+  // Render review step
+  const renderReviewStep = () => (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold">Review Extracted Pieces</h2>
+        <button
+          onClick={handleImport}
+          disabled={isImporting || selectedIds.size === 0}
+          className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isImporting ? 'Importing...' : `Import Selected (${selectedIds.size})`}
+        </button>
+      </div>
+
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg">
+          <p className="font-medium mb-1">Warnings:</p>
+          <ul className="list-disc list-inside text-sm">
+            {warnings.map((warning, i) => (
+              <li key={i}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-sm text-gray-600 mb-4">
+        Found {extractedPieces.length} pieces in drawing
+      </p>
+
+      {/* Selection controls */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={selectAll} className="text-sm text-primary-600 hover:text-primary-700">
+          Select All
+        </button>
+        <span className="text-gray-300">|</span>
+        <button onClick={deselectAll} className="text-sm text-primary-600 hover:text-primary-700">
+          Deselect All
+        </button>
+      </div>
+
+      {/* Pieces table */}
+      <div className="border rounded-lg overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
+                <span className="sr-only">Select</span>
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Dimensions
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Room
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                Conf.
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {extractedPieces.map(piece => {
+              const confidence = getConfidenceIndicator(piece.confidence);
+              return (
+                <tr key={piece.id} className="group">
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(piece.id)}
+                      onChange={() => toggleSelection(piece.id)}
+                      className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    {piece.isEditing ? (
+                      <input
+                        type="text"
+                        value={piece.name}
+                        onChange={(e) => updatePiece(piece.id, 'name', e.target.value)}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => toggleEditing(piece.id)}
+                        className="text-sm font-medium text-gray-900 hover:text-primary-600"
+                      >
+                        {piece.name}
+                      </button>
+                    )}
+                    {piece.notes && !piece.isEditing && (
+                      <p className="text-xs text-gray-500 mt-1">AI note: {piece.notes}</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {piece.isEditing ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={piece.length}
+                          onChange={(e) => updatePiece(piece.id, 'length', parseInt(e.target.value) || 0)}
+                          className="w-20 px-2 py-1 border rounded text-sm"
+                          placeholder="Length"
+                        />
+                        <span className="text-gray-400">×</span>
+                        <input
+                          type="number"
+                          value={piece.width}
+                          onChange={(e) => updatePiece(piece.id, 'width', parseInt(e.target.value) || 0)}
+                          className="w-20 px-2 py-1 border rounded text-sm"
+                          placeholder="Width"
+                        />
+                        <span className="text-gray-500 text-sm">mm</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-600">
+                        {piece.length} × {piece.width}mm
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {piece.isEditing ? (
+                      <select
+                        value={piece.room}
+                        onChange={(e) => updatePiece(piece.id, 'room', e.target.value)}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      >
+                        {STANDARD_ROOMS.map(room => (
+                          <option key={room} value={room}>
+                            {room}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-sm text-gray-600">{piece.room}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${confidence.bg} ${confidence.color}`}
+                      title={`${Math.round(piece.confidence * 100)}% confidence`}
+                    >
+                      {Math.round(piece.confidence * 100)}%
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Legend */}
+      <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-3 rounded bg-green-100"></span>
+          High confidence (90%+)
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-3 rounded bg-yellow-100"></span>
+          Medium (70-89%)
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-3 rounded bg-red-100"></span>
+          Low (&lt;70%) - review recommended
+        </span>
+      </div>
+
+      {/* Footer actions */}
+      <div className="mt-6 flex justify-between">
+        <button
+          onClick={() => {
+            setStep('upload');
+            setFile(null);
+            setExtractedPieces([]);
+            setSelectedIds(new Set());
+            setError(null);
+          }}
+          className="btn-secondary"
+        >
+          Upload Different Drawing
+        </button>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="btn-secondary">
+            Cancel
+          </button>
+          <button
+            onClick={handleImport}
+            disabled={isImporting || selectedIds.size === 0}
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isImporting ? 'Importing...' : `Import ${selectedIds.size} Pieces`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-auto">
+        {step === 'upload' && renderUploadStep()}
+        {step === 'analyzing' && renderAnalyzingStep()}
+        {step === 'review' && renderReviewStep()}
+      </div>
+    </div>
+  );
+}

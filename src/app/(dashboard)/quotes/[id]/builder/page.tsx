@@ -9,6 +9,7 @@ import RoomGrouping from './components/RoomGrouping';
 import PieceForm from './components/PieceForm';
 import PricingSummary from './components/PricingSummary';
 import QuoteActions from './components/QuoteActions';
+import DrawingImport from './components/DrawingImport';
 import { CutoutType, PieceCutout } from './components/CutoutSelector';
 import type { CalculationResult } from '@/lib/types/pricing';
 
@@ -96,6 +97,8 @@ export default function QuoteBuilderPage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [calculation, setCalculation] = useState<CalculationResult | null>(null);
   const calculationRef = useRef<CalculationResult | null>(null);
+  const [showDrawingImport, setShowDrawingImport] = useState(false);
+  const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
 
   // Trigger recalculation after piece changes
   const triggerRecalculate = useCallback(() => {
@@ -360,6 +363,16 @@ export default function QuoteBuilderPage() {
     }
   };
 
+  // Handle drawing import complete
+  const handleImportComplete = useCallback(async (count: number) => {
+    setShowDrawingImport(false);
+    await fetchQuote();
+    triggerRecalculate();
+    setImportSuccessMessage(`Imported ${count} piece${count !== 1 ? 's' : ''} from drawing`);
+    // Auto-clear success message after 5 seconds
+    setTimeout(() => setImportSuccessMessage(null), 5000);
+  }, [fetchQuote, triggerRecalculate]);
+
   // Get selected piece
   const selectedPiece = selectedPieceId
     ? pieces.find(p => p.id === selectedPieceId)
@@ -404,6 +417,23 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
           <span>{error}</span>
           <button onClick={() => setError(null)} className="text-red-700 hover:text-red-900">
+            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Import Success Toast */}
+      {importSuccessMessage && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            {importSuccessMessage}
+          </span>
+          <button onClick={() => setImportSuccessMessage(null)} className="text-green-700 hover:text-green-900">
             <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
@@ -460,9 +490,20 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                   </button>
                 </div>
               </div>
-              <button onClick={handleAddPiece} className="btn-primary text-sm">
-                + Add Piece
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowDrawingImport(true)}
+                  className="btn-secondary text-sm flex items-center gap-1"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Import Drawing
+                </button>
+                <button onClick={handleAddPiece} className="btn-primary text-sm">
+                  + Add Piece
+                </button>
+              </div>
             </div>
             {viewMode === 'list' ? (
               <PieceList
@@ -541,6 +582,15 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
           </div>
         </div>
       </div>
+
+      {/* Drawing Import Modal */}
+      {showDrawingImport && (
+        <DrawingImport
+          quoteId={quoteId}
+          onImportComplete={handleImportComplete}
+          onClose={() => setShowDrawingImport(false)}
+        />
+      )}
     </div>
   );
 }
