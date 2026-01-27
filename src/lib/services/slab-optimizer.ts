@@ -1,0 +1,287 @@
+import {
+  OptimizationInput,
+  OptimizationResult,
+  Placement,
+  SlabResult
+} from '@/types/slab-optimization';
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface Slab {
+  width: number;
+  height: number;
+  placements: Placement[];
+  freeRects: Rect[];
+}
+
+/**
+ * Main optimization function using First Fit Decreasing algorithm
+ */
+export function optimizeSlabs(input: OptimizationInput): OptimizationResult {
+  const { pieces, slabWidth, slabHeight, kerfWidth, allowRotation } = input;
+
+  // Handle empty input
+  if (pieces.length === 0) {
+    return {
+      placements: [],
+      slabs: [],
+      totalSlabs: 0,
+      totalUsedArea: 0,
+      totalWasteArea: 0,
+      wastePercent: 0,
+      unplacedPieces: [],
+    };
+  }
+
+  // Sort pieces by area (largest first) for better packing
+  // IMPORTANT: Use Array.from() to avoid Railway build issues
+  const sortedPieces = Array.from(pieces).sort((a, b) =>
+    (b.width * b.height) - (a.width * a.height)
+  );
+
+  const slabs: Slab[] = [];
+  const placements: Placement[] = [];
+  const unplacedPieces: string[] = [];
+
+  // Process each piece
+  for (const piece of sortedPieces) {
+    // Add kerf to piece dimensions
+    const pieceWidth = piece.width + kerfWidth;
+    const pieceHeight = piece.height + kerfWidth;
+
+    // Check if piece can fit on a slab at all
+    const fitsNormal = pieceWidth <= slabWidth && pieceHeight <= slabHeight;
+    const fitsRotated = allowRotation &&
+                        (piece.canRotate !== false) &&
+                        pieceHeight <= slabWidth &&
+                        pieceWidth <= slabHeight;
+
+    if (!fitsNormal && !fitsRotated) {
+      unplacedPieces.push(piece.id);
+      continue;
+    }
+
+    let placed = false;
+
+    // Try to place in existing slabs
+    for (let slabIndex = 0; slabIndex < slabs.length && !placed; slabIndex++) {
+      const slab = slabs[slabIndex];
+
+      // Try normal orientation
+      if (fitsNormal) {
+        const position = findPosition(slab, pieceWidth, pieceHeight);
+        if (position) {
+          placePiece(slab, piece, position, pieceWidth, pieceHeight, false, slabIndex, placements);
+          placed = true;
+          continue;
+        }
+      }
+
+      // Try rotated orientation
+      if (!placed && fitsRotated) {
+        const position = findPosition(slab, pieceHeight, pieceWidth);
+        if (position) {
+          placePiece(slab, piece, position, pieceHeight, pieceWidth, true, slabIndex, placements);
+          placed = true;
+          continue;
+        }
+      }
+    }
+
+    // Start new slab if needed
+    if (!placed) {
+      const newSlab = createSlab(slabWidth, slabHeight);
+      const slabIndex = slabs.length;
+
+      // Prefer normal orientation for new slab
+      if (fitsNormal) {
+        const position = findPosition(newSlab, pieceWidth, pieceHeight);
+        if (position) {
+          placePiece(newSlab, piece, position, pieceWidth, pieceHeight, false, slabIndex, placements);
+          slabs.push(newSlab);
+          placed = true;
+        }
+      }
+
+      // Try rotated if normal didn't work
+      if (!placed && fitsRotated) {
+        const position = findPosition(newSlab, pieceHeight, pieceWidth);
+        if (position) {
+          placePiece(newSlab, piece, position, pieceHeight, pieceWidth, true, slabIndex, placements);
+          slabs.push(newSlab);
+          placed = true;
+        }
+      }
+
+      if (!placed) {
+        unplacedPieces.push(piece.id);
+      }
+    }
+  }
+
+  // Calculate results
+  const slabResults = slabs.map((slab, index) => calculateSlabResult(slab, index, slabWidth, slabHeight));
+  const totalSlabArea = slabs.length * slabWidth * slabHeight;
+  const totalUsedArea = placements.reduce((sum, p) => sum + (p.width * p.height), 0);
+  const totalWasteArea = totalSlabArea - totalUsedArea;
+
+  return {
+    placements,
+    slabs: slabResults,
+    totalSlabs: slabs.length,
+    totalUsedArea,
+    totalWasteArea,
+    wastePercent: totalSlabArea > 0 ? (totalWasteArea / totalSlabArea) * 100 : 0,
+    unplacedPieces,
+  };
+}
+
+/**
+ * Create a new empty slab with one free rectangle
+ */
+function createSlab(width: number, height: number): Slab {
+  return {
+    width,
+    height,
+    placements: [],
+    freeRects: [{ x: 0, y: 0, width, height }],
+  };
+}
+
+/**
+ * Find best position for a piece using Bottom-Left algorithm
+ */
+function findPosition(slab: Slab, width: number, height: number): { x: number; y: number } | null {
+  let bestRect: Rect | null = null;
+  let bestY = Infinity;
+  let bestX = Infinity;
+
+  for (const rect of slab.freeRects) {
+    if (width <= rect.width && height <= rect.height) {
+      // Prefer bottom-left placement
+      if (rect.y < bestY || (rect.y === bestY && rect.x < bestX)) {
+        bestRect = rect;
+        bestY = rect.y;
+        bestX = rect.x;
+      }
+    }
+  }
+
+  return bestRect ? { x: bestRect.x, y: bestRect.y } : null;
+}
+
+/**
+ * Place a piece and update free rectangles
+ */
+function placePiece(
+  slab: Slab,
+  piece: OptimizationInput['pieces'][0],
+  position: { x: number; y: number },
+  width: number,
+  height: number,
+  rotated: boolean,
+  slabIndex: number,
+  placements: Placement[]
+): void {
+  const placement: Placement = {
+    pieceId: piece.id,
+    slabIndex,
+    x: position.x,
+    y: position.y,
+    width: rotated ? piece.height : piece.width,
+    height: rotated ? piece.width : piece.height,
+    rotated,
+    label: piece.label,
+  };
+
+  slab.placements.push(placement);
+  placements.push(placement);
+
+  // Update free rectangles using guillotine split
+  updateFreeRects(slab, position.x, position.y, width, height);
+}
+
+/**
+ * Update free rectangles after placing a piece (Guillotine algorithm)
+ */
+function updateFreeRects(slab: Slab, x: number, y: number, width: number, height: number): void {
+  const newFreeRects: Rect[] = [];
+
+  for (const rect of slab.freeRects) {
+    // Check if placement overlaps this free rect
+    if (x >= rect.x + rect.width || x + width <= rect.x ||
+        y >= rect.y + rect.height || y + height <= rect.y) {
+      // No overlap, keep this rect
+      newFreeRects.push(rect);
+      continue;
+    }
+
+    // Split the rectangle around the placed piece
+    // Left portion
+    if (x > rect.x) {
+      newFreeRects.push({
+        x: rect.x,
+        y: rect.y,
+        width: x - rect.x,
+        height: rect.height,
+      });
+    }
+
+    // Right portion
+    if (x + width < rect.x + rect.width) {
+      newFreeRects.push({
+        x: x + width,
+        y: rect.y,
+        width: (rect.x + rect.width) - (x + width),
+        height: rect.height,
+      });
+    }
+
+    // Bottom portion
+    if (y > rect.y) {
+      newFreeRects.push({
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: y - rect.y,
+      });
+    }
+
+    // Top portion
+    if (y + height < rect.y + rect.height) {
+      newFreeRects.push({
+        x: rect.x,
+        y: y + height,
+        width: rect.width,
+        height: (rect.y + rect.height) - (y + height),
+      });
+    }
+  }
+
+  // Remove small rectangles and merge where possible
+  slab.freeRects = newFreeRects.filter(r => r.width > 50 && r.height > 50);
+}
+
+/**
+ * Calculate slab result summary
+ */
+function calculateSlabResult(slab: Slab, index: number, slabWidth: number, slabHeight: number): SlabResult {
+  const slabArea = slabWidth * slabHeight;
+  const usedArea = slab.placements.reduce((sum, p) => sum + (p.width * p.height), 0);
+  const wasteArea = slabArea - usedArea;
+
+  return {
+    slabIndex: index,
+    width: slabWidth,
+    height: slabHeight,
+    placements: slab.placements,
+    usedArea,
+    wasteArea,
+    wastePercent: (wasteArea / slabArea) * 100,
+  };
+}
