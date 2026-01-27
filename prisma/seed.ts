@@ -440,7 +440,12 @@ async function main() {
   // ============================================
   // CREATE DEMO QUOTE
   // ============================================
-  const quote = await prisma.quote.create({
+  // Check if demo quote already exists
+  const existingQuote = await prisma.quote.findFirst({
+    where: { quoteNumber: 'Q-00001' },
+  });
+
+  const quote = existingQuote ?? await prisma.quote.create({
     data: {
       quoteNumber: 'Q-00001',
       customerId: 1,
