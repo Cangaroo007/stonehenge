@@ -20,6 +20,10 @@ interface PieceData {
   featuresCost: number;
   totalCost: number;
   sortOrder: number;
+  edgeTop: string | null;
+  edgeBottom: string | null;
+  edgeLeft: string | null;
+  edgeRight: string | null;
   features: FeatureData[];
 }
 
@@ -103,6 +107,10 @@ export async function POST(request: NextRequest) {
                 featuresCost: piece.featuresCost,
                 totalCost: piece.totalCost,
                 sortOrder: piece.sortOrder,
+                edgeTop: piece.edgeTop,
+                edgeBottom: piece.edgeBottom,
+                edgeLeft: piece.edgeLeft,
+                edgeRight: piece.edgeRight,
                 features: {
                   create: piece.features.map((feature: FeatureData) => ({
                     name: feature.name,
