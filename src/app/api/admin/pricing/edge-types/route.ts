@@ -6,7 +6,19 @@ export async function GET() {
     const edgeTypes = await prisma.edgeType.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
-    return NextResponse.json(edgeTypes);
+
+    // Properly serialize Decimal fields to numbers and ensure boolean fields are set
+    const serialized = edgeTypes.map((et: typeof edgeTypes[number]) => ({
+      id: et.id,
+      name: et.name,
+      description: et.description,
+      category: et.category,
+      baseRate: Number(et.baseRate),
+      isActive: et.isActive ?? true, // Default to true if null/undefined
+      sortOrder: et.sortOrder,
+    }));
+
+    return NextResponse.json(serialized);
   } catch (error) {
     console.error('Error fetching edge types:', error);
     return NextResponse.json({ error: 'Failed to fetch edge types' }, { status: 500 });

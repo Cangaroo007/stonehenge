@@ -153,8 +153,8 @@ export default function QuoteBuilderPage() {
       const response = await fetch('/api/admin/pricing/edge-types');
       if (!response.ok) throw new Error('Failed to fetch edge types');
       const data = await response.json();
-      // Filter to only active edge types
-      setEdgeTypes(data.filter((e: EdgeType) => e.isActive));
+      // Filter to only active edge types (treat null/undefined as active)
+      setEdgeTypes(data.filter((e: EdgeType) => e.isActive !== false));
     } catch (err) {
       console.error('Error fetching edge types:', err);
     }
@@ -166,8 +166,8 @@ export default function QuoteBuilderPage() {
       const response = await fetch('/api/admin/pricing/cutout-types');
       if (!response.ok) throw new Error('Failed to fetch cutout types');
       const data = await response.json();
-      // Filter to only active cutout types
-      setCutoutTypes(data.filter((c: CutoutType) => c.isActive));
+      // Filter to only active cutout types (treat null/undefined as active)
+      setCutoutTypes(data.filter((c: CutoutType) => c.isActive !== false));
     } catch (err) {
       console.error('Error fetching cutout types:', err);
     }

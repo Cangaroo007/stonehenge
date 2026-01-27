@@ -6,7 +6,18 @@ export async function GET() {
     const cutoutTypes = await prisma.cutoutType.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
-    return NextResponse.json(cutoutTypes);
+
+    // Properly serialize Decimal fields to numbers and ensure boolean fields are set
+    const serialized = cutoutTypes.map((ct: typeof cutoutTypes[number]) => ({
+      id: ct.id,
+      name: ct.name,
+      description: ct.description,
+      baseRate: Number(ct.baseRate),
+      isActive: ct.isActive ?? true, // Default to true if null/undefined
+      sortOrder: ct.sortOrder,
+    }));
+
+    return NextResponse.json(serialized);
   } catch (error) {
     console.error('Error fetching cutout types:', error);
     return NextResponse.json({ error: 'Failed to fetch cutout types' }, { status: 500 });
