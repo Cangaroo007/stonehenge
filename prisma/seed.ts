@@ -134,6 +134,60 @@ async function main() {
   console.log('✅ Created', cutoutTypes.length, 'cutout types');
 
   // ============================================
+  // CREATE THICKNESS OPTIONS (for Thickness selector)
+  // ============================================
+  const thicknessOptions = [
+    { name: '20mm', value: 20, multiplier: 1.00, isDefault: true, sortOrder: 1, isActive: true },
+    { name: '40mm', value: 40, multiplier: 1.30, isDefault: false, sortOrder: 2, isActive: true },
+  ];
+
+  for (const thickness of thicknessOptions) {
+    await prisma.thicknessOption.upsert({
+      where: { name: thickness.name },
+      update: thickness,
+      create: thickness,
+    });
+  }
+  console.log('✅ Created', thicknessOptions.length, 'thickness options');
+
+  // ============================================
+  // CREATE CLIENT TYPES (for customer classification)
+  // ============================================
+  const clientTypes = [
+    { name: 'Cabinet Maker', description: 'Kitchen and joinery manufacturers', sortOrder: 1, isActive: true },
+    { name: 'Builder', description: 'Residential and commercial builders', sortOrder: 2, isActive: true },
+    { name: 'Direct Consumer', description: 'Homeowners and end consumers', sortOrder: 3, isActive: true },
+    { name: 'Designer/Architect', description: 'Interior designers and architects', sortOrder: 4, isActive: true },
+  ];
+
+  for (const clientType of clientTypes) {
+    await prisma.clientType.upsert({
+      where: { name: clientType.name },
+      update: clientType,
+      create: clientType,
+    });
+  }
+  console.log('✅ Created', clientTypes.length, 'client types');
+
+  // ============================================
+  // CREATE CLIENT TIERS (for pricing tiers)
+  // ============================================
+  const clientTiers = [
+    { name: 'Tier 1', description: 'Premium partners - best pricing', priority: 100, sortOrder: 1, isActive: true },
+    { name: 'Tier 2', description: 'Regular clients - standard discounts', priority: 50, sortOrder: 2, isActive: true },
+    { name: 'Tier 3', description: 'New clients - standard pricing', priority: 0, isDefault: true, sortOrder: 3, isActive: true },
+  ];
+
+  for (const tier of clientTiers) {
+    await prisma.clientTier.upsert({
+      where: { name: tier.name },
+      update: tier,
+      create: tier,
+    });
+  }
+  console.log('✅ Created', clientTiers.length, 'client tiers');
+
+  // ============================================
   // CREATE DEMO CUSTOMERS
   // ============================================
   const customers = [

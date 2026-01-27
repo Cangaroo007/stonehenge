@@ -48,11 +48,22 @@ interface EdgeSelections {
   edgeRight: string | null;
 }
 
+interface ThicknessOption {
+  id: string;
+  name: string;
+  value: number;
+  multiplier: number;
+  isDefault: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 interface PieceFormProps {
   piece?: QuotePiece;
   materials: Material[];
   edgeTypes: EdgeType[];
   cutoutTypes: CutoutType[];
+  thicknessOptions: ThicknessOption[];
   roomNames: string[];
   onSave: (data: Partial<QuotePiece>, roomName: string) => void;
   onCancel: () => void;
@@ -69,9 +80,11 @@ const STANDARD_ROOMS = [
   'Bar',
   'Other',
 ];
-const THICKNESS_OPTIONS = [
-  { value: 20, label: '20mm' },
-  { value: 40, label: '40mm' },
+
+// Fallback thickness options if none are loaded from database
+const DEFAULT_THICKNESS_OPTIONS: ThicknessOption[] = [
+  { id: 'default-20', name: '20mm', value: 20, multiplier: 1.0, isDefault: true, isActive: true, sortOrder: 1 },
+  { id: 'default-40', name: '40mm', value: 40, multiplier: 1.3, isDefault: false, isActive: true, sortOrder: 2 },
 ];
 
 export default function PieceForm({
@@ -79,6 +92,7 @@ export default function PieceForm({
   materials,
   edgeTypes,
   cutoutTypes,
+  thicknessOptions,
   roomNames,
   onSave,
   onCancel,
@@ -295,9 +309,9 @@ export default function PieceForm({
           onChange={(e) => setThicknessMm(parseInt(e.target.value))}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
         >
-          {THICKNESS_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
+          {(thicknessOptions.length > 0 ? thicknessOptions : DEFAULT_THICKNESS_OPTIONS).map((option) => (
+            <option key={option.id} value={option.value}>
+              {option.name}
             </option>
           ))}
         </select>

@@ -77,6 +77,16 @@ interface EdgeType {
   sortOrder: number;
 }
 
+interface ThicknessOption {
+  id: string;
+  name: string;
+  value: number;
+  multiplier: number;
+  isDefault: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export default function QuoteBuilderPage() {
   const params = useParams();
   const router = useRouter();
@@ -87,6 +97,7 @@ export default function QuoteBuilderPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [edgeTypes, setEdgeTypes] = useState<EdgeType[]>([]);
   const [cutoutTypes, setCutoutTypes] = useState<CutoutType[]>([]);
+  const [thicknessOptions, setThicknessOptions] = useState<ThicknessOption[]>([]);
   const [rooms, setRooms] = useState<QuoteRoom[]>([]);
   const [selectedPieceId, setSelectedPieceId] = useState<number | null>(null);
   const [isAddingPiece, setIsAddingPiece] = useState(false);
@@ -173,15 +184,28 @@ export default function QuoteBuilderPage() {
     }
   }, []);
 
+  // Fetch thickness options
+  const fetchThicknessOptions = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/pricing/thickness-options');
+      if (!response.ok) throw new Error('Failed to fetch thickness options');
+      const data = await response.json();
+      // Filter to only active thickness options (treat null/undefined as active)
+      setThicknessOptions(data.filter((t: ThicknessOption) => t.isActive !== false));
+    } catch (err) {
+      console.error('Error fetching thickness options:', err);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchQuote(), fetchMaterials(), fetchEdgeTypes(), fetchCutoutTypes()]);
+      await Promise.all([fetchQuote(), fetchMaterials(), fetchEdgeTypes(), fetchCutoutTypes(), fetchThicknessOptions()]);
       setLoading(false);
     };
     loadData();
-  }, [fetchQuote, fetchMaterials, fetchEdgeTypes, fetchCutoutTypes]);
+  }, [fetchQuote, fetchMaterials, fetchEdgeTypes, fetchCutoutTypes, fetchThicknessOptions]);
 
   // Handle piece selection
   const handleSelectPiece = (pieceId: number) => {
@@ -541,6 +565,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                 materials={materials}
                 edgeTypes={edgeTypes}
                 cutoutTypes={cutoutTypes}
+                thicknessOptions={thicknessOptions}
                 roomNames={roomNames}
                 onSave={handleSavePiece}
                 onCancel={handleCancelForm}
