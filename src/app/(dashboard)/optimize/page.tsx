@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { optimizeSlabs } from '@/lib/services/slab-optimizer';
 import { OptimizationResult, OptimizationInput } from '@/types/slab-optimization';
 import { SlabResults } from '@/components/slab-optimizer';
+import { generateCutListCSV, downloadCSV } from '@/lib/services/cut-list-generator';
 
 interface PieceInput {
   id: string;
@@ -102,6 +103,20 @@ export default function OptimizePage() {
   const clearResults = () => {
     setResult(null);
     setError(null);
+  };
+
+  // Export CSV
+  const handleExportCSV = () => {
+    if (!result) return;
+
+    const csv = generateCutListCSV(result, parseInt(slabWidth) || 3000, parseInt(slabHeight) || 1400);
+    const filename = `cut-list-standalone-${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCSV(csv, filename);
+  };
+
+  // Print
+  const handlePrint = () => {
+    window.print();
   };
 
   return (
@@ -251,11 +266,39 @@ export default function OptimizePage() {
           <h2 className="font-semibold text-gray-900 mb-4">Results</h2>
 
           {result ? (
-            <SlabResults
-              result={result}
-              slabWidth={parseInt(slabWidth) || 3000}
-              slabHeight={parseInt(slabHeight) || 1400}
-            />
+            <>
+              <SlabResults
+                result={result}
+                slabWidth={parseInt(slabWidth) || 3000}
+                slabHeight={parseInt(slabHeight) || 1400}
+              />
+
+              {/* Export Buttons */}
+              <div className="mt-4 flex gap-2 justify-end print:hidden">
+                <button
+                  onClick={handleExportCSV}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50
+                           text-gray-700 flex items-center gap-2 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Export CSV
+                </button>
+                <button
+                  onClick={handlePrint}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50
+                           text-gray-700 flex items-center gap-2 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print
+                </button>
+              </div>
+            </>
           ) : (
             <div className="text-center py-12 text-gray-400">
               <svg

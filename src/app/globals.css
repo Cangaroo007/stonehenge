@@ -49,3 +49,62 @@
     @apply px-4 py-3 text-sm text-gray-900;
   }
 }
+
+/* ================================
+   PRINT STYLES FOR CUT LIST
+   ================================ */
+@media print {
+  /* Hide non-essential elements when printing */
+  .print\:hidden,
+  nav,
+  aside,
+  header:not(.print-header),
+  footer,
+  button {
+    display: none !important;
+  }
+
+  /* Reset backgrounds for printing */
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ensure modal content prints well */
+  .fixed {
+    position: relative !important;
+    background: white !important;
+  }
+
+  .bg-black\/50 {
+    background: white !important;
+  }
+
+  /* Card styling for print */
+  .bg-white {
+    box-shadow: none !important;
+  }
+
+  /* Ensure SVG colors print */
+  svg rect,
+  svg text {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Page breaks between slabs for multi-page prints */
+  .slab-page-break {
+    page-break-after: always;
+  }
+
+  /* Ensure content fits on page */
+  .max-w-4xl {
+    max-width: 100% !important;
+  }
+
+  .max-h-\[90vh\] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
