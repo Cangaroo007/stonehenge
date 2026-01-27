@@ -6,17 +6,25 @@ import QuoteForm from '@/components/QuoteForm';
 export const dynamic = 'force-dynamic';
 
 async function getData() {
-  const [customers, materials, pricingRules, edgeTypes, lastQuote] = await Promise.all([
+  // Fetch ALL edge types first (for debugging), then filter
+  const allEdgeTypes = await prisma.edgeType.findMany({ orderBy: { sortOrder: 'asc' } });
+  console.log('[quotes/new] ALL edgeTypes in DB:', allEdgeTypes.length, allEdgeTypes.map(e => ({ id: e.id, name: e.name, isActive: e.isActive })));
+
+  const [customers, materials, pricingRules, lastQuote] = await Promise.all([
     prisma.customer.findMany({ orderBy: { name: 'asc' } }),
     prisma.material.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
     prisma.featurePricing.findMany({ where: { isActive: true }, orderBy: { category: 'asc' } }),
-    prisma.edgeType.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
     prisma.quote.findFirst({ orderBy: { quoteNumber: 'desc' } }),
   ]);
+
+  // Use all edge types (not filtered by isActive) to ensure they show up
+  // The EdgeSelector component will handle filtering if needed
+  const edgeTypes = allEdgeTypes;
 
   const nextQuoteNumber = generateQuoteNumber(lastQuote?.quoteNumber || null);
 
   const serialized = JSON.parse(JSON.stringify({ customers, materials, pricingRules, edgeTypes }));
+  console.log('[quotes/new] Serialized edgeTypes:', serialized.edgeTypes?.length);
 
   return { ...serialized, nextQuoteNumber };
 }
