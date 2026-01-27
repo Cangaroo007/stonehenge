@@ -188,6 +188,151 @@ async function main() {
   console.log('✅ Created', clientTiers.length, 'client tiers');
 
   // ============================================
+  // PRICING RULES
+  // ============================================
+  console.log('Seeding pricing rules...');
+
+  // Get tier IDs
+  const tier1 = await prisma.clientTier.findFirst({ where: { name: 'Tier 1' } });
+  const tier2 = await prisma.clientTier.findFirst({ where: { name: 'Tier 2' } });
+  const tier3 = await prisma.clientTier.findFirst({ where: { name: 'Tier 3' } });
+
+  // Get type IDs
+  const cabinetMaker = await prisma.clientType.findFirst({ where: { name: 'Cabinet Maker' } });
+  const builder = await prisma.clientType.findFirst({ where: { name: 'Builder' } });
+
+  // Tier 1 - Premium Partners (15% off materials, 10% off edges)
+  if (tier1) {
+    await prisma.pricingRule.upsert({
+      where: { id: 'rule-tier1-materials' },
+      update: {},
+      create: {
+        id: 'rule-tier1-materials',
+        name: 'Tier 1 - Material Discount',
+        description: 'Premium partners receive 15% off all materials',
+        priority: 100,
+        clientTierId: tier1.id,
+        adjustmentType: 'percentage',
+        adjustmentValue: -15,
+        appliesTo: 'materials',
+        isActive: true,
+      },
+    });
+
+    await prisma.pricingRule.upsert({
+      where: { id: 'rule-tier1-edges' },
+      update: {},
+      create: {
+        id: 'rule-tier1-edges',
+        name: 'Tier 1 - Edge Discount',
+        description: 'Premium partners receive 10% off edge polishing',
+        priority: 100,
+        clientTierId: tier1.id,
+        adjustmentType: 'percentage',
+        adjustmentValue: -10,
+        appliesTo: 'edges',
+        isActive: true,
+      },
+    });
+  }
+
+  // Tier 2 - Regular Clients (10% off materials)
+  if (tier2) {
+    await prisma.pricingRule.upsert({
+      where: { id: 'rule-tier2-materials' },
+      update: {},
+      create: {
+        id: 'rule-tier2-materials',
+        name: 'Tier 2 - Material Discount',
+        description: 'Regular clients receive 10% off all materials',
+        priority: 75,
+        clientTierId: tier2.id,
+        adjustmentType: 'percentage',
+        adjustmentValue: -10,
+        appliesTo: 'materials',
+        isActive: true,
+      },
+    });
+  }
+
+  // Cabinet Maker Type Discount (5% off all)
+  if (cabinetMaker) {
+    await prisma.pricingRule.upsert({
+      where: { id: 'rule-cabinetmaker-all' },
+      update: {},
+      create: {
+        id: 'rule-cabinetmaker-all',
+        name: 'Cabinet Maker Discount',
+        description: 'Cabinet makers receive 5% trade discount',
+        priority: 50,
+        clientTypeId: cabinetMaker.id,
+        adjustmentType: 'percentage',
+        adjustmentValue: -5,
+        appliesTo: 'all',
+        isActive: true,
+      },
+    });
+  }
+
+  // Builder Type Discount (5% off all)
+  if (builder) {
+    await prisma.pricingRule.upsert({
+      where: { id: 'rule-builder-all' },
+      update: {},
+      create: {
+        id: 'rule-builder-all',
+        name: 'Builder Discount',
+        description: 'Builders receive 5% trade discount',
+        priority: 50,
+        clientTypeId: builder.id,
+        adjustmentType: 'percentage',
+        adjustmentValue: -5,
+        appliesTo: 'all',
+        isActive: true,
+      },
+    });
+  }
+
+  // Volume Discount ($10,000+)
+  await prisma.pricingRule.upsert({
+    where: { id: 'rule-volume-10k' },
+    update: {},
+    create: {
+      id: 'rule-volume-10k',
+      name: 'Large Order Discount',
+      description: 'Orders over $10,000 receive 3% discount',
+      priority: 25,
+      minQuoteValue: 10000,
+      adjustmentType: 'percentage',
+      adjustmentValue: -3,
+      appliesTo: 'all',
+      isActive: true,
+    },
+  });
+
+  console.log('✅ Pricing rules seeded!');
+
+  // ============================================
+  // DEFAULT PRICE BOOK
+  // ============================================
+  console.log('Seeding default price book...');
+
+  await prisma.priceBook.upsert({
+    where: { name: 'Retail Price List' },
+    update: {},
+    create: {
+      name: 'Retail Price List',
+      description: 'Standard retail pricing - no discounts',
+      category: 'retail',
+      defaultThickness: 20,
+      isDefault: true,
+      isActive: true,
+    },
+  });
+
+  console.log('✅ Default price book seeded!');
+
+  // ============================================
   // CREATE DEMO CUSTOMERS
   // ============================================
   const customers = [
@@ -222,6 +367,75 @@ async function main() {
     });
   }
   console.log('✅ Created', customers.length, 'customers');
+
+  // ============================================
+  // UPDATE CUSTOMERS WITH PRICING CLASSIFICATIONS
+  // ============================================
+  console.log('Updating customers with pricing classifications...');
+
+  // Get tier and type IDs for customer classification
+  const tier1Id = tier1?.id;
+  const tier2Id = tier2?.id;
+  const tier3Id = tier3?.id;
+  const builderId = builder?.id;
+  const cabinetMakerId = cabinetMaker?.id;
+  const directConsumer = await prisma.clientType.findFirst({ where: { name: 'Direct Consumer' } });
+  const directConsumerId = directConsumer?.id;
+
+  // Update Gem Life - Tier 1 Builder
+  await prisma.customer.updateMany({
+    where: { company: 'GemLife Highfields Heights' },
+    data: {
+      clientTierId: tier1Id,
+      clientTypeId: builderId
+    },
+  });
+
+  // Update Smith Building - Tier 2 Builder
+  await prisma.customer.updateMany({
+    where: { company: 'Smith Building Co' },
+    data: {
+      clientTierId: tier2Id,
+      clientTypeId: builderId
+    },
+  });
+
+  // Update Sarah Johnson - Tier 3 Direct Consumer
+  await prisma.customer.updateMany({
+    where: { name: 'Sarah Johnson', company: null },
+    data: {
+      clientTierId: tier3Id,
+      clientTypeId: directConsumerId
+    },
+  });
+
+  // Create Premium Kitchens - Tier 1 Cabinet Maker
+  const existingPremiumKitchens = await prisma.customer.findFirst({
+    where: { company: 'Premium Kitchens Pty Ltd' },
+  });
+  if (!existingPremiumKitchens) {
+    await prisma.customer.create({
+      data: {
+        name: 'Premium Kitchens',
+        company: 'Premium Kitchens Pty Ltd',
+        email: 'orders@premiumkitchens.com.au',
+        phone: '07 5555 9999',
+        address: '789 Industrial Dr, Toowoomba QLD',
+        clientTierId: tier1Id,
+        clientTypeId: cabinetMakerId,
+      },
+    });
+  } else {
+    await prisma.customer.update({
+      where: { id: existingPremiumKitchens.id },
+      data: {
+        clientTierId: tier1Id,
+        clientTypeId: cabinetMakerId,
+      },
+    });
+  }
+
+  console.log('✅ Customers updated with pricing classifications!');
 
   // ============================================
   // CREATE DEMO QUOTE

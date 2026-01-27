@@ -149,26 +149,80 @@ export default function PricingSummary({
             </div>
           )}
 
-          {/* Customer Info */}
-          {(customerName || priceBookName) && (
+          {/* Warning when no customer selected */}
+          {!customerName && (
+            <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <svg className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-gray-600 text-sm">
+                    No customer selected
+                  </p>
+                  <p className="text-gray-500 text-xs mt-1">
+                    Using standard base prices. Select a customer to apply their pricing tier.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Customer Info with Tier Badge */}
+          {customerName && (
             <div className="pb-3 border-b border-gray-200">
-              {customerName && (
-                <p className="text-sm">
-                  <span className="text-gray-600">Customer:</span>{' '}
-                  <span className="font-medium">{customerName}</span>
-                  {customerTier && customerType && (
-                    <span className="text-gray-500 ml-1">
-                      ({customerTier} {customerType})
-                    </span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">
+                    <span className="text-gray-600">Customer:</span>{' '}
+                    <span className="font-medium">{customerName}</span>
+                  </p>
+                  {customerType && (
+                    <p className="text-xs text-gray-500 mt-0.5">{customerType}</p>
                   )}
-                </p>
-              )}
+                </div>
+                {customerTier && (
+                  <span className={`
+                    inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                    ${customerTier === 'Tier 1' ? 'bg-green-100 text-green-800' :
+                      customerTier === 'Tier 2' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'}
+                  `}>
+                    {customerTier}
+                  </span>
+                )}
+              </div>
               {priceBookName && (
                 <p className="text-sm mt-1">
                   <span className="text-gray-600">Price Book:</span>{' '}
                   <span className="font-medium">{priceBookName}</span>
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Warning when customer has no pricing classification */}
+          {customerName && !customerTier && !customerType && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <svg className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <p className="text-amber-800 font-medium text-sm">
+                    No pricing rules for this customer
+                  </p>
+                  <p className="text-amber-700 text-xs mt-1">
+                    Using standard base prices. Assign a tier in the
+                    <a href="/customers" className="underline ml-1 hover:text-amber-900">
+                      customer profile
+                    </a>
+                    {' '}to apply discounts.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
