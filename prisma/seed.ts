@@ -90,6 +90,50 @@ async function main() {
   console.log('✅ Created', featurePricing.length, 'feature pricing entries');
 
   // ============================================
+  // CREATE EDGE TYPES (for EdgeSelector component)
+  // ============================================
+  const edgeTypes = [
+    { name: 'Pencil Round', description: 'Standard pencil round edge', category: 'polish', baseRate: 35, sortOrder: 1 },
+    { name: 'Bullnose', description: 'Full bullnose edge', category: 'polish', baseRate: 45, sortOrder: 2 },
+    { name: 'Arriss', description: 'Slight ease/chamfer on edge', category: 'polish', baseRate: 25, sortOrder: 3 },
+    { name: 'Beveled', description: '45 degree bevel', category: 'polish', baseRate: 40, sortOrder: 4 },
+    { name: 'Ogee', description: 'Decorative ogee profile', category: 'polish', baseRate: 65, sortOrder: 5 },
+    { name: 'Square/Eased', description: 'Square edge with slight ease', category: 'polish', baseRate: 30, sortOrder: 6 },
+    { name: 'Mitered', description: 'Mitered edge for thick appearance', category: 'polish', baseRate: 85, sortOrder: 7 },
+    { name: 'Waterfall', description: 'Waterfall edge return', category: 'waterfall', baseRate: 120, sortOrder: 8 },
+  ];
+
+  for (const edgeType of edgeTypes) {
+    await prisma.edgeType.upsert({
+      where: { name: edgeType.name },
+      update: edgeType,
+      create: edgeType,
+    });
+  }
+  console.log('✅ Created', edgeTypes.length, 'edge types');
+
+  // ============================================
+  // CREATE CUTOUT TYPES (for CutoutSelector component)
+  // ============================================
+  const cutoutTypes = [
+    { name: 'Undermount Sink', description: 'Cutout for undermount sink', baseRate: 180, sortOrder: 1 },
+    { name: 'Drop-in Sink', description: 'Cutout for drop-in sink', baseRate: 120, sortOrder: 2 },
+    { name: 'Cooktop/Hotplate', description: 'Cutout for cooktop or hotplate', baseRate: 150, sortOrder: 3 },
+    { name: 'Basin', description: 'Cutout for basin', baseRate: 95, sortOrder: 4 },
+    { name: 'Tap Hole', description: 'Single tap hole', baseRate: 35, sortOrder: 5 },
+    { name: 'GPO/Powerpoint', description: 'Cutout for electrical outlet', baseRate: 45, sortOrder: 6 },
+  ];
+
+  for (const cutoutType of cutoutTypes) {
+    await prisma.cutoutType.upsert({
+      where: { name: cutoutType.name },
+      update: cutoutType,
+      create: cutoutType,
+    });
+  }
+  console.log('✅ Created', cutoutTypes.length, 'cutout types');
+
+  // ============================================
   // CREATE DEMO CUSTOMERS
   // ============================================
   const customers = [
