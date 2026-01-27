@@ -141,6 +141,7 @@ model Quote {
   rooms           QuoteRoom[]
   files           QuoteFile[]
   drawingAnalysis QuoteDrawingAnalysis?
+  optimizations   SlabOptimization[]
 
   priceBookId     String?     @map("price_book_id")
   priceBook       PriceBook?  @relation(fields: [priceBookId], references: [id])
@@ -468,4 +469,36 @@ model Setting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("settings")
+}
+
+// ============================================
+// SLAB OPTIMIZATION
+// ============================================
+
+model SlabOptimization {
+  id            String   @id @default(cuid())
+
+  // Optional link to quote (null for standalone optimizations)
+  quoteId       Int?
+  quote         Quote?   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  // Slab configuration
+  slabWidth     Int      @default(3000)  // mm
+  slabHeight    Int      @default(1400)  // mm
+  kerfWidth     Int      @default(3)     // mm (saw blade width)
+
+  // Results
+  totalSlabs    Int
+  totalWaste    Decimal  @db.Decimal(10, 2)  // square mm
+  wastePercent  Decimal  @db.Decimal(5, 2)   // percentage
+
+  // Placements stored as JSON array
+  placements    Json     // Array of Placement objects
+
+  // Metadata
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([quoteId])
+  @@map("slab_optimizations")
 }
