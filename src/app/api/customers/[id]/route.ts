@@ -13,6 +13,12 @@ export async function GET(
         clientType: true,
         clientTier: true,
         defaultPriceBook: true,
+        _count: {
+          select: {
+            quotes: true,
+            users: true,
+          },
+        },
       },
     });
 

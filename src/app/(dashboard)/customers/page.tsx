@@ -62,10 +62,10 @@ export default async function CustomersPage() {
                     <td className="table-cell">{formatDate(customer.createdAt)}</td>
                     <td className="table-cell">
                       <Link
-                        href={`/customers/${customer.id}/edit`}
+                        href={`/customers/${customer.id}`}
                         className="text-primary-600 hover:text-primary-700"
                       >
-                        Edit
+                        View
                       </Link>
                     </td>
                   </tr>

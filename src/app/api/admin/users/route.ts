@@ -9,6 +9,7 @@ import { UserRole, Prisma } from '@prisma/client';
 /**
  * GET /api/admin/users
  * List all users (requires MANAGE_USERS or VIEW_USERS permission)
+ * Query params: customerId - filter by customer ID
  */
 export async function GET(request: NextRequest) {
   try {
@@ -23,8 +24,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Get query params
+    const { searchParams } = new URL(request.url);
+    const customerId = searchParams.get('customerId');
+
+    // Build where clause
+    const where: Prisma.UserWhereInput = {};
+    if (customerId) {
+      where.customerId = parseInt(customerId);
+    }
+
     // Get all users with their customer info and permissions
     const users = await prisma.user.findMany({
+      where,
       include: {
         customer: {
           select: {
