@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import prisma from '@/lib/db';
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import DeleteQuoteButton from '@/components/DeleteQuoteButton';
+import QuoteViewTracker from './components/QuoteViewTracker';
+import QuoteSignatureSection from './components/QuoteSignatureSection';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +48,17 @@ async function getQuote(id: number) {
         },
       },
       drawingAnalysis: true,
+      signature: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          },
+        },
+      },
     },
   });
 }
@@ -113,6 +126,22 @@ export default async function QuoteDetailPage({
           </div>
         </div>
       </div>
+
+      {/* View Tracking */}
+      <QuoteViewTracker quoteId={quote.id} showHistory={true} />
+
+      {/* Signature Section */}
+      <QuoteSignatureSection
+        quoteId={quote.id}
+        quoteNumber={quote.quoteNumber}
+        customerName={quote.customer?.company || quote.customer?.name || 'Customer'}
+        totalAmount={formatCurrency(Number(quote.total))}
+        status={quote.status}
+        signature={quote.signature ? {
+          ...quote.signature,
+          signedAt: quote.signature.signedAt.toISOString(),
+        } : null}
+      />
 
       {/* Drawing Analysis Section */}
       {quote.drawingAnalysis && (

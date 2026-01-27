@@ -69,7 +69,7 @@ export async function getCurrentUser(): Promise<UserPayload | null> {
   return verifyToken(token);
 }
 
-export async function login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+export async function login(email: string, password: string): Promise<{ success: boolean; error?: string; role?: string }> {
   const user = await prisma.user.findUnique({
     where: { email },
   });
@@ -97,7 +97,14 @@ export async function login(email: string, password: string): Promise<{ success:
   });
 
   await setAuthCookie(token);
-  return { success: true };
+  
+  // Update last login timestamp
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
+  
+  return { success: true, role: user.role };
 }
 
 export async function logout(): Promise<void> {

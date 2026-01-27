@@ -25,7 +25,12 @@ export default function LoginPage() {
 
       if (res.ok) {
         toast.success('Welcome back!');
-        router.push('/dashboard');
+        // Redirect based on user role
+        if (data.role === 'CUSTOMER') {
+          router.push('/portal');
+        } else {
+          router.push('/dashboard');
+        }
         router.refresh();
       } else {
         toast.error(data.error || 'Login failed');

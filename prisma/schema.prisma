@@ -74,6 +74,7 @@ model User {
   permissions  UserPermission[]
   auditLogs    AuditLog[]
   quoteViews   QuoteView[]
+  signatures   QuoteSignature[] @relation("QuoteSignatures")
 
   @@map("users")
 }
@@ -116,10 +117,11 @@ model QuoteSignature {
   signerName      String   @map("signer_name")
   signerEmail     String   @map("signer_email")
   signerTitle     String?  @map("signer_title")
-  signerUserId    Int?     @map("signer_user_id")
+  userId          Int?     @map("user_id")
+  user            User?    @relation("QuoteSignatures", fields: [userId], references: [id])
   
   // Signature data
-  signatureMethod String   @map("signature_method") // 'typed', 'drawn'
+  signatureType   String   @map("signature_type") // 'typed', 'drawn'
   signatureData   String   @map("signature_data") @db.Text // Base64 image or typed text
   
   // Legal compliance tracking (Australian Electronic Transactions Act 1999)

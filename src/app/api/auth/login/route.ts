@@ -15,7 +15,10 @@ export async function POST(request: NextRequest) {
     const result = await login(email, password);
 
     if (result.success) {
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ 
+        success: true,
+        role: result.role,
+      });
     } else {
       return NextResponse.json(
         { error: result.error },
