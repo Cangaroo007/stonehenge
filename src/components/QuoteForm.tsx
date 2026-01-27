@@ -72,6 +72,22 @@ interface PieceFeature {
   unitPrice: number;
 }
 
+// Type for piece data from initialData
+interface PieceData {
+  id: number;
+  description: string | null;
+  lengthMm: number;
+  widthMm: number;
+  thicknessMm: number;
+  materialId: number | null;
+  features: Array<{
+    id: number;
+    name: string;
+    quantity: number;
+    unitPrice: string | number;
+  }>;
+}
+
 // Drawing Analysis Types
 interface AnalysisPiece {
   pieceNumber?: number;
