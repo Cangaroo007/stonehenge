@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { optimizeSlabs } from '@/lib/services/slab-optimizer';
 import { OptimizationResult, OptimizationInput } from '@/types/slab-optimization';
 import { SlabResults } from '@/components/slab-optimizer';
@@ -11,6 +11,24 @@ interface PieceInput {
   width: string;
   height: string;
   label: string;
+}
+
+interface Quote {
+  id: number;
+  quoteNumber: string;
+  projectName: string | null;
+  customer: {
+    name: string;
+    company: string | null;
+  } | null;
+}
+
+interface QuotePiece {
+  id: number;
+  name: string;
+  lengthMm: number;
+  widthMm: number;
+  room?: { name: string };
 }
 
 export default function OptimizePage() {
@@ -29,6 +47,81 @@ export default function OptimizePage() {
   const [result, setResult] = useState<OptimizationResult | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Quote selection
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string>('');
+  const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
+  const [isLoadingPieces, setIsLoadingPieces] = useState(false);
+
+  // Fetch quotes on mount
+  useEffect(() => {
+    const fetchQuotes = async () => {
+      setIsLoadingQuotes(true);
+      try {
+        const response = await fetch('/api/quotes');
+        if (response.ok) {
+          const data = await response.json();
+          setQuotes(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch quotes:', err);
+      } finally {
+        setIsLoadingQuotes(false);
+      }
+    };
+    fetchQuotes();
+  }, []);
+
+  // Load pieces from selected quote
+  const loadPiecesFromQuote = async (quoteId: string) => {
+    if (!quoteId) return;
+
+    setIsLoadingPieces(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}`);
+      if (!response.ok) throw new Error('Failed to fetch quote');
+
+      const quote = await response.json();
+
+      // Extract pieces from rooms
+      const quotePieces: PieceInput[] = [];
+      if (quote.rooms) {
+        quote.rooms.forEach((room: { name: string; pieces: QuotePiece[] }) => {
+          room.pieces.forEach((piece: QuotePiece) => {
+            quotePieces.push({
+              id: String(piece.id),
+              width: String(piece.lengthMm),
+              height: String(piece.widthMm),
+              label: `${room.name}: ${piece.name || 'Piece'}`,
+            });
+          });
+        });
+      }
+
+      if (quotePieces.length === 0) {
+        setError('Selected quote has no pieces');
+        return;
+      }
+
+      setPieces(quotePieces);
+      setResult(null); // Clear previous results
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load quote pieces');
+    } finally {
+      setIsLoadingPieces(false);
+    }
+  };
+
+  // Handle quote selection change
+  const handleQuoteChange = (quoteId: string) => {
+    setSelectedQuoteId(quoteId);
+    if (quoteId) {
+      loadPiecesFromQuote(quoteId);
+    }
+  };
 
   // Add new piece
   const addPiece = () => {
@@ -105,12 +198,42 @@ export default function OptimizePage() {
     setError(null);
   };
 
+  // Save optimization to quote
+  const saveToQuote = async () => {
+    if (!selectedQuoteId || !result) return;
+
+    setError(null);
+    try {
+      const response = await fetch(`/api/quotes/${selectedQuoteId}/optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slabWidth: parseInt(slabWidth) || 3000,
+          slabHeight: parseInt(slabHeight) || 1400,
+          kerfWidth: parseInt(kerfWidth) || 3,
+          allowRotation,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to save optimization');
+      }
+
+      alert('Optimization saved to quote successfully!');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save to quote');
+    }
+  };
+
   // Export CSV
   const handleExportCSV = () => {
     if (!result) return;
 
     const csv = generateCutListCSV(result, parseInt(slabWidth) || 3000, parseInt(slabHeight) || 1400);
-    const filename = `cut-list-standalone-${new Date().toISOString().split('T')[0]}.csv`;
+    const selectedQuote = quotes.find(q => String(q.id) === selectedQuoteId);
+    const quoteLabel = selectedQuote ? selectedQuote.quoteNumber : 'standalone';
+    const filename = `cut-list-${quoteLabel}-${new Date().toISOString().split('T')[0]}.csv`;
     downloadCSV(csv, filename);
   };
 
@@ -128,6 +251,44 @@ export default function OptimizePage() {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Left column: Settings and Pieces */}
         <div className="space-y-6">
+          {/* Load from Quote */}
+          <div className="bg-white rounded-lg shadow p-4">
+            <h2 className="font-semibold text-gray-900 mb-4">Load from Quote</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">
+                  Select a quote to load pieces
+                </label>
+                <select
+                  value={selectedQuoteId}
+                  onChange={(e) => handleQuoteChange(e.target.value)}
+                  disabled={isLoadingQuotes || isLoadingPieces}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">-- Select a Quote --</option>
+                  {quotes.map((quote) => (
+                    <option key={quote.id} value={quote.id}>
+                      {quote.quoteNumber} - {quote.customer?.company || quote.customer?.name || 'No customer'}
+                      {quote.projectName ? ` (${quote.projectName})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {isLoadingPieces && (
+                <div className="flex items-center gap-2 text-sm text-blue-600">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Loading pieces...
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                Or manually enter pieces below
+              </p>
+            </div>
+          </div>
+
           {/* Slab Settings */}
           <div className="bg-white rounded-lg shadow p-4">
             <h2 className="font-semibold text-gray-900 mb-4">Slab Settings</h2>
@@ -274,7 +435,20 @@ export default function OptimizePage() {
               />
 
               {/* Export Buttons */}
-              <div className="mt-4 flex gap-2 justify-end print:hidden">
+              <div className="mt-4 flex gap-2 justify-end print:hidden flex-wrap">
+                {selectedQuoteId && (
+                  <button
+                    onClick={saveToQuote}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                             flex items-center gap-2 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    </svg>
+                    Save to Quote
+                  </button>
+                )}
                 <button
                   onClick={handleExportCSV}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50
