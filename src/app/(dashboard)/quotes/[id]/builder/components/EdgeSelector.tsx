@@ -123,22 +123,22 @@ export default function EdgeSelector({
           <div className="flex items-center justify-center">
             <div className="relative">
               {/* Top Label */}
-              <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-medium text-gray-500">
+              <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-medium text-gray-500 pointer-events-none">
                 Top
               </div>
 
               {/* Left Label */}
-              <div className="absolute -left-10 top-1/2 transform -translate-y-1/2 -rotate-90 text-xs font-medium text-gray-500">
+              <div className="absolute -left-10 top-1/2 transform -translate-y-1/2 -rotate-90 text-xs font-medium text-gray-500 pointer-events-none">
                 Left
               </div>
 
               {/* Right Label */}
-              <div className="absolute -right-10 top-1/2 transform -translate-y-1/2 rotate-90 text-xs font-medium text-gray-500">
+              <div className="absolute -right-10 top-1/2 transform -translate-y-1/2 rotate-90 text-xs font-medium text-gray-500 pointer-events-none">
                 Right
               </div>
 
               {/* Bottom Label */}
-              <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs font-medium text-gray-500">
+              <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs font-medium text-gray-500 pointer-events-none">
                 Bottom
               </div>
 
@@ -168,7 +168,7 @@ export default function EdgeSelector({
           </div>
 
           {/* Right Side - Edge Selection Grid */}
-          <div className="space-y-3">
+          <div className="space-y-3 relative z-30">
             {/* Edge rows */}
             <div className="space-y-2">
               <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 uppercase">
