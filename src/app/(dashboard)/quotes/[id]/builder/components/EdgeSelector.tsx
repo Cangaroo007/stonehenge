@@ -40,9 +40,20 @@ export default function EdgeSelector({
   edgeTypes,
   onChange,
 }: EdgeSelectorProps) {
+  // Debug: log props on mount/update
+  console.log('EdgeSelector render:', {
+    edgeTypes: edgeTypes?.length || 0,
+    edgeSelections,
+    hasOnChange: typeof onChange === 'function'
+  });
+
   // Filter edge types by category
   const polishTypes = useMemo(
-    () => edgeTypes.filter((e) => e.category === 'polish' && e.isActive),
+    () => {
+      const filtered = edgeTypes.filter((e) => e.category === 'polish' && e.isActive);
+      console.log('polishTypes filtered:', filtered.length, 'from', edgeTypes.length, 'total');
+      return filtered;
+    },
     [edgeTypes]
   );
 
@@ -79,12 +90,23 @@ export default function EdgeSelector({
 
   // Handle checkbox toggle
   const handleToggle = (key: keyof EdgeSelections, checked: boolean) => {
+    console.log('EdgeSelector handleToggle called:', { key, checked, polishTypes: polishTypes.length, edgeTypes: edgeTypes.length });
     if (checked) {
-      // Enable with first available polish type
-      const defaultType = polishTypes.length > 0 ? polishTypes[0].id : null;
+      // Enable with first available polish type, or any edge type, or 'selected' marker
+      let defaultType: string | null = null;
+      if (polishTypes.length > 0) {
+        defaultType = polishTypes[0].id;
+      } else if (edgeTypes.length > 0) {
+        defaultType = edgeTypes[0].id;
+      } else {
+        // Use a marker value so checkbox stays checked even without edge types
+        defaultType = 'selected';
+      }
+      console.log('Setting edge to:', defaultType);
       onChange({ ...edgeSelections, [key]: defaultType });
     } else {
       // Disable
+      console.log('Disabling edge');
       onChange({ ...edgeSelections, [key]: null });
     }
   };
@@ -168,7 +190,7 @@ export default function EdgeSelector({
           </div>
 
           {/* Right Side - Edge Selection Grid */}
-          <div className="space-y-3 relative z-30">
+          <div className="space-y-3 relative z-50" style={{ isolation: 'isolate' }}>
             {/* Edge rows */}
             <div className="space-y-2">
               <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 uppercase">
@@ -186,14 +208,25 @@ export default function EdgeSelector({
                     className="grid grid-cols-12 gap-2 items-center py-1"
                   >
                     {/* Checkbox */}
-                    <div className="col-span-1 relative z-20">
+                    <div className="col-span-1 relative z-50">
                       <input
                         type="checkbox"
+                        id={`edge-checkbox-${edge.key}`}
                         checked={isSelected}
-                        onChange={(e) => handleToggle(edge.key, e.target.checked)}
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer pointer-events-auto"
+                        onChange={(e) => {
+                          console.log('Checkbox onChange fired:', edge.key, e.target.checked);
+                          handleToggle(edge.key, e.target.checked);
+                        }}
+                        onClick={(e) => {
+                          console.log('Checkbox onClick fired:', edge.key);
+                          e.stopPropagation();
+                        }}
+                        onMouseDown={(e) => {
+                          console.log('Checkbox onMouseDown fired:', edge.key);
+                          e.stopPropagation();
+                        }}
+                        className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                        style={{ pointerEvents: 'auto', position: 'relative', zIndex: 100 }}
                       />
                     </div>
 
@@ -212,9 +245,18 @@ export default function EdgeSelector({
                     <div className="col-span-5 relative z-20">
                       <select
                         value={edgeSelections[edge.key] || ''}
-                        onChange={(e) => handleTypeChange(edge.key, e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          console.log('Select onChange fired:', edge.key, e.target.value);
+                          handleTypeChange(edge.key, e.target.value);
+                        }}
+                        onClick={(e) => {
+                          console.log('Select onClick fired:', edge.key);
+                          e.stopPropagation();
+                        }}
+                        onMouseDown={(e) => {
+                          console.log('Select onMouseDown fired:', edge.key);
+                          e.stopPropagation();
+                        }}
                         disabled={!isSelected}
                         className={`w-full text-sm px-2 py-1 border rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 pointer-events-auto ${
                           isSelected
@@ -223,7 +265,8 @@ export default function EdgeSelector({
                         }`}
                       >
                         <option value="">None</option>
-                        {polishTypes.map((type) => (
+                        {/* Show polish types first, then other types if polish is empty */}
+                        {(polishTypes.length > 0 ? polishTypes : edgeTypes).map((type) => (
                           <option key={type.id} value={type.id}>
                             {type.name}
                           </option>

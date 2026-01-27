@@ -1249,7 +1249,12 @@ export default function QuoteForm({
                               </div>
                               {/* Edge Selector - Expanded */}
                               {piece.expanded && piece.lengthMm > 0 && piece.widthMm > 0 && (
-                                <div className="p-4 bg-white border-t border-gray-200">
+                                <div
+                                  className="p-4 bg-white border-t border-gray-200 relative"
+                                  style={{ zIndex: 100 }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                >
                                   <EdgeSelector
                                     lengthMm={piece.lengthMm}
                                     widthMm={piece.widthMm}
@@ -1522,23 +1527,30 @@ export default function QuoteForm({
                           </div>
                         )}
                         {piece.showEdgeSelector && piece.lengthMm > 0 && piece.widthMm > 0 && (
-                          <EdgeSelector
-                            lengthMm={piece.lengthMm}
-                            widthMm={piece.widthMm}
-                            edgeSelections={{
-                              edgeTop: piece.edgeTop,
-                              edgeBottom: piece.edgeBottom,
-                              edgeLeft: piece.edgeLeft,
-                              edgeRight: piece.edgeRight,
-                            }}
-                            edgeTypes={edgeTypes}
-                            onChange={(edges) => updatePiece(room.id, piece.id, {
-                              edgeTop: edges.edgeTop,
-                              edgeBottom: edges.edgeBottom,
-                              edgeLeft: edges.edgeLeft,
-                              edgeRight: edges.edgeRight,
-                            })}
-                          />
+                          <div
+                            className="relative"
+                            style={{ zIndex: 100 }}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            <EdgeSelector
+                              lengthMm={piece.lengthMm}
+                              widthMm={piece.widthMm}
+                              edgeSelections={{
+                                edgeTop: piece.edgeTop,
+                                edgeBottom: piece.edgeBottom,
+                                edgeLeft: piece.edgeLeft,
+                                edgeRight: piece.edgeRight,
+                              }}
+                              edgeTypes={edgeTypes}
+                              onChange={(edges) => updatePiece(room.id, piece.id, {
+                                edgeTop: edges.edgeTop,
+                                edgeBottom: edges.edgeBottom,
+                                edgeLeft: edges.edgeLeft,
+                                edgeRight: edges.edgeRight,
+                              })}
+                            />
+                          </div>
                         )}
                       </div>
 

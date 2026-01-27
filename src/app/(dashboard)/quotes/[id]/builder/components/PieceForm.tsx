@@ -259,13 +259,20 @@ export default function PieceForm({
 
       {/* Edge Selector */}
       {lengthMm && widthMm && parseInt(lengthMm) > 0 && parseInt(widthMm) > 0 && (
-        <EdgeSelector
-          lengthMm={parseInt(lengthMm)}
-          widthMm={parseInt(widthMm)}
-          edgeSelections={edgeSelections}
-          edgeTypes={edgeTypes}
-          onChange={setEdgeSelections}
-        />
+        <div
+          className="relative"
+          style={{ zIndex: 100, isolation: 'isolate' }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <EdgeSelector
+            lengthMm={parseInt(lengthMm)}
+            widthMm={parseInt(widthMm)}
+            edgeSelections={edgeSelections}
+            edgeTypes={edgeTypes}
+            onChange={setEdgeSelections}
+          />
+        </div>
       )}
 
       {/* Cutout Selector */}
