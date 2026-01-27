@@ -47,11 +47,16 @@ export default function EdgeSelector({
     hasOnChange: typeof onChange === 'function'
   });
 
-  // Filter edge types by category
-  const polishTypes = useMemo(
+  // Get all active edge types (no longer filtering by category)
+  const availableTypes = useMemo(
     () => {
-      const filtered = edgeTypes.filter((e) => e.category === 'polish' && e.isActive);
-      console.log('polishTypes filtered:', filtered.length, 'from', edgeTypes.length, 'total');
+      // Show all edge types, not just polish - the category is now informational
+      const filtered = edgeTypes.filter((e) => e.isActive !== false);
+      console.log('availableTypes:', filtered.length, 'from', edgeTypes.length, 'total');
+      if (filtered.length === 0 && edgeTypes.length > 0) {
+        console.log('No active edge types, using all:', edgeTypes);
+        return edgeTypes; // Fallback to all if none are active
+      }
       return filtered;
     },
     [edgeTypes]
@@ -90,12 +95,12 @@ export default function EdgeSelector({
 
   // Handle checkbox toggle
   const handleToggle = (key: keyof EdgeSelections, checked: boolean) => {
-    console.log('EdgeSelector handleToggle called:', { key, checked, polishTypes: polishTypes.length, edgeTypes: edgeTypes.length });
+    console.log('EdgeSelector handleToggle called:', { key, checked, availableTypes: availableTypes.length, edgeTypes: edgeTypes.length });
     if (checked) {
       // Enable with first available polish type, or any edge type, or 'selected' marker
       let defaultType: string | null = null;
-      if (polishTypes.length > 0) {
-        defaultType = polishTypes[0].id;
+      if (availableTypes.length > 0) {
+        defaultType = availableTypes[0].id;
       } else if (edgeTypes.length > 0) {
         defaultType = edgeTypes[0].id;
       } else {
@@ -265,10 +270,12 @@ export default function EdgeSelector({
                         }`}
                       >
                         <option value="">None</option>
-                        {/* Show polish types first, then other types if polish is empty */}
-                        {(polishTypes.length > 0 ? polishTypes : edgeTypes).map((type) => (
+                        {availableTypes.length === 0 && (
+                          <option value="" disabled>No edge types configured</option>
+                        )}
+                        {availableTypes.map((type) => (
                           <option key={type.id} value={type.id}>
-                            {type.name}
+                            {type.name} {type.category !== 'polish' ? `(${type.category})` : ''}
                           </option>
                         ))}
                       </select>
