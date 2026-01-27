@@ -7,6 +7,9 @@
 import { UserRole, Permission } from '@prisma/client';
 import prisma from './db';
 
+// Re-export Permission enum for convenience
+export { Permission, UserRole } from '@prisma/client';
+
 // Role to default permissions mapping
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ADMIN: [
