@@ -7,7 +7,13 @@ export const dynamic = 'force-dynamic';
 
 async function getData() {
   const [customers, materials, pricingRules, edgeTypes, lastQuote] = await Promise.all([
-    prisma.customer.findMany({ orderBy: { name: 'asc' } }),
+    prisma.customer.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        clientTier: true,
+        clientType: true,
+      },
+    }),
     prisma.material.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
     prisma.featurePricing.findMany({ where: { isActive: true }, orderBy: { category: 'asc' } }),
     prisma.edgeType.findMany({

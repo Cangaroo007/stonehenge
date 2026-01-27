@@ -202,8 +202,8 @@ export default function PricingSummary({
             </div>
           )}
 
-          {/* Warning when customer has no pricing classification */}
-          {customerName && !customerTier && !customerType && (
+          {/* Warning when customer has no pricing tier assigned */}
+          {customerName && !customerTier && (
             <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <div className="flex items-start gap-2">
                 <svg className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -212,10 +212,10 @@ export default function PricingSummary({
                 </svg>
                 <div>
                   <p className="text-amber-800 font-medium text-sm">
-                    No pricing rules for this customer
+                    No pricing tier assigned
                   </p>
                   <p className="text-amber-700 text-xs mt-1">
-                    Using standard base prices. Assign a tier in the
+                    Using base prices. Assign a tier in the
                     <a href="/customers" className="underline ml-1 hover:text-amber-900">
                       customer profile
                     </a>

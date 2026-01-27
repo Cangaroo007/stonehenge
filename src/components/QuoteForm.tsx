@@ -10,6 +10,8 @@ interface Customer {
   id: number;
   name: string;
   company: string | null;
+  clientTier?: { id: number; name: string } | null;
+  clientType?: { id: number; name: string } | null;
 }
 
 interface Material {
@@ -227,6 +229,20 @@ export default function QuoteForm({
 
   // Form state
   const [customerId, setCustomerId] = useState<number | null>(initialData?.customerId || null);
+  const [selectedCustomerTier, setSelectedCustomerTier] = useState<string | null>(() => {
+    if (initialData?.customerId) {
+      const customer = customers.find(c => c.id === initialData.customerId);
+      return customer?.clientTier?.name || null;
+    }
+    return null;
+  });
+  const [selectedCustomerType, setSelectedCustomerType] = useState<string | null>(() => {
+    if (initialData?.customerId) {
+      const customer = customers.find(c => c.id === initialData.customerId);
+      return customer?.clientType?.name || null;
+    }
+    return null;
+  });
   const [projectName, setProjectName] = useState(initialData?.projectName || '');
   const [projectAddress, setProjectAddress] = useState(initialData?.projectAddress || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
@@ -727,6 +743,21 @@ export default function QuoteForm({
     setAnalysisData(null);
   };
 
+  // Customer selection handler
+  const handleCustomerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCustomerId = e.target.value ? Number(e.target.value) : null;
+    setCustomerId(newCustomerId);
+
+    if (newCustomerId) {
+      const customer = customers.find(c => c.id === newCustomerId);
+      setSelectedCustomerTier(customer?.clientTier?.name || null);
+      setSelectedCustomerType(customer?.clientType?.name || null);
+    } else {
+      setSelectedCustomerTier(null);
+      setSelectedCustomerType(null);
+    }
+  };
+
   // Get unique room names from extracted pieces
   const extractedRoomNames = Array.from(new Set(extractedPieces.map((p) => p.roomName)));
 
@@ -825,7 +856,7 @@ export default function QuoteForm({
             <select
               className="input"
               value={customerId || ''}
-              onChange={(e) => setCustomerId(e.target.value ? Number(e.target.value) : null)}
+              onChange={handleCustomerChange}
             >
               <option value="">Select customer...</option>
               {customers.map((c) => (
@@ -834,6 +865,41 @@ export default function QuoteForm({
                 </option>
               ))}
             </select>
+            {/* Pricing Status Indicator */}
+            <div className="mt-2">
+              {!customerId ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Using base prices (no customer selected)</span>
+                </div>
+              ) : selectedCustomerTier ? (
+                <div className="flex items-center gap-2">
+                  <span className={`
+                    inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                    ${selectedCustomerTier === 'Tier 1' ? 'bg-green-100 text-green-800' :
+                      selectedCustomerTier === 'Tier 2' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'}
+                  `}>
+                    {selectedCustomerTier}
+                  </span>
+                  {selectedCustomerType && (
+                    <span className="text-sm text-gray-600">{selectedCustomerType}</span>
+                  )}
+                  <span className="text-sm text-green-600">✓ Tier pricing will apply</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-amber-600">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>No pricing tier assigned - using base prices</span>
+                </div>
+              )}
+            </div>
           </div>
           <div>
             <label className="label">Project Name</label>
