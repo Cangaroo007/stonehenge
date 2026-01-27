@@ -13,17 +13,145 @@ datasource db {
 // USER & AUTHENTICATION
 // ============================================
 
+enum UserRole {
+  ADMIN
+  SALES_MANAGER
+  SALES_REP
+  FABRICATOR
+  READ_ONLY
+  CUSTOM
+  CUSTOMER
+}
+
+enum Permission {
+  MANAGE_USERS
+  VIEW_USERS
+  MANAGE_CUSTOMERS
+  VIEW_CUSTOMERS
+  CREATE_QUOTES
+  EDIT_QUOTES
+  DELETE_QUOTES
+  VIEW_ALL_QUOTES
+  VIEW_OWN_QUOTES
+  APPROVE_QUOTES
+  MANAGE_MATERIALS
+  VIEW_MATERIALS
+  MANAGE_PRICING
+  VIEW_PRICING
+  RUN_OPTIMIZATION
+  VIEW_OPTIMIZATION
+  EXPORT_CUTLISTS
+  VIEW_REPORTS
+  EXPORT_DATA
+  MANAGE_SETTINGS
+  VIEW_AUDIT_LOGS
+}
+
 model User {
   id           Int       @id @default(autoincrement())
   email        String    @unique
   passwordHash String    @map("password_hash")
   name         String?
+  role         UserRole  @default(SALES_REP)
+  isActive     Boolean   @default(true) @map("is_active")
+  
+  // Customer linking (for customer users)
+  customerId   Int?      @map("customer_id")
+  customer     Customer? @relation(fields: [customerId], references: [id])
+  
+  // Invitation tracking
+  invitedBy    Int?      @map("invited_by")
+  invitedAt    DateTime? @map("invited_at")
+  
+  // Last activity
+  lastLoginAt  DateTime? @map("last_login_at")
+  lastActiveAt DateTime? @map("last_active_at")
+  
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   quotes       Quote[]
+  permissions  UserPermission[]
+  auditLogs    AuditLog[]
+  quoteViews   QuoteView[]
 
   @@map("users")
+}
+
+// Custom permissions for CUSTOM role users
+model UserPermission {
+  id         Int        @id @default(autoincrement())
+  userId     Int        @map("user_id")
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission
+  createdAt  DateTime   @default(now()) @map("created_at")
+  
+  @@unique([userId, permission])
+  @@map("user_permissions")
+}
+
+// Track quote views (especially by customers)
+model QuoteView {
+  id         Int      @id @default(autoincrement())
+  quoteId    Int      @map("quote_id")
+  quote      Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  userId     Int?     @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id])
+  viewedAt   DateTime @default(now()) @map("viewed_at")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent") @db.Text
+  
+  @@index([quoteId])
+  @@index([userId])
+  @@map("quote_views")
+}
+
+// E-signature records for legal compliance (Australia)
+model QuoteSignature {
+  id              Int      @id @default(autoincrement())
+  quoteId         Int      @unique @map("quote_id")
+  quote           Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  
+  // Signer information
+  signerName      String   @map("signer_name")
+  signerEmail     String   @map("signer_email")
+  signerTitle     String?  @map("signer_title")
+  signerUserId    Int?     @map("signer_user_id")
+  
+  // Signature data
+  signatureMethod String   @map("signature_method") // 'typed', 'drawn'
+  signatureData   String   @map("signature_data") @db.Text // Base64 image or typed text
+  
+  // Legal compliance tracking (Australian Electronic Transactions Act 1999)
+  signedAt        DateTime @default(now()) @map("signed_at")
+  ipAddress       String   @map("ip_address")
+  userAgent       String   @map("user_agent") @db.Text
+  documentHash    String   @map("document_hash") // SHA-256 of PDF
+  documentVersion String   @map("document_version") // Quote revision/number
+  
+  // Audit trail
+  signedPdfPath   String?  @map("signed_pdf_path") // Path to signed PDF
+  
+  @@map("quote_signatures")
+}
+
+// Audit log for compliance and tracking
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?     @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   // 'created', 'updated', 'deleted', 'viewed', 'signed'
+  entityType String   @map("entity_type") // 'quote', 'customer', 'user', etc.
+  entityId   String   @map("entity_id")
+  changes    Json?    // Old/new values
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 // ============================================
@@ -51,6 +179,7 @@ model Customer {
 
   quotes       Quote[]
   pricingRules PricingRule[]
+  users        User[]        // Customer portal users
 
   @@map("customers")
 }
@@ -142,6 +271,8 @@ model Quote {
   files           QuoteFile[]
   drawingAnalysis QuoteDrawingAnalysis?
   optimizations   SlabOptimization[]
+  views           QuoteView[]
+  signature       QuoteSignature?
 
   priceBookId     String?     @map("price_book_id")
   priceBook       PriceBook?  @relation(fields: [priceBookId], references: [id])

@@ -13,6 +13,8 @@ export interface UserPayload {
   id: number;
   email: string;
   name: string | null;
+  role: string;
+  customerId?: number | null;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -76,6 +78,11 @@ export async function login(email: string, password: string): Promise<{ success:
     return { success: false, error: 'Invalid email or password' };
   }
 
+  // Check if user is active
+  if (!user.isActive) {
+    return { success: false, error: 'Account is deactivated' };
+  }
+
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
     return { success: false, error: 'Invalid email or password' };
@@ -85,6 +92,8 @@ export async function login(email: string, password: string): Promise<{ success:
     id: user.id,
     email: user.email,
     name: user.name,
+    role: user.role,
+    customerId: user.customerId,
   });
 
   await setAuthCookie(token);
