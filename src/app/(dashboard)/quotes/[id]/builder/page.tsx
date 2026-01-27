@@ -553,7 +553,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
               <p className="font-medium">Select a piece to edit</p>
-              <p className="text-sm mt-1">Click on any piece in the list to view and edit its details</p>
+              <p className="text-sm mt-1">Click any piece to view and edit its details including edges</p>
             </div>
           )}
 

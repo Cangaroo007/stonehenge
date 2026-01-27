@@ -186,13 +186,14 @@ export default function EdgeSelector({
                     className="grid grid-cols-12 gap-2 items-center py-1"
                   >
                     {/* Checkbox */}
-                    <div className="col-span-1 relative z-10">
+                    <div className="col-span-1 relative z-20">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={(e) => handleToggle(edge.key, e.target.checked)}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer pointer-events-auto"
                       />
                     </div>
 
@@ -208,15 +209,16 @@ export default function EdgeSelector({
                     </div>
 
                     {/* Type Dropdown */}
-                    <div className="col-span-5 relative z-10">
+                    <div className="col-span-5 relative z-20">
                       <select
                         value={edgeSelections[edge.key] || ''}
                         onChange={(e) => handleTypeChange(edge.key, e.target.value)}
                         onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
                         disabled={!isSelected}
-                        className={`w-full text-sm px-2 py-1 border rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 cursor-pointer ${
+                        className={`w-full text-sm px-2 py-1 border rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 pointer-events-auto ${
                           isSelected
-                            ? 'border-gray-300 bg-white'
+                            ? 'border-gray-300 bg-white cursor-pointer'
                             : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
                         }`}
                       >

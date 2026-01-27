@@ -164,12 +164,18 @@ export default function PieceList({
               onClick={() => onSelectPiece(piece.id)}
               className={`cursor-pointer transition-colors ${
                 selectedPieceId === piece.id
-                  ? 'bg-primary-50 border-l-4 border-primary-500'
+                  ? 'bg-primary-50 ring-2 ring-inset ring-primary-500'
                   : 'hover:bg-gray-50'
               }`}
             >
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                {index + 1}
+                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium ${
+                  selectedPieceId === piece.id
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {index + 1}
+                </span>
               </td>
               <td className="px-4 py-3 whitespace-nowrap">
                 <div className="text-sm font-medium text-gray-900">{piece.name}</div>

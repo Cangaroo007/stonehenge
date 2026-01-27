@@ -621,7 +621,11 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
 
                   {/* Edge Selector */}
                   {piece.length > 0 && piece.width > 0 && (
-                    <div className="relative z-10">
+                    <div
+                      className="relative z-20"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
                       <EdgeSelector
                         lengthMm={piece.length}
                         widthMm={piece.width}
