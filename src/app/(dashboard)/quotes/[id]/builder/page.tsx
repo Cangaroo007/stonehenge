@@ -529,7 +529,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
         {/* Piece Form / Summary - 1 column on large screens */}
         <div className="lg:col-span-1 space-y-6">
           {/* Piece Editor */}
-          {(isAddingPiece || selectedPiece) && (
+          {(isAddingPiece || selectedPiece) ? (
             <div className="card">
               <div className="p-4 border-b border-gray-200">
                 <h2 className="text-lg font-semibold">
@@ -546,6 +546,14 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                 onCancel={handleCancelForm}
                 saving={saving}
               />
+            </div>
+          ) : (
+            <div className="card p-6 text-center text-gray-500">
+              <svg className="h-12 w-12 mx-auto mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+              <p className="font-medium">Select a piece to edit</p>
+              <p className="text-sm mt-1">Click on any piece in the list to view and edit its details</p>
             </div>
           )}
 

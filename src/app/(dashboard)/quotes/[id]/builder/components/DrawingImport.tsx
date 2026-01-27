@@ -573,7 +573,7 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
 
               {/* Expanded edit panel */}
               {piece.isEditing && (
-                <div className="p-4 bg-white space-y-4">
+                <div className="p-4 bg-white space-y-4 relative" onClick={(e) => e.stopPropagation()}>
                   {/* Basic info row */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
@@ -621,13 +621,15 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
 
                   {/* Edge Selector */}
                   {piece.length > 0 && piece.width > 0 && (
-                    <EdgeSelector
-                      lengthMm={piece.length}
-                      widthMm={piece.width}
-                      edgeSelections={piece.edgeSelections}
-                      edgeTypes={edgeTypes}
-                      onChange={(edges) => updatePieceEdges(piece.id, edges)}
-                    />
+                    <div className="relative z-10">
+                      <EdgeSelector
+                        lengthMm={piece.length}
+                        widthMm={piece.width}
+                        edgeSelections={piece.edgeSelections}
+                        edgeTypes={edgeTypes}
+                        onChange={(edges) => updatePieceEdges(piece.id, edges)}
+                      />
+                    </div>
                   )}
 
                   <div className="flex justify-end">

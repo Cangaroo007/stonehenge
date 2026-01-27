@@ -10,6 +10,10 @@ interface QuotePiece {
   widthMm: number;
   thicknessMm: number;
   materialName: string | null;
+  edgeTop: string | null;
+  edgeBottom: string | null;
+  edgeLeft: string | null;
+  edgeRight: string | null;
   sortOrder: number;
   totalCost: number;
   room: {
@@ -31,6 +35,23 @@ interface RoomGroup {
   pieces: QuotePiece[];
   isExpanded: boolean;
 }
+
+// Get edge summary string for a piece
+const getEdgeSummary = (piece: QuotePiece): string => {
+  const edges = [
+    piece.edgeTop && `T`,
+    piece.edgeBottom && `B`,
+    piece.edgeLeft && `L`,
+    piece.edgeRight && `R`,
+  ].filter(Boolean);
+
+  return edges.length > 0 ? edges.join(', ') : '';
+};
+
+// Check if piece has any edges
+const hasEdges = (piece: QuotePiece): boolean => {
+  return !!(piece.edgeTop || piece.edgeBottom || piece.edgeLeft || piece.edgeRight);
+};
 
 export default function RoomGrouping({
   pieces,
@@ -181,6 +202,11 @@ export default function RoomGrouping({
                       <span>{piece.thicknessMm}mm</span>
                       {piece.materialName && (
                         <span className="truncate">{piece.materialName}</span>
+                      )}
+                      {hasEdges(piece) && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                          Edges: {getEdgeSummary(piece)}
+                        </span>
                       )}
                     </div>
                   </div>

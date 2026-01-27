@@ -8,6 +8,10 @@ interface QuotePiece {
   widthMm: number;
   thicknessMm: number;
   materialName: string | null;
+  edgeTop: string | null;
+  edgeBottom: string | null;
+  edgeLeft: string | null;
+  edgeRight: string | null;
   sortOrder: number;
   totalCost: number;
   room: {
@@ -24,6 +28,32 @@ interface PieceListProps {
   onDuplicatePiece: (pieceId: number) => void;
   onReorder: (pieces: { id: number; sortOrder: number }[]) => void;
 }
+
+// Format edge type ID to readable name
+const formatEdgeName = (edgeId: string | null): string => {
+  if (!edgeId) return '';
+  // Convert kebab-case or snake_case to Title Case
+  return edgeId
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+// Get edge summary string for a piece
+const getEdgeSummary = (piece: QuotePiece): string => {
+  const edges = [
+    piece.edgeTop && `T`,
+    piece.edgeBottom && `B`,
+    piece.edgeLeft && `L`,
+    piece.edgeRight && `R`,
+  ].filter(Boolean);
+
+  return edges.length > 0 ? edges.join(', ') : '';
+};
+
+// Check if piece has any edges
+const hasEdges = (piece: QuotePiece): boolean => {
+  return !!(piece.edgeTop || piece.edgeBottom || piece.edgeLeft || piece.edgeRight);
+};
 
 export default function PieceList({
   pieces,
@@ -119,6 +149,9 @@ export default function PieceList({
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Room
             </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Edges
+            </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
               Actions
             </th>
@@ -154,6 +187,15 @@ export default function PieceList({
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                   {piece.room.name}
                 </span>
+              </td>
+              <td className="px-4 py-3 whitespace-nowrap text-sm">
+                {hasEdges(piece) ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                    {getEdgeSummary(piece)}
+                  </span>
+                ) : (
+                  <span className="text-gray-400 text-xs">None</span>
+                )}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm">
                 <div className="flex items-center gap-1">

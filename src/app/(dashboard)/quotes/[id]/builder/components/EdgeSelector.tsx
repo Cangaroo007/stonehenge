@@ -186,12 +186,13 @@ export default function EdgeSelector({
                     className="grid grid-cols-12 gap-2 items-center py-1"
                   >
                     {/* Checkbox */}
-                    <div className="col-span-1">
+                    <div className="col-span-1 relative z-10">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={(e) => handleToggle(edge.key, e.target.checked)}
-                        className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
                       />
                     </div>
 
@@ -207,15 +208,16 @@ export default function EdgeSelector({
                     </div>
 
                     {/* Type Dropdown */}
-                    <div className="col-span-5">
+                    <div className="col-span-5 relative z-10">
                       <select
                         value={edgeSelections[edge.key] || ''}
                         onChange={(e) => handleTypeChange(edge.key, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
                         disabled={!isSelected}
-                        className={`w-full text-sm px-2 py-1 border rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`w-full text-sm px-2 py-1 border rounded focus:ring-1 focus:ring-primary-500 focus:border-primary-500 cursor-pointer ${
                           isSelected
                             ? 'border-gray-300 bg-white'
-                            : 'border-gray-200 bg-gray-50 text-gray-400'
+                            : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
                         }`}
                       >
                         <option value="">None</option>
