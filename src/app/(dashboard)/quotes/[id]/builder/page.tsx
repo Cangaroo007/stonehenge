@@ -10,6 +10,7 @@ import PieceForm from './components/PieceForm';
 import PricingSummary from './components/PricingSummary';
 import QuoteActions from './components/QuoteActions';
 import DrawingImport from './components/DrawingImport';
+import { DrawingReferencePanel } from './components/DrawingReferencePanel';
 import { CutoutType, PieceCutout } from './components/CutoutSelector';
 import type { CalculationResult } from '@/lib/types/pricing';
 
@@ -552,6 +553,9 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
 
         {/* Piece Form / Summary - 1 column on large screens */}
         <div className="lg:col-span-1 space-y-6">
+          {/* Drawing Reference Panel */}
+          <DrawingReferencePanel quoteId={quoteId} />
+
           {/* Piece Editor */}
           {(isAddingPiece || selectedPiece) ? (
             <div className="card">
