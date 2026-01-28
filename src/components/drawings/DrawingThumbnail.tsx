@@ -1,0 +1,65 @@
+'use client';
+
+import { useState } from 'react';
+import Image from 'next/image';
+import { useDrawingUrl } from '@/hooks/useDrawingUrl';
+
+interface DrawingThumbnailProps {
+  drawingId: string;
+  filename: string;
+  onClick?: () => void;
+  className?: string;
+}
+
+export function DrawingThumbnail({
+  drawingId,
+  filename,
+  onClick,
+  className = '',
+}: DrawingThumbnailProps) {
+  const { url, loading, error } = useDrawingUrl(drawingId);
+  const [imageError, setImageError] = useState(false);
+
+  if (loading) {
+    return (
+      <div className={`bg-gray-100 animate-pulse rounded-lg flex items-center justify-center ${className}`}>
+        <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (error || imageError || !url) {
+    return (
+      <div className={`bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 ${className}`}>
+        <svg className="h-8 w-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span className="text-xs">Failed to load</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`relative rounded-lg overflow-hidden cursor-pointer group ${className}`}
+      onClick={onClick}
+    >
+      <Image
+        src={url}
+        alt={filename}
+        fill
+        className="object-contain"
+        onError={() => setImageError(true)}
+      />
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-2">
+          <svg className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
