@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import { UserRole } from '@prisma/client';
+import { hasPermission, Permission } from '@/lib/permissions';
 import QuoteViewTracker from '@/app/(dashboard)/quotes/[id]/components/QuoteViewTracker';
 import QuoteSignatureSection from '@/app/(dashboard)/quotes/[id]/components/QuoteSignatureSection';
 
@@ -62,6 +63,10 @@ export default async function CustomerQuoteDetailPage({
     notFound();
   }
 
+  // Check permissions
+  const canDownload = await hasPermission(user.id, Permission.DOWNLOAD_QUOTES);
+  const canApprove = await hasPermission(user.id, Permission.APPROVE_QUOTES);
+
   return (
     <div className="space-y-6">
       {/* Back Button */}
@@ -87,9 +92,11 @@ export default async function CustomerQuoteDetailPage({
             </div>
             <p className="text-gray-500 mt-1">{quote.projectName}</p>
           </div>
-          <Link href={`/api/quotes/${quote.id}/pdf`} target="_blank" className="btn-secondary">
-            Download PDF
-          </Link>
+          {canDownload && (
+            <Link href={`/api/quotes/${quote.id}/pdf`} target="_blank" className="btn-secondary">
+              Download PDF
+            </Link>
+          )}
         </div>
 
         {/* Quote Info */}
@@ -112,18 +119,29 @@ export default async function CustomerQuoteDetailPage({
       {/* View Tracking (silent) */}
       <QuoteViewTracker quoteId={quote.id} showHistory={false} />
 
-      {/* Signature Section */}
-      <QuoteSignatureSection
-        quoteId={quote.id}
-        quoteNumber={quote.quoteNumber}
-        customerName={quote.customer?.company || quote.customer?.name || 'Customer'}
-        totalAmount={formatCurrency(Number(quote.total))}
-        status={quote.status}
-        signature={quote.signature ? {
-          ...quote.signature,
-          signedAt: quote.signature.signedAt.toISOString(),
-        } : null}
-      />
+      {/* Signature Section - Only for users with approval permission */}
+      {canApprove ? (
+        <QuoteSignatureSection
+          quoteId={quote.id}
+          quoteNumber={quote.quoteNumber}
+          customerName={quote.customer?.company || quote.customer?.name || 'Customer'}
+          totalAmount={formatCurrency(Number(quote.total))}
+          status={quote.status}
+          signature={quote.signature ? {
+            ...quote.signature,
+            signedAt: quote.signature.signedAt.toISOString(),
+          } : null}
+        />
+      ) : quote.signature && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quote Status</h2>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-sm text-green-900">
+              ✓ This quote was signed on {formatDate(quote.signature.signedAt)}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Rooms and Pieces */}
       <div className="space-y-4">

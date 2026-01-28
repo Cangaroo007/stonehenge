@@ -4,11 +4,11 @@
  * Handles role-based and custom permission checking
  */
 
-import { UserRole, Permission } from '@prisma/client';
+import { UserRole, Permission, CustomerUserRole } from '@prisma/client';
 import prisma from './db';
 
-// Re-export Permission enum for convenience
-export { Permission, UserRole } from '@prisma/client';
+// Re-export enums for convenience
+export { Permission, UserRole, CustomerUserRole } from '@prisma/client';
 
 // Role to default permissions mapping
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -85,9 +85,36 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   CUSTOM: [], // Custom role uses UserPermission table
   
   CUSTOMER: [
+    // Base permissions - actual permissions determined by CustomerUserRole
+    Permission.VIEW_OWN_QUOTES,
+  ],
+};
+
+/**
+ * Customer User Role Permissions
+ * Defines what each customer portal role can do
+ */
+export const CUSTOMER_USER_ROLE_PERMISSIONS: Record<CustomerUserRole, Permission[]> = {
+  CUSTOMER_ADMIN: [
     Permission.VIEW_OWN_QUOTES,
     Permission.APPROVE_QUOTES,
+    Permission.UPLOAD_FILES,
+    Permission.DOWNLOAD_QUOTES,
+    Permission.VIEW_PROJECT_UPDATES,
+    Permission.MANAGE_CUSTOMER_USERS,
   ],
+  CUSTOMER_APPROVER: [
+    Permission.VIEW_OWN_QUOTES,
+    Permission.APPROVE_QUOTES,
+    Permission.DOWNLOAD_QUOTES,
+    Permission.VIEW_PROJECT_UPDATES,
+  ],
+  CUSTOMER_VIEWER: [
+    Permission.VIEW_OWN_QUOTES,
+    Permission.DOWNLOAD_QUOTES,
+    Permission.VIEW_PROJECT_UPDATES,
+  ],
+  CUSTOM: [], // Uses UserPermission table
 };
 
 /**
@@ -113,7 +140,27 @@ export async function hasPermission(
     return user.permissions.some(p => p.permission === permission);
   }
 
-  // Predefined roles use ROLE_PERMISSIONS mapping
+  // CUSTOMER role - check CustomerUserRole
+  if (user.role === UserRole.CUSTOMER) {
+    const customerUserRole = user.customerUserRole;
+    
+    // If no customer user role set, default to CUSTOMER_VIEWER
+    if (!customerUserRole) {
+      const viewerPermissions = CUSTOMER_USER_ROLE_PERMISSIONS[CustomerUserRole.CUSTOMER_VIEWER];
+      return viewerPermissions.includes(permission);
+    }
+    
+    // CUSTOM customer role uses database permissions
+    if (customerUserRole === CustomerUserRole.CUSTOM) {
+      return user.permissions.some(p => p.permission === permission);
+    }
+    
+    // Predefined customer roles
+    const customerPermissions = CUSTOMER_USER_ROLE_PERMISSIONS[customerUserRole];
+    return customerPermissions.includes(permission);
+  }
+
+  // Predefined staff roles use ROLE_PERMISSIONS mapping
   const rolePermissions = ROLE_PERMISSIONS[user.role];
   return rolePermissions.includes(permission);
 }
@@ -278,7 +325,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [Permission.DELETE_QUOTES]: 'Delete Quotes',
   [Permission.VIEW_ALL_QUOTES]: 'View All Quotes',
   [Permission.VIEW_OWN_QUOTES]: 'View Own Quotes',
-  [Permission.APPROVE_QUOTES]: 'Approve Quotes',
+  [Permission.APPROVE_QUOTES]: 'Approve/Sign Quotes',
   [Permission.MANAGE_MATERIALS]: 'Manage Materials',
   [Permission.VIEW_MATERIALS]: 'View Materials',
   [Permission.MANAGE_PRICING]: 'Manage Pricing',
@@ -290,6 +337,12 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [Permission.EXPORT_DATA]: 'Export Data',
   [Permission.MANAGE_SETTINGS]: 'Manage Settings',
   [Permission.VIEW_AUDIT_LOGS]: 'View Audit Logs',
+  
+  // Customer portal permissions
+  [Permission.UPLOAD_FILES]: 'Upload Files & Drawings',
+  [Permission.MANAGE_CUSTOMER_USERS]: 'Manage Portal Users',
+  [Permission.DOWNLOAD_QUOTES]: 'Download Quotes',
+  [Permission.VIEW_PROJECT_UPDATES]: 'View Project Updates',
 };
 
 /**
@@ -303,4 +356,14 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   [UserRole.READ_ONLY]: 'Read Only',
   [UserRole.CUSTOM]: 'Custom',
   [UserRole.CUSTOMER]: 'Customer',
+};
+
+/**
+ * Get user-friendly customer user role labels
+ */
+export const CUSTOMER_USER_ROLE_LABELS: Record<CustomerUserRole, string> = {
+  [CustomerUserRole.CUSTOMER_ADMIN]: 'Customer Admin',
+  [CustomerUserRole.CUSTOMER_APPROVER]: 'Approver',
+  [CustomerUserRole.CUSTOMER_VIEWER]: 'Viewer (Read-Only)',
+  [CustomerUserRole.CUSTOM]: 'Custom Permissions',
 };

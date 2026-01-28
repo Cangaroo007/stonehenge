@@ -41,6 +41,10 @@ export default function NewCustomerPage() {
     defaultPriceBookId: '',
   });
 
+  // Portal user creation
+  const [createPortalUser, setCreatePortalUser] = useState(true); // Default to checked
+  const [customerUserRole, setCustomerUserRole] = useState('CUSTOMER_ADMIN'); // Default role
+
   // Pricing options
   const [clientTypes, setClientTypes] = useState<ClientType[]>([]);
   const [clientTiers, setClientTiers] = useState<ClientTier[]>([]);
@@ -84,6 +88,13 @@ export default function NewCustomerPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // Validate email if creating portal user
+    if (createPortalUser && !form.email) {
+      toast.error('Email is required to create a portal user');
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -92,6 +103,8 @@ export default function NewCustomerPage() {
         clientTypeId: form.clientTypeId || null,
         clientTierId: form.clientTierId || null,
         defaultPriceBookId: form.defaultPriceBookId || null,
+        createPortalUser,
+        customerUserRole: createPortalUser ? customerUserRole : null,
       };
 
       const res = await fetch('/api/customers', {
@@ -101,7 +114,18 @@ export default function NewCustomerPage() {
       });
 
       if (res.ok) {
-        toast.success('Customer created!');
+        const data = await res.json();
+        
+        // Show success message with portal user info if created
+        if (data.portalUser) {
+          toast.success(
+            `Customer created! Portal login:\nEmail: ${data.portalUser.email}\nPassword: ${data.portalUser.tempPassword}`,
+            { duration: 10000 }
+          );
+        } else {
+          toast.success('Customer created!');
+        }
+        
         router.push('/customers');
         router.refresh();
       } else {
@@ -176,6 +200,54 @@ export default function NewCustomerPage() {
             value={form.notes}
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
           />
+        </div>
+
+        {/* Portal Access Section */}
+        <div className="border-t pt-4 mt-4">
+          <h3 className="text-sm font-medium text-gray-700 mb-3">Portal Access</h3>
+          <div className="space-y-4">
+            <div className="flex items-start">
+              <input
+                type="checkbox"
+                id="createPortalUser"
+                checked={createPortalUser}
+                onChange={(e) => setCreatePortalUser(e.target.checked)}
+                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <div className="ml-3">
+                <label htmlFor="createPortalUser" className="text-sm font-medium text-gray-700">
+                  Create Portal User
+                </label>
+                <p className="text-xs text-gray-500">
+                  Automatically create a portal login for this customer using their email address
+                </p>
+              </div>
+            </div>
+
+            {createPortalUser && (
+              <div>
+                <label className="label">Portal Access Level *</label>
+                <select
+                  className="input max-w-xs"
+                  value={customerUserRole}
+                  onChange={(e) => setCustomerUserRole(e.target.value)}
+                  required={createPortalUser}
+                >
+                  <option value="CUSTOMER_ADMIN">Customer Admin - Full Access</option>
+                  <option value="CUSTOMER_APPROVER">Approver - View + Sign Quotes</option>
+                  <option value="CUSTOMER_VIEWER">Viewer - Read Only</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {customerUserRole === 'CUSTOMER_ADMIN' && 'Can view, sign, upload files, and manage portal users'}
+                  {customerUserRole === 'CUSTOMER_APPROVER' && 'Can view quotes and sign/approve them'}
+                  {customerUserRole === 'CUSTOMER_VIEWER' && 'Can only view quotes (read-only access)'}
+                </p>
+                {!form.email && (
+                  <p className="text-xs text-red-600 mt-1">⚠️ Email address is required to create portal user</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Pricing Classification Section */}

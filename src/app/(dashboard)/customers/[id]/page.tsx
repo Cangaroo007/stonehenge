@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { UserRole } from '@prisma/client';
+import { UserRole, CustomerUserRole } from '@prisma/client';
+import { CUSTOMER_USER_ROLE_LABELS } from '@/lib/permissions';
 
 interface Customer {
   id: number;
@@ -29,6 +30,7 @@ interface CustomerUser {
   email: string;
   name: string | null;
   role: UserRole;
+  customerUserRole: CustomerUserRole | null;
   customerId: number | null;
   isActive: boolean;
   createdAt: string;
@@ -350,6 +352,7 @@ function UsersTab({
             <thead className="bg-gray-50">
               <tr>
                 <th className="table-header">User</th>
+                <th className="table-header">Access Level</th>
                 <th className="table-header">Status</th>
                 <th className="table-header">Invited</th>
                 <th className="table-header">Last Login</th>
@@ -364,6 +367,13 @@ function UsersTab({
                       <div className="font-medium text-gray-900">{user.name || 'Unnamed User'}</div>
                       <div className="text-sm text-gray-500">{user.email}</div>
                     </div>
+                  </td>
+                  <td className="table-cell">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {user.customerUserRole 
+                        ? CUSTOMER_USER_ROLE_LABELS[user.customerUserRole]
+                        : 'Viewer'}
+                    </span>
                   </td>
                   <td className="table-cell">
                     {user.isActive ? (
@@ -501,6 +511,7 @@ function CustomerUserModal({
     email: user?.email || '',
     name: user?.name || '',
     password: '',
+    customerUserRole: user?.customerUserRole || CustomerUserRole.CUSTOMER_ADMIN,
     sendInvite: !user, // Default to true for new users
   });
   const [saving, setSaving] = useState(false);
@@ -517,6 +528,7 @@ function CustomerUserModal({
         ...formData,
         role: UserRole.CUSTOMER,
         customerId,
+        customerUserRole: formData.customerUserRole,
       };
 
       const response = await fetch(url, {
@@ -588,6 +600,34 @@ function CustomerUserModal({
             />
           </div>
 
+          <div>
+            <label className="label">Portal Access Level *</label>
+            <select
+              required
+              value={formData.customerUserRole}
+              onChange={(e) => setFormData({ ...formData, customerUserRole: e.target.value as CustomerUserRole })}
+              className="input"
+            >
+              <option value={CustomerUserRole.CUSTOMER_ADMIN}>
+                Customer Admin - Full Access
+              </option>
+              <option value={CustomerUserRole.CUSTOMER_APPROVER}>
+                Approver - View + Sign Quotes
+              </option>
+              <option value={CustomerUserRole.CUSTOMER_VIEWER}>
+                Viewer - Read Only
+              </option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {formData.customerUserRole === CustomerUserRole.CUSTOMER_ADMIN && 
+                '✓ View quotes, sign approvals, upload files, manage portal users'}
+              {formData.customerUserRole === CustomerUserRole.CUSTOMER_APPROVER && 
+                '✓ View quotes, sign/approve quotes, download PDFs'}
+              {formData.customerUserRole === CustomerUserRole.CUSTOMER_VIEWER && 
+                '✓ View quotes only (read-only access)'}
+            </p>
+          </div>
+
           {!user && (
             <div>
               <label className="label">Password {!formData.sendInvite && '*'}</label>
@@ -615,15 +655,71 @@ function CustomerUserModal({
           )}
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-900">
-              <strong>Portal Access:</strong> This user will be able to:
+            <p className="text-sm text-blue-900 font-medium mb-2">
+              What can this user do?
             </p>
-            <ul className="text-sm text-blue-800 mt-2 space-y-1 ml-4">
-              <li>• View their quotes</li>
-              <li>• Upload files and drawings</li>
-              <li>• Sign quote approvals</li>
-              <li>• Track project status</li>
-            </ul>
+            <div className="text-sm text-blue-800 space-y-1">
+              {formData.customerUserRole === CustomerUserRole.CUSTOMER_ADMIN && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>View all quotes for this customer</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>Sign and approve quotes</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>Upload files and drawings</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>Manage other portal users</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>Download PDFs and view project updates</span>
+                  </div>
+                </>
+              )}
+              {formData.customerUserRole === CustomerUserRole.CUSTOMER_APPROVER && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>View all quotes for this customer</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>Sign and approve quotes</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>Download PDFs and view project updates</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-400">✗</span>
+                    <span className="text-gray-500">Cannot upload files or manage users</span>
+                  </div>
+                </>
+              )}
+              {formData.customerUserRole === CustomerUserRole.CUSTOMER_VIEWER && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>View all quotes for this customer</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✓</span>
+                    <span>Download PDFs</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-400">✗</span>
+                    <span className="text-gray-500">Cannot sign, upload, or manage users (read-only)</span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </form>
 

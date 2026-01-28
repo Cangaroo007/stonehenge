@@ -4,7 +4,7 @@ import { hasPermission, Permission } from '@/lib/permissions';
 import { createAuditLog, getClientIp, getUserAgent, getChanges } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth';
 import prisma from '@/lib/db';
-import { UserRole } from '@prisma/client';
+import { UserRole, CustomerUserRole } from '@prisma/client';
 
 /**
  * GET /api/admin/users/[id]
@@ -115,7 +115,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, role, customerId, isActive, permissions, password } = body;
+    const { name, role, customerId, customerUserRole, isActive, permissions, password } = body;
 
     // Build update data
     const updateData: Record<string, unknown> = {};
@@ -127,6 +127,13 @@ export async function PUT(
       updateData.role = role;
     }
     if (customerId !== undefined) updateData.customerId = customerId || null;
+    if (customerUserRole !== undefined) {
+      // Validate customerUserRole if provided
+      if (customerUserRole && !Object.values(CustomerUserRole).includes(customerUserRole)) {
+        return NextResponse.json({ error: 'Invalid customer user role' }, { status: 400 });
+      }
+      updateData.customerUserRole = customerUserRole || null;
+    }
     if (isActive !== undefined) updateData.isActive = isActive;
     if (password) {
       updateData.passwordHash = await hashPassword(password);

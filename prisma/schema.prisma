@@ -23,6 +23,13 @@ enum UserRole {
   CUSTOMER
 }
 
+enum CustomerUserRole {
+  CUSTOMER_ADMIN    // Full access: view, sign, upload, manage users
+  CUSTOMER_APPROVER // View quotes + sign/accept
+  CUSTOMER_VIEWER   // View only (read-only)
+  CUSTOM            // Select specific permissions
+}
+
 enum Permission {
   MANAGE_USERS
   VIEW_USERS
@@ -45,6 +52,12 @@ enum Permission {
   EXPORT_DATA
   MANAGE_SETTINGS
   VIEW_AUDIT_LOGS
+  
+  // Customer portal permissions
+  UPLOAD_FILES
+  MANAGE_CUSTOMER_USERS
+  DOWNLOAD_QUOTES
+  VIEW_PROJECT_UPDATES
 }
 
 model User {
@@ -54,19 +67,20 @@ model User {
   name         String?
   role         UserRole  @default(SALES_REP)
   isActive     Boolean   @default(true) @map("is_active")
-  
+
   // Customer linking (for customer users)
-  customerId   Int?      @map("customer_id")
-  customer     Customer? @relation(fields: [customerId], references: [id])
-  
+  customerId       Int?                  @map("customer_id")
+  customer         Customer?             @relation(fields: [customerId], references: [id])
+  customerUserRole CustomerUserRole?     @map("customer_user_role") // Role within customer portal
+
   // Invitation tracking
   invitedBy    Int?      @map("invited_by")
   invitedAt    DateTime? @map("invited_at")
-  
+
   // Last activity
   lastLoginAt  DateTime? @map("last_login_at")
   lastActiveAt DateTime? @map("last_active_at")
-  
+
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 

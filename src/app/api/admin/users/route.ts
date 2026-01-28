@@ -4,7 +4,7 @@ import { hasPermission, Permission } from '@/lib/permissions';
 import { createAuditLog, getClientIp, getUserAgent } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth';
 import prisma from '@/lib/db';
-import { UserRole, Prisma } from '@prisma/client';
+import { UserRole, CustomerUserRole, Prisma } from '@prisma/client';
 
 /**
  * GET /api/admin/users
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, name, password, role, customerId, permissions, sendInvite } = body;
+    const { email, name, password, role, customerId, customerUserRole, permissions, sendInvite } = body;
 
     // Validate required fields
     if (!email || !role) {
@@ -108,12 +108,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Customer users must have customerId
-    if (role === UserRole.CUSTOMER && !customerId) {
-      return NextResponse.json(
-        { error: 'Customer users must be linked to a customer' },
-        { status: 400 }
-      );
+    // Customer users must have customerId and customerUserRole
+    if (role === UserRole.CUSTOMER) {
+      if (!customerId) {
+        return NextResponse.json(
+          { error: 'Customer users must be linked to a customer' },
+          { status: 400 }
+        );
+      }
+      if (!customerUserRole || !Object.values(CustomerUserRole).includes(customerUserRole)) {
+        return NextResponse.json(
+          { error: 'Customer users must have a valid customer user role' },
+          { status: 400 }
+        );
+      }
     }
 
     // Check if user already exists
@@ -147,6 +155,7 @@ export async function POST(request: NextRequest) {
         passwordHash,
         role,
         customerId: customerId || null,
+        customerUserRole: role === UserRole.CUSTOMER ? customerUserRole : null,
         isActive: true,
         invitedBy: currentUser.id,
         invitedAt: new Date(),
@@ -178,7 +187,7 @@ export async function POST(request: NextRequest) {
       action: 'created',
       entityType: 'user',
       entityId: String(newUser.id),
-      changes: { email, name, role, customerId },
+      changes: { email, name, role, customerId, customerUserRole },
       ipAddress: getClientIp(request.headers),
       userAgent: getUserAgent(request.headers),
     });
