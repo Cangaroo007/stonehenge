@@ -111,6 +111,7 @@ export default function QuoteBuilderPage() {
   const calculationRef = useRef<CalculationResult | null>(null);
   const [showDrawingImport, setShowDrawingImport] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
+  const [drawingsRefreshKey, setDrawingsRefreshKey] = useState(0);
 
   // Trigger recalculation after piece changes
   const triggerRecalculate = useCallback(() => {
@@ -398,6 +399,11 @@ export default function QuoteBuilderPage() {
     setTimeout(() => setImportSuccessMessage(null), 5000);
   }, [fetchQuote, triggerRecalculate]);
 
+  // Handle drawings saved (refresh DrawingReferencePanel)
+  const handleDrawingsSaved = useCallback(() => {
+    setDrawingsRefreshKey(n => n + 1);
+  }, []);
+
   // Get selected piece
   const selectedPiece = selectedPieceId
     ? pieces.find(p => p.id === selectedPieceId)
@@ -554,7 +560,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
         {/* Piece Form / Summary - 1 column on large screens */}
         <div className="lg:col-span-1 space-y-6">
           {/* Drawing Reference Panel */}
-          <DrawingReferencePanel quoteId={quoteId} />
+          <DrawingReferencePanel quoteId={quoteId} refreshKey={drawingsRefreshKey} />
 
           {/* Piece Editor */}
           {(isAddingPiece || selectedPiece) ? (
@@ -621,11 +627,13 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
       </div>
 
       {/* Drawing Import Modal */}
-      {showDrawingImport && (
+      {showDrawingImport && quote.customer && (
         <DrawingImport
           quoteId={quoteId}
+          customerId={quote.customer.id}
           edgeTypes={edgeTypes}
           onImportComplete={handleImportComplete}
+          onDrawingsSaved={handleDrawingsSaved}
           onClose={() => setShowDrawingImport(false)}
         />
       )}

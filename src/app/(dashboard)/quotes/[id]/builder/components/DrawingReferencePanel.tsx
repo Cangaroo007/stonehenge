@@ -13,9 +13,10 @@ interface Drawing {
 
 interface DrawingReferencePanelProps {
   quoteId: string;
+  refreshKey?: number;
 }
 
-export function DrawingReferencePanel({ quoteId }: DrawingReferencePanelProps) {
+export function DrawingReferencePanel({ quoteId, refreshKey = 0 }: DrawingReferencePanelProps) {
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -24,6 +25,7 @@ export function DrawingReferencePanel({ quoteId }: DrawingReferencePanelProps) {
 
   useEffect(() => {
     async function fetchDrawings() {
+      setLoading(true);
       try {
         const response = await fetch(`/api/quotes/${quoteId}/drawings`);
         if (response.ok) {
@@ -38,7 +40,7 @@ export function DrawingReferencePanel({ quoteId }: DrawingReferencePanelProps) {
     }
 
     fetchDrawings();
-  }, [quoteId]);
+  }, [quoteId, refreshKey]);
 
   const primaryDrawing = drawings.find(d => d.isPrimary) || drawings[0];
   const hasDrawings = drawings.length > 0;
