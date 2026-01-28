@@ -22,9 +22,20 @@ interface EdgeSelections {
 
 interface DrawingImportProps {
   quoteId: string;
+  customerId: number;
   edgeTypes: EdgeType[];
   onImportComplete: (count: number) => void;
+  onDrawingsSaved?: () => void;
   onClose: () => void;
+}
+
+type UploadProgress = 'idle' | 'uploading' | 'analyzing' | 'saving' | 'complete' | 'error';
+
+interface UploadResult {
+  storageKey: string;
+  filename: string;
+  mimeType: string;
+  fileSize: number;
 }
 
 interface ExtractedPiece {
@@ -91,7 +102,7 @@ const DEFAULT_EDGE_SELECTIONS: EdgeSelections = {
   edgeRight: null,
 };
 
-export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, onClose }: DrawingImportProps) {
+export default function DrawingImport({ quoteId, customerId, edgeTypes, onImportComplete, onDrawingsSaved, onClose }: DrawingImportProps) {
   const [step, setStep] = useState<Step>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -104,25 +115,82 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
   const [warnings, setWarnings] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // R2 storage states
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress>('idle');
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
+
+  // Upload file to R2 storage
+  const uploadToStorage = useCallback(async (fileToUpload: File): Promise<UploadResult> => {
+    const formData = new FormData();
+    formData.append('file', fileToUpload);
+    formData.append('customerId', customerId.toString());
+    formData.append('quoteId', quoteId);
+
+    const response = await fetch('/api/upload/drawing', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to upload file');
+    }
+
+    return response.json();
+  }, [customerId, quoteId]);
+
+  // Save drawing record to database
+  const saveDrawingRecord = useCallback(async (
+    upload: UploadResult,
+    analysisData?: Record<string, unknown>
+  ) => {
+    const response = await fetch(`/api/quotes/${quoteId}/drawings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...upload,
+        analysisData,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to save drawing record');
+    }
+
+    return response.json();
+  }, [quoteId]);
+
   // Handle file selection
   const handleFile = useCallback(async (selectedFile: File) => {
     setFile(selectedFile);
     setError(null);
+    setUploadProgress('uploading');
     setStep('analyzing');
 
     // Initialize progress steps
     setAnalysisSteps([
-      { label: 'Uploaded drawing', done: true },
+      { label: 'Uploading to storage', done: false },
       { label: 'Detecting pieces', done: false },
       { label: 'Extracting dimensions', done: false },
-      { label: 'Identifying rooms', done: false },
+      { label: 'Saving drawing', done: false },
     ]);
-    setAnalysisProgress(20);
+    setAnalysisProgress(10);
+
+    let storedUploadResult: UploadResult | null = null;
+    let analysisResult: AnalysisResult | null = null;
 
     try {
-      // Simulate progress updates
+      // Step 1: Upload to R2 storage
+      storedUploadResult = await uploadToStorage(selectedFile);
+      setUploadResult(storedUploadResult);
+      setAnalysisSteps(prev => prev.map((s, i) => i === 0 ? { ...s, done: true } : s));
+      setAnalysisProgress(25);
+      setUploadProgress('analyzing');
+
+      // Simulate progress updates for analysis
       const progressInterval = setInterval(() => {
-        setAnalysisProgress(prev => Math.min(prev + 10, 80));
+        setAnalysisProgress(prev => Math.min(prev + 10, 75));
       }, 500);
 
       setTimeout(() => {
@@ -133,7 +201,7 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
         setAnalysisSteps(prev => prev.map((s, i) => i === 2 ? { ...s, done: true } : s));
       }, 1600);
 
-      // Call the analyze-drawing API
+      // Step 2: Call the analyze-drawing API
       const formData = new FormData();
       formData.append('file', selectedFile);
 
@@ -150,16 +218,25 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
       }
 
       const data = await response.json();
-      const analysis: AnalysisResult = data.analysis;
+      analysisResult = data.analysis as AnalysisResult;
 
+      setAnalysisProgress(80);
+      setUploadProgress('saving');
+
+      // Step 3: Save drawing record with analysis data
+      await saveDrawingRecord(storedUploadResult, analysisResult as unknown as Record<string, unknown>);
+      setAnalysisSteps(prev => prev.map((s, i) => i === 3 ? { ...s, done: true } : s));
       setAnalysisProgress(100);
-      setAnalysisSteps(prev => prev.map(s => ({ ...s, done: true })));
+      setUploadProgress('complete');
+
+      // Notify parent that drawings have been saved
+      onDrawingsSaved?.();
 
       // Transform analysis results to ExtractedPiece format
       const pieces: ExtractedPiece[] = [];
       let pieceIndex = 0;
 
-      for (const room of analysis.rooms || []) {
+      for (const room of analysisResult.rooms || []) {
         for (const piece of room.pieces || []) {
           const id = `extracted-${pieceIndex++}`;
           pieces.push({
@@ -168,7 +245,7 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
             name: piece.name || `Piece ${pieceIndex}`,
             length: piece.length || 0,
             width: piece.width || 0,
-            thickness: piece.thickness || analysis.metadata?.defaultThickness || 20,
+            thickness: piece.thickness || analysisResult.metadata?.defaultThickness || 20,
             room: room.name || 'Kitchen',
             confidence: piece.confidence || 0.5,
             notes: piece.notes || null,
@@ -184,7 +261,7 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
       }
 
       setExtractedPieces(pieces);
-      setWarnings(analysis.warnings || []);
+      setWarnings(analysisResult.warnings || []);
 
       // Auto-select high confidence pieces (>= 70%)
       const highConfidenceIds = new Set(
@@ -197,10 +274,22 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
     } catch (err) {
       console.error('Analysis error:', err);
       setError(err instanceof Error ? err.message : 'Failed to analyze drawing');
+      setUploadProgress('error');
+
+      // If upload succeeded but analysis failed, still save the drawing
+      if (storedUploadResult && !analysisResult) {
+        try {
+          await saveDrawingRecord(storedUploadResult);
+          onDrawingsSaved?.();
+        } catch (saveErr) {
+          console.error('Failed to save drawing after analysis error:', saveErr);
+        }
+      }
+
       setStep('upload');
       setFile(null);
     }
-  }, []);
+  }, [uploadToStorage, saveDrawingRecord, onDrawingsSaved]);
 
   // Handle drag events
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -418,50 +507,81 @@ export default function DrawingImport({ quoteId, edgeTypes, onImportComplete, on
   );
 
   // Render analyzing step
-  const renderAnalyzingStep = () => (
-    <div className="p-6">
-      <h2 className="text-lg font-semibold mb-4">Analyzing Drawing...</h2>
+  const renderAnalyzingStep = () => {
+    const getProgressTitle = () => {
+      switch (uploadProgress) {
+        case 'uploading':
+          return 'Uploading Drawing...';
+        case 'analyzing':
+          return 'Analyzing Drawing...';
+        case 'saving':
+          return 'Saving Drawing...';
+        case 'complete':
+          return 'Processing Complete!';
+        case 'error':
+          return 'Processing Failed';
+        default:
+          return 'Processing Drawing...';
+      }
+    };
 
-      <div className="mb-6">
-        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary-600 transition-all duration-300"
-            style={{ width: `${analysisProgress}%` }}
-          />
-        </div>
-        <p className="text-right text-sm text-gray-500 mt-1">{analysisProgress}%</p>
-      </div>
+    return (
+      <div className="p-6">
+        <h2 className="text-lg font-semibold mb-4">{getProgressTitle()}</h2>
 
-      <div className="space-y-3">
-        {analysisSteps.map((stepItem, index) => (
-          <div key={index} className="flex items-center gap-3">
-            {stepItem.done ? (
-              <svg className="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            ) : (
-              <div className="h-5 w-5 rounded-full border-2 border-gray-300 border-dashed flex items-center justify-center">
-                <div className="h-2 w-2 rounded-full bg-gray-300 animate-pulse" />
-              </div>
-            )}
-            <span className={stepItem.done ? 'text-gray-900' : 'text-gray-500'}>
-              {stepItem.label}
-            </span>
+        <div className="mb-6">
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${
+                uploadProgress === 'error' ? 'bg-red-500' :
+                uploadProgress === 'complete' ? 'bg-green-500' : 'bg-primary-600'
+              }`}
+              style={{ width: `${analysisProgress}%` }}
+            />
           </div>
-        ))}
-      </div>
+          <p className="text-right text-sm text-gray-500 mt-1">{analysisProgress}%</p>
+        </div>
 
-      {file && (
-        <p className="mt-4 text-sm text-gray-500">
-          Analyzing: {file.name}
-        </p>
-      )}
-    </div>
-  );
+        <div className="space-y-3">
+          {analysisSteps.map((stepItem, index) => (
+            <div key={index} className="flex items-center gap-3">
+              {stepItem.done ? (
+                <svg className="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              ) : (
+                <div className="h-5 w-5 rounded-full border-2 border-gray-300 border-dashed flex items-center justify-center">
+                  <div className="h-2 w-2 rounded-full bg-gray-300 animate-pulse" />
+                </div>
+              )}
+              <span className={stepItem.done ? 'text-gray-900' : 'text-gray-500'}>
+                {stepItem.label}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {file && (
+          <p className="mt-4 text-sm text-gray-500">
+            Processing: {file.name}
+          </p>
+        )}
+
+        {uploadProgress === 'complete' && (
+          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+            <svg className="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="text-green-700 text-sm">Drawing saved successfully!</span>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Render review step
   const renderReviewStep = () => (
