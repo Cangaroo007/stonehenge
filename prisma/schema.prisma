@@ -196,6 +196,7 @@ model Customer {
   quotes       Quote[]
   pricingRules PricingRule[]
   users        User[]        // Customer portal users
+  drawings     Drawing[]
 
   @@map("customers")
 }
@@ -289,6 +290,7 @@ model Quote {
   optimizations   SlabOptimization[]
   views           QuoteView[]
   signature       QuoteSignature?
+  drawings        Drawing[]
 
   priceBookId     String?     @map("price_book_id")
   priceBook       PriceBook?  @relation(fields: [priceBookId], references: [id])
@@ -648,4 +650,38 @@ model SlabOptimization {
 
   @@index([quoteId])
   @@map("slab_optimizations")
+}
+
+// ============================================
+// DRAWINGS (R2 Storage References)
+// ============================================
+
+model Drawing {
+  id           String   @id @default(cuid())
+  filename     String   // Original filename
+  storageKey   String   // R2 object key (path in bucket)
+  mimeType     String   // image/jpeg, image/png, application/pdf
+  fileSize     Int      // Size in bytes
+
+  // Timestamps
+  uploadedAt   DateTime @default(now())
+
+  // Relations
+  quote        Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId      Int
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId   Int
+
+  // AI Analysis data (pieces detected, dimensions, etc.)
+  analysisData Json?
+
+  // Is this the primary/main drawing for the quote?
+  isPrimary    Boolean  @default(false)
+
+  // Optional notes/description
+  notes        String?
+
+  @@index([quoteId])
+  @@index([customerId])
+  @@map("drawings")
 }
