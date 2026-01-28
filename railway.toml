@@ -1,5 +1,10 @@
 [build]
-buildCommand = "npx prisma migrate deploy && npx prisma generate && npm run build"
+buildCommand = "npx prisma generate && npm run build"
 
 [build.cache]
 paths = ["node_modules", ".next/cache"]
+
+[deploy]
+startCommand = "npx prisma migrate deploy && npm run start"
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 10
