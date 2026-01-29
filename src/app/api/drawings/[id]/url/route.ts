@@ -54,18 +54,30 @@ export async function GET(
     }
 
     // Generate presigned URL
-    // TODO: Replace with actual R2 presigned URL when implemented
-    // For now, return a placeholder that indicates the drawing exists
+    console.log('[Drawing URL API] Generating presigned URL for drawing:', {
+      drawingId: drawing.id,
+      filename: drawing.filename,
+      storageKey: drawing.storageKey,
+      quoteId: drawing.quoteId
+    });
+
     try {
       const url = await getDownloadUrl(drawing.storageKey);
+      console.log('[Drawing URL API] ✅ Presigned URL generated successfully');
       return NextResponse.json({ url });
-    } catch {
-      // R2 not yet implemented - return a placeholder response
-      // The frontend will show an error state
+    } catch (error) {
+      // R2 error - log details and return placeholder response
+      console.error('[Drawing URL API] ❌ Failed to generate presigned URL:', {
+        error: error instanceof Error ? error.message : String(error),
+        storageKey: drawing.storageKey,
+        drawingId: drawing.id
+      });
+      
       return NextResponse.json({
         url: null,
         placeholder: true,
-        message: 'R2 storage not yet configured',
+        message: error instanceof Error ? error.message : 'R2 storage error',
+        error: 'Failed to generate presigned URL'
       });
     }
   } catch (error) {

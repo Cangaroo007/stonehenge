@@ -1080,6 +1080,11 @@ export default function QuoteForm({
             </svg>
             <span className="text-lg font-semibold text-gray-900">Drawing Analysis</span>
             <span className="text-sm text-gray-500">(Optional)</span>
+            {!customerId && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                ⚠️ Select customer first
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {analysisData && !analysisResult && (
@@ -1103,6 +1108,23 @@ export default function QuoteForm({
 
         {analysisExpanded && (
           <div className="p-6 border-t border-gray-200">
+            {/* Customer Required Warning */}
+            {!customerId && (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <svg className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="font-medium text-yellow-800">Customer Required</p>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      Please select a customer from the dropdown above before uploading a drawing. This ensures the drawing is properly saved and linked to the quote.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Error message */}
             {analysisError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-start gap-2">
@@ -1126,14 +1148,16 @@ export default function QuoteForm({
             {!analyzing && !analysisResult && (
               <div
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                  dragActive
+                  !customerId
+                    ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                    : dragActive
                     ? 'border-primary-500 bg-primary-50'
                     : 'border-gray-300 hover:border-gray-400'
                 }`}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
+                onDragEnter={customerId ? handleDrag : undefined}
+                onDragLeave={customerId ? handleDrag : undefined}
+                onDragOver={customerId ? handleDrag : undefined}
+                onDrop={customerId ? handleDrop : undefined}
               >
                 <svg
                   className="mx-auto h-12 w-12 text-gray-400"
@@ -1149,20 +1173,30 @@ export default function QuoteForm({
                   />
                 </svg>
                 <p className="mt-4 text-sm text-gray-600">
-                  Drop drawing here or{' '}
-                  <label className="text-primary-600 hover:text-primary-700 cursor-pointer font-medium">
-                    click to browse
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*,.pdf,application/pdf"
-                      onChange={handleFileSelect}
-                    />
-                  </label>
+                  {customerId ? (
+                    <>
+                      Drop drawing here or{' '}
+                      <label className="text-primary-600 hover:text-primary-700 cursor-pointer font-medium">
+                        click to browse
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*,.pdf,application/pdf"
+                          onChange={handleFileSelect}
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <span className="text-gray-400">
+                      Select a customer above to enable drawing upload
+                    </span>
+                  )}
                 </p>
-                <p className="mt-2 text-xs text-gray-500">
-                  Supports: PNG, JPG, PDF (max 10MB, images auto-compressed)
-                </p>
+                {customerId && (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Supports: PNG, JPG, PDF (max 10MB, images auto-compressed)
+                  </p>
+                )}
               </div>
             )}
 
