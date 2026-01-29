@@ -62,13 +62,33 @@ export async function POST(
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     }
 
-    // Extract pieces from quote
-    const pieces = quote.rooms.flatMap((room: { name: string; pieces: Array<{ id: number; lengthMm: number; widthMm: number; name: string }> }) =>
-      room.pieces.map((piece: { id: number; lengthMm: number; widthMm: number; name: string }) => ({
+    // Extract pieces from quote with thickness and finished edges
+    const pieces = quote.rooms.flatMap((room: { 
+      name: string; 
+      pieces: Array<{ 
+        id: number; 
+        lengthMm: number; 
+        widthMm: number; 
+        thicknessMm: number;
+        name: string;
+        edgeTop: string | null;
+        edgeBottom: string | null;
+        edgeLeft: string | null;
+        edgeRight: string | null;
+      }> 
+    }) =>
+      room.pieces.map((piece) => ({
         id: piece.id.toString(),
         width: piece.lengthMm,
         height: piece.widthMm,
         label: `${room.name}: ${piece.name || 'Piece'}`,
+        thickness: piece.thicknessMm || 20,
+        finishedEdges: {
+          top: piece.edgeTop !== null,
+          bottom: piece.edgeBottom !== null,
+          left: piece.edgeLeft !== null,
+          right: piece.edgeRight !== null,
+        },
       }))
     );
 
@@ -99,6 +119,7 @@ export async function POST(
         totalWaste: result.totalWasteArea,
         wastePercent: result.wastePercent,
         placements: result.placements as object,
+        laminationSummary: result.laminationSummary as object || null,
       },
     });
 

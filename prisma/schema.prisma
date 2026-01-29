@@ -643,6 +643,9 @@ model SlabOptimization {
 
   // Placements stored as JSON array
   placements    Json     // Array of Placement objects
+  
+  // Lamination summary (40mm+ pieces)
+  laminationSummary Json?  // LaminationSummary object (totalStrips, totalStripArea, stripsByParent)
 
   // Metadata
   createdAt     DateTime @default(now())

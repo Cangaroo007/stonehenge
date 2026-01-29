@@ -11,6 +11,13 @@ interface PieceInput {
   width: string;
   height: string;
   label: string;
+  thickness: string; // NEW: "20", "30", "40", "60"
+  finishedEdges: {   // NEW: Which edges need lamination
+    top: boolean;
+    bottom: boolean;
+    left: boolean;
+    right: boolean;
+  };
 }
 
 interface Quote {
@@ -40,7 +47,14 @@ export default function OptimizePage() {
 
   // Pieces
   const [pieces, setPieces] = useState<PieceInput[]>([
-    { id: '1', width: '2000', height: '600', label: 'Piece 1' },
+    { 
+      id: '1', 
+      width: '2000', 
+      height: '600', 
+      label: 'Piece 1',
+      thickness: '20',
+      finishedEdges: { top: false, bottom: false, left: false, right: false }
+    },
   ]);
 
   // Results
@@ -96,6 +110,8 @@ export default function OptimizePage() {
               width: String(piece.lengthMm),
               height: String(piece.widthMm),
               label: `${room.name}: ${piece.name || 'Piece'}`,
+              thickness: String((piece as any).thicknessMm || 20),
+              finishedEdges: { top: false, bottom: false, left: false, right: false },
             });
           });
         });
@@ -130,7 +146,9 @@ export default function OptimizePage() {
       id: newId,
       width: '1000',
       height: '500',
-      label: `Piece ${pieces.length + 1}`
+      label: `Piece ${pieces.length + 1}`,
+      thickness: '20',
+      finishedEdges: { top: false, bottom: false, left: false, right: false }
     }]);
   };
 
@@ -143,6 +161,16 @@ export default function OptimizePage() {
   const updatePiece = (id: string, field: keyof PieceInput, value: string) => {
     setPieces(pieces.map(p =>
       p.id === id ? { ...p, [field]: value } : p
+    ));
+  };
+  
+  // Update piece finished edge
+  const updatePieceEdge = (id: string, edge: keyof PieceInput['finishedEdges'], value: boolean) => {
+    setPieces(pieces.map(p =>
+      p.id === id ? {
+        ...p,
+        finishedEdges: { ...p.finishedEdges, [edge]: value }
+      } : p
     ));
   };
 
@@ -168,6 +196,8 @@ export default function OptimizePage() {
           width: parseInt(p.width) || 0,
           height: parseInt(p.height) || 0,
           label: p.label || `Piece ${p.id}`,
+          thickness: parseInt(p.thickness) || 20,
+          finishedEdges: p.finishedEdges,
         }))
         .filter(p => p.width > 0 && p.height > 0);
 
@@ -353,43 +383,126 @@ export default function OptimizePage() {
             </div>
 
             <div className="space-y-3">
-              {pieces.map((piece) => (
-                <div
-                  key={piece.id}
-                  className="flex gap-2 items-center p-3 bg-gray-50 rounded-lg"
-                >
-                  <input
-                    type="text"
-                    value={piece.label}
-                    onChange={(e) => updatePiece(piece.id, 'label', e.target.value)}
-                    placeholder="Label"
-                    className="flex-1 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <input
-                    type="number"
-                    value={piece.width}
-                    onChange={(e) => updatePiece(piece.id, 'width', e.target.value)}
-                    placeholder="Width"
-                    className="w-20 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <span className="text-gray-400">x</span>
-                  <input
-                    type="number"
-                    value={piece.height}
-                    onChange={(e) => updatePiece(piece.id, 'height', e.target.value)}
-                    placeholder="Height"
-                    className="w-20 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <span className="text-gray-400 text-sm">mm</span>
-                  <button
-                    onClick={() => removePiece(piece.id)}
-                    className="text-red-500 hover:text-red-700 p-1"
-                    disabled={pieces.length === 1}
-                  >
-                    x
-                  </button>
-                </div>
-              ))}
+              {pieces.map((piece, index) => {
+                const is40mmPlus = parseInt(piece.thickness) >= 40;
+                const hasFinishedEdges = is40mmPlus && (
+                  piece.finishedEdges.top || 
+                  piece.finishedEdges.bottom || 
+                  piece.finishedEdges.left || 
+                  piece.finishedEdges.right
+                );
+                
+                return (
+                  <div key={piece.id} className="p-3 bg-gray-50 rounded-lg space-y-3">
+                    {/* Main piece info */}
+                    <div className="flex gap-2 items-center">
+                      <span className="text-xs text-gray-500 w-5">{index + 1}.</span>
+                      <input
+                        type="text"
+                        value={piece.label}
+                        onChange={(e) => updatePiece(piece.id, 'label', e.target.value)}
+                        placeholder="Label"
+                        className="flex-1 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <input
+                        type="number"
+                        value={piece.width}
+                        onChange={(e) => updatePiece(piece.id, 'width', e.target.value)}
+                        placeholder="Width"
+                        className="w-20 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <span className="text-gray-400">×</span>
+                      <input
+                        type="number"
+                        value={piece.height}
+                        onChange={(e) => updatePiece(piece.id, 'height', e.target.value)}
+                        placeholder="Height"
+                        className="w-20 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <select
+                        value={piece.thickness}
+                        onChange={(e) => updatePiece(piece.id, 'thickness', e.target.value)}
+                        className="w-20 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="20">20mm</option>
+                        <option value="30">30mm</option>
+                        <option value="40">40mm</option>
+                        <option value="60">60mm</option>
+                      </select>
+                      <button
+                        onClick={() => removePiece(piece.id)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                        disabled={pieces.length === 1}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    
+                    {/* Finished edges (only for 40mm+) */}
+                    {is40mmPlus && (
+                      <div className="ml-7 pl-3 border-l-2 border-blue-200">
+                        <div className="text-xs font-medium text-gray-700 mb-2">
+                          Finished Edges (for lamination)
+                          {hasFinishedEdges && (
+                            <span className="ml-2 text-blue-600">
+                              → Will generate {
+                                [piece.finishedEdges.top, piece.finishedEdges.bottom, 
+                                 piece.finishedEdges.left, piece.finishedEdges.right]
+                                .filter(Boolean).length
+                              } strip{
+                                [piece.finishedEdges.top, piece.finishedEdges.bottom, 
+                                 piece.finishedEdges.left, piece.finishedEdges.right]
+                                .filter(Boolean).length !== 1 ? 's' : ''
+                              }
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          <label className="flex items-center gap-1 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={piece.finishedEdges.top}
+                              onChange={(e) => updatePieceEdge(piece.id, 'top', e.target.checked)}
+                              className="rounded text-blue-600"
+                            />
+                            <span>Top</span>
+                          </label>
+                          <label className="flex items-center gap-1 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={piece.finishedEdges.bottom}
+                              onChange={(e) => updatePieceEdge(piece.id, 'bottom', e.target.checked)}
+                              className="rounded text-blue-600"
+                            />
+                            <span>Bottom</span>
+                          </label>
+                          <label className="flex items-center gap-1 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={piece.finishedEdges.left}
+                              onChange={(e) => updatePieceEdge(piece.id, 'left', e.target.checked)}
+                              className="rounded text-blue-600"
+                            />
+                            <span>Left</span>
+                          </label>
+                          <label className="flex items-center gap-1 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={piece.finishedEdges.right}
+                              onChange={(e) => updatePieceEdge(piece.id, 'right', e.target.checked)}
+                              className="rounded text-blue-600"
+                            />
+                            <span>Right</span>
+                          </label>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Each finished edge generates a 40mm lamination strip
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Run button */}

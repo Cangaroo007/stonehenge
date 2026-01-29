@@ -2,7 +2,8 @@ import {
   OptimizationInput,
   OptimizationResult,
   Placement,
-  SlabResult
+  SlabResult,
+  LaminationSummary
 } from '@/types/slab-optimization';
 
 interface Rect {
@@ -17,6 +18,142 @@ interface Slab {
   height: number;
   placements: Placement[];
   freeRects: Rect[];
+}
+
+// Lamination strip constants
+const LAMINATION_STRIP_WIDTH = 40; // mm - standard strip width
+const LAMINATION_THRESHOLD = 40; // mm - pieces >= 40mm need lamination
+
+// Internal type for pieces during optimization (includes lamination data)
+type OptimizationPiece = OptimizationInput['pieces'][0] & {
+  isLaminationStrip?: boolean;
+  parentPieceId?: string;
+  stripPosition?: 'top' | 'bottom' | 'left' | 'right';
+};
+
+/**
+ * Generates lamination strips for a 40mm+ piece
+ * Strips are needed under each finished edge to create the thickness appearance
+ */
+function generateLaminationStrips(piece: OptimizationPiece): OptimizationPiece[] {
+  // Only generate strips for 40mm+ pieces
+  if (!piece.thickness || piece.thickness < LAMINATION_THRESHOLD) {
+    return [];
+  }
+  
+  // If no finished edges specified, assume none (no strips needed)
+  if (!piece.finishedEdges) {
+    return [];
+  }
+  
+  const strips: OptimizationPiece[] = [];
+  const edges = piece.finishedEdges;
+  
+  // Top edge strip (runs along the width)
+  if (edges.top) {
+    strips.push({
+      id: `${piece.id}-lam-top`,
+      width: piece.width,
+      height: LAMINATION_STRIP_WIDTH,
+      thickness: 20, // Strips are cut from 20mm slab
+      label: `${piece.label} (Lam-Top)`,
+      isLaminationStrip: true,
+      parentPieceId: piece.id,
+      stripPosition: 'top'
+    });
+  }
+  
+  // Bottom edge strip (runs along the width)
+  if (edges.bottom) {
+    strips.push({
+      id: `${piece.id}-lam-bottom`,
+      width: piece.width,
+      height: LAMINATION_STRIP_WIDTH,
+      thickness: 20,
+      label: `${piece.label} (Lam-Bottom)`,
+      isLaminationStrip: true,
+      parentPieceId: piece.id,
+      stripPosition: 'bottom'
+    });
+  }
+  
+  // Left edge strip (runs along the height)
+  if (edges.left) {
+    strips.push({
+      id: `${piece.id}-lam-left`,
+      width: LAMINATION_STRIP_WIDTH,
+      height: piece.height,
+      thickness: 20,
+      label: `${piece.label} (Lam-Left)`,
+      isLaminationStrip: true,
+      parentPieceId: piece.id,
+      stripPosition: 'left'
+    });
+  }
+  
+  // Right edge strip (runs along the height)
+  if (edges.right) {
+    strips.push({
+      id: `${piece.id}-lam-right`,
+      width: LAMINATION_STRIP_WIDTH,
+      height: piece.height,
+      thickness: 20,
+      label: `${piece.label} (Lam-Right)`,
+      isLaminationStrip: true,
+      parentPieceId: piece.id,
+      stripPosition: 'right'
+    });
+  }
+  
+  return strips;
+}
+
+/**
+ * Generates lamination summary for reporting
+ */
+function generateLaminationSummary(
+  originalPieces: OptimizationPiece[],
+  allPieces: OptimizationPiece[]
+): LaminationSummary | undefined {
+  const strips = allPieces.filter((p): p is OptimizationPiece & { isLaminationStrip: true } => 
+    p.isLaminationStrip === true
+  );
+  
+  if (strips.length === 0) {
+    return undefined;
+  }
+  
+  const stripsByParent: LaminationSummary['stripsByParent'] = [];
+  
+  // Group strips by parent piece
+  const parentIds = Array.from(new Set(strips.map(s => s.parentPieceId).filter(Boolean)));
+  
+  for (const parentId of parentIds) {
+    const parent = originalPieces.find(p => p.id === parentId);
+    const parentStrips = strips.filter(s => s.parentPieceId === parentId);
+    
+    stripsByParent.push({
+      parentPieceId: parentId || '',
+      parentLabel: parent?.label || 'Unknown',
+      strips: parentStrips.map(s => ({
+        position: s.stripPosition || 'unknown',
+        lengthMm: s.stripPosition === 'left' || s.stripPosition === 'right' 
+          ? s.height 
+          : s.width,
+        widthMm: LAMINATION_STRIP_WIDTH
+      }))
+    });
+  }
+  
+  const totalStripArea = strips.reduce((sum, s) => {
+    return sum + (s.width * s.height) / 1_000_000; // Convert to m²
+  }, 0);
+  
+  return {
+    totalStrips: strips.length,
+    totalStripArea,
+    stripsByParent
+  };
 }
 
 /**
@@ -38,11 +175,41 @@ export function optimizeSlabs(input: OptimizationInput): OptimizationResult {
     };
   }
 
+  // Store original pieces for reference (before adding strips)
+  const originalPieces: OptimizationPiece[] = Array.from(pieces);
+  
+  // Generate lamination strips for all 40mm+ pieces
+  const allPieces: OptimizationPiece[] = [];
+  
+  for (const piece of pieces) {
+    // Add the main piece
+    allPieces.push(piece as OptimizationPiece);
+    
+    // Generate and add lamination strips if needed
+    const strips = generateLaminationStrips(piece as OptimizationPiece);
+    allPieces.push(...strips);
+  }
+  
+  // Log for debugging (visible in server logs)
+  if (allPieces.length > pieces.length) {
+    console.log(`[Optimizer] Input: ${pieces.length} pieces + ${allPieces.length - pieces.length} lamination strips = ${allPieces.length} total`);
+  }
+
   // Sort pieces by area (largest first) for better packing
   // IMPORTANT: Use Array.from() to avoid Railway build issues
-  const sortedPieces = Array.from(pieces).sort((a, b) =>
-    (b.width * b.height) - (a.width * a.height)
-  );
+  // Keep main pieces and their strips somewhat together for better organization
+  const sortedPieces = Array.from(allPieces).sort((a, b) => {
+    // Primary sort: area descending
+    const areaA = a.width * a.height;
+    const areaB = b.width * b.height;
+    if (areaA !== areaB) return areaB - areaA;
+    
+    // Secondary sort: main pieces before their strips
+    if (a.isLaminationStrip && !b.isLaminationStrip) return 1;
+    if (!a.isLaminationStrip && b.isLaminationStrip) return -1;
+    
+    return 0;
+  });
 
   const slabs: Slab[] = [];
   const placements: Placement[] = [];
@@ -130,6 +297,9 @@ export function optimizeSlabs(input: OptimizationInput): OptimizationResult {
   const totalUsedArea = placements.reduce((sum, p) => sum + (p.width * p.height), 0);
   const totalWasteArea = totalSlabArea - totalUsedArea;
 
+  // Generate lamination summary
+  const laminationSummary = generateLaminationSummary(originalPieces, allPieces);
+
   return {
     placements,
     slabs: slabResults,
@@ -138,6 +308,7 @@ export function optimizeSlabs(input: OptimizationInput): OptimizationResult {
     totalWasteArea,
     wastePercent: totalSlabArea > 0 ? (totalWasteArea / totalSlabArea) * 100 : 0,
     unplacedPieces,
+    laminationSummary,
   };
 }
 
@@ -180,7 +351,7 @@ function findPosition(slab: Slab, width: number, height: number): { x: number; y
  */
 function placePiece(
   slab: Slab,
-  piece: OptimizationInput['pieces'][0],
+  piece: OptimizationPiece,
   position: { x: number; y: number },
   width: number,
   height: number,
@@ -197,6 +368,10 @@ function placePiece(
     height: rotated ? piece.width : piece.height,
     rotated,
     label: piece.label,
+    // Include lamination data if this is a strip
+    isLaminationStrip: piece.isLaminationStrip,
+    parentPieceId: piece.parentPieceId,
+    stripPosition: piece.stripPosition,
   };
 
   slab.placements.push(placement);

@@ -14,7 +14,7 @@ interface SlabCanvasProps {
   maxWidth?: number;
 }
 
-// Color palette for pieces
+// Color palette for main pieces
 const PIECE_COLORS = [
   '#3B82F6', // Blue
   '#10B981', // Green
@@ -28,7 +28,14 @@ const PIECE_COLORS = [
   '#6366F1', // Indigo
 ];
 
-function getColorForPiece(index: number): string {
+// Lamination strip colors
+const LAMINATION_COLOR = '#D1D5DB'; // gray-300
+const LAMINATION_PATTERN_COLOR = '#9CA3AF'; // gray-400
+
+function getColorForPiece(index: number, isLaminationStrip?: boolean): string {
+  if (isLaminationStrip) {
+    return LAMINATION_COLOR;
+  }
   return PIECE_COLORS[index % PIECE_COLORS.length];
 }
 
@@ -67,8 +74,9 @@ export function SlabCanvas({
           strokeWidth={2}
         />
 
-        {/* Grid lines (optional visual aid) */}
+        {/* Grid lines and patterns */}
         <defs>
+          {/* Grid pattern */}
           <pattern
             id="grid"
             width={100 * scale}
@@ -82,6 +90,25 @@ export function SlabCanvas({
               strokeWidth={0.5}
             />
           </pattern>
+          
+          {/* Diagonal stripe pattern for lamination strips */}
+          <pattern
+            id="laminationPattern"
+            width="8"
+            height="8"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <rect width="8" height="8" fill={LAMINATION_COLOR} />
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="8"
+              stroke={LAMINATION_PATTERN_COLOR}
+              strokeWidth="1"
+            />
+          </pattern>
         </defs>
         <rect width={canvasWidth} height={canvasHeight} fill="url(#grid)" />
 
@@ -92,6 +119,7 @@ export function SlabCanvas({
           const width = placement.width * scale;
           const height = placement.height * scale;
           const isHighlighted = highlightPieceId === placement.pieceId;
+          const isLaminationStrip = placement.isLaminationStrip === true;
 
           return (
             <g key={`${placement.pieceId}-${index}`}>
@@ -101,10 +129,10 @@ export function SlabCanvas({
                 y={y}
                 width={width}
                 height={height}
-                fill={getColorForPiece(index)}
-                stroke={isHighlighted ? '#000' : '#333'}
+                fill={isLaminationStrip ? 'url(#laminationPattern)' : getColorForPiece(index)}
+                stroke={isHighlighted ? '#000' : isLaminationStrip ? '#9CA3AF' : '#333'}
                 strokeWidth={isHighlighted ? 3 : 1}
-                opacity={0.85}
+                opacity={isLaminationStrip ? 0.7 : 0.85}
                 className="transition-opacity hover:opacity-100"
               />
 
@@ -190,6 +218,36 @@ export function SlabCanvas({
           </>
         )}
       </svg>
+      
+      {/* Legend */}
+      <div className="flex gap-4 mt-3 text-xs text-gray-600 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <div className="w-4 h-4 bg-blue-500 border border-gray-700 rounded-sm"></div>
+          <span>Main Pieces</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <svg width="16" height="16" className="border border-gray-400 rounded-sm">
+            <defs>
+              <pattern
+                id="legendPattern"
+                width="4"
+                height="4"
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(45)"
+              >
+                <rect width="4" height="4" fill="#D1D5DB" />
+                <line x1="0" y1="0" x2="0" y2="4" stroke="#9CA3AF" strokeWidth="0.5" />
+              </pattern>
+            </defs>
+            <rect width="16" height="16" fill="url(#legendPattern)" />
+          </svg>
+          <span>Lamination Strips (40mm+)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+          <span>Rotated 90°</span>
+        </div>
+      </div>
     </div>
   );
 }

@@ -3,6 +3,14 @@
  * Used by the bin-packing algorithm and API endpoints
  */
 
+// NEW: Which edges are finished (polished) - needed for 40mm+ lamination
+export interface FinishedEdges {
+  top: boolean;
+  bottom: boolean;
+  left: boolean;
+  right: boolean;
+}
+
 export interface Placement {
   pieceId: string;
   slabIndex: number;
@@ -12,6 +20,10 @@ export interface Placement {
   height: number;
   rotated: boolean;
   label: string;
+  // NEW: Lamination tracking
+  isLaminationStrip?: boolean;
+  parentPieceId?: string;
+  stripPosition?: 'top' | 'bottom' | 'left' | 'right';
 }
 
 export interface SlabResult {
@@ -24,6 +36,21 @@ export interface SlabResult {
   wastePercent: number;
 }
 
+// NEW: Lamination summary for reporting
+export interface LaminationSummary {
+  totalStrips: number;
+  totalStripArea: number; // m²
+  stripsByParent: Array<{
+    parentPieceId: string;
+    parentLabel: string;
+    strips: Array<{
+      position: string;
+      lengthMm: number;
+      widthMm: number;
+    }>;
+  }>;
+}
+
 export interface OptimizationResult {
   placements: Placement[];
   slabs: SlabResult[];
@@ -32,6 +59,8 @@ export interface OptimizationResult {
   totalWasteArea: number;
   wastePercent: number;
   unplacedPieces: string[];
+  // NEW: Lamination summary
+  laminationSummary?: LaminationSummary;
 }
 
 export interface OptimizationInput {
@@ -41,6 +70,10 @@ export interface OptimizationInput {
     height: number;
     label: string;
     canRotate?: boolean;
+    // NEW: Thickness tracking (20mm, 40mm, 60mm, etc.)
+    thickness?: number;
+    // NEW: Which edges need lamination strips
+    finishedEdges?: FinishedEdges;
   }>;
   slabWidth: number;
   slabHeight: number;
