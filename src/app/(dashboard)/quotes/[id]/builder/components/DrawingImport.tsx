@@ -121,29 +121,58 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
 
   // Upload file to R2 storage
   const uploadToStorage = useCallback(async (fileToUpload: File): Promise<UploadResult> => {
-    console.log('>>> [UPLOAD-1] uploadToStorage STARTED', { fileName: fileToUpload.name, fileSize: fileToUpload.size, fileType: fileToUpload.type });
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('>>> [UPLOAD-ENTRY] uploadToStorage FUNCTION CALLED');
+    console.log('>>> File to upload:', { 
+      fileName: fileToUpload.name, 
+      fileSize: fileToUpload.size, 
+      fileType: fileToUpload.type,
+      customerId: customerId.toString(),
+      quoteId: quoteId
+    });
 
+    console.log('>>> [UPLOAD-1] Creating FormData...');
     const formData = new FormData();
     formData.append('file', fileToUpload);
     formData.append('customerId', customerId.toString());
     formData.append('quoteId', quoteId);
-    console.log('>>> [UPLOAD-2] FormData created, calling /api/upload/drawing', { customerId, quoteId });
+    console.log('>>> [UPLOAD-2] ✅ FormData created successfully');
+    
+    console.log('>>> [UPLOAD-3] About to call fetch(/api/upload/drawing)...');
+    console.log('>>> [UPLOAD-3] THIS IS THE CRITICAL MOMENT - WATCH FOR THIS IN NETWORK TAB!');
+    
+    try {
+      const response = await fetch('/api/upload/drawing', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      console.log('>>> [UPLOAD-4] ✅ fetch() returned', { 
+        status: response.status, 
+        ok: response.ok, 
+        statusText: response.statusText,
+        url: response.url
+      });
 
-    const response = await fetch('/api/upload/drawing', {
-      method: 'POST',
-      body: formData,
-    });
-    console.log('>>> [UPLOAD-3] Response received', { status: response.status, ok: response.ok, statusText: response.statusText });
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('>>> [UPLOAD-ERROR] Server returned error:', errorData);
+        throw new Error(errorData.error || 'Failed to upload file');
+      }
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('>>> [UPLOAD-ERROR] Upload failed:', errorData);
-      throw new Error(errorData.error || 'Failed to upload file');
+      const result = await response.json();
+      console.log('>>> [UPLOAD-5] ✅✅ Upload COMPLETELY SUCCESSFUL:', result);
+      console.log('═══════════════════════════════════════════════════════');
+      return result;
+    } catch (fetchError) {
+      console.error('>>> [UPLOAD-FATAL] fetch() threw an exception:', fetchError);
+      console.error('>>> Error details:', {
+        name: (fetchError as Error).name,
+        message: (fetchError as Error).message,
+        stack: (fetchError as Error).stack
+      });
+      throw fetchError;
     }
-
-    const result = await response.json();
-    console.log('>>> [UPLOAD-4] Upload SUCCESS', result);
-    return result;
   }, [customerId, quoteId]);
 
   // Save drawing record to database
@@ -170,12 +199,21 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
 
   // Handle file selection
   const handleFile = useCallback(async (selectedFile: File) => {
-    console.log('>>> [1] handleFile STARTED', { fileName: selectedFile.name, fileSize: selectedFile.size, fileType: selectedFile.type });
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('>>> [DEBUG-START] handleFile CALLED');
+    console.log('>>> File Details:', { 
+      fileName: selectedFile.name, 
+      fileSize: selectedFile.size, 
+      fileType: selectedFile.type,
+      quoteId,
+      customerId
+    });
+    console.log('═══════════════════════════════════════════════════════');
+    
     setFile(selectedFile);
     setError(null);
     setUploadProgress('uploading');
     setStep('analyzing');
-    console.log('>>> [2] State set: uploading/analyzing');
 
     // Initialize progress steps
     setAnalysisSteps([
@@ -191,10 +229,20 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
 
     try {
       // Step 1: Upload to R2 storage
-      console.log('>>> [3] Checking required data', { quoteId, customerId });
-      console.log('>>> [4] About to call uploadToStorage');
+      console.log('>>> [STEP-1] Starting R2 upload process');
+      console.log('>>> [STEP-1] Calling uploadToStorage with file:', selectedFile.name);
+      
+      if (!selectedFile) {
+        throw new Error('No file selected');
+      }
+      
+      if (!quoteId || !customerId) {
+        throw new Error(`Missing required IDs - quoteId: ${quoteId}, customerId: ${customerId}`);
+      }
+      
+      console.log('>>> [STEP-1] All validations passed, calling uploadToStorage NOW...');
       storedUploadResult = await uploadToStorage(selectedFile);
-      console.log('>>> [5] uploadToStorage RETURNED', storedUploadResult);
+      console.log('>>> [STEP-1] ✅ uploadToStorage COMPLETED successfully:', storedUploadResult);
       setUploadResult(storedUploadResult);
       setAnalysisSteps(prev => prev.map((s, i) => i === 0 ? { ...s, done: true } : s));
       setAnalysisProgress(25);
@@ -325,21 +373,36 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
+    
+    console.log('>>> [DROP-EVENT] File dropped');
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
+      console.log('>>> [DROP-EVENT] File detected:', droppedFile.name, droppedFile.type);
+      
       if (isValidFileType(droppedFile)) {
+        console.log('>>> [DROP-EVENT] File type valid, calling handleFile');
         handleFile(droppedFile);
       } else {
+        console.error('>>> [DROP-EVENT] Invalid file type:', droppedFile.type);
         setError('Please upload a PDF, PNG, or JPG file.');
       }
+    } else {
+      console.error('>>> [DROP-EVENT] No file found in drop event');
     }
   }, [handleFile]);
 
   // Handle file input change
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('>>> [FILE-INPUT] File input changed');
+    
     if (e.target.files && e.target.files[0]) {
-      handleFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      console.log('>>> [FILE-INPUT] File selected:', selectedFile.name, selectedFile.type);
+      console.log('>>> [FILE-INPUT] Calling handleFile...');
+      handleFile(selectedFile);
+    } else {
+      console.error('>>> [FILE-INPUT] No file selected');
     }
   }, [handleFile]);
 
