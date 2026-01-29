@@ -100,6 +100,13 @@ export async function POST(
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     }
 
+    if (!quote.customerId) {
+      return NextResponse.json(
+        { error: 'Quote must have a customer before adding drawings' },
+        { status: 400 }
+      );
+    }
+
     // Check if user can edit this quote
     const canEdit = await hasPermission(
       currentUser.id,
