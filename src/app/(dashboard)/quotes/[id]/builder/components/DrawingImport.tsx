@@ -121,22 +121,29 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
 
   // Upload file to R2 storage
   const uploadToStorage = useCallback(async (fileToUpload: File): Promise<UploadResult> => {
+    console.log('>>> [UPLOAD-1] uploadToStorage STARTED', { fileName: fileToUpload.name, fileSize: fileToUpload.size, fileType: fileToUpload.type });
+
     const formData = new FormData();
     formData.append('file', fileToUpload);
     formData.append('customerId', customerId.toString());
     formData.append('quoteId', quoteId);
+    console.log('>>> [UPLOAD-2] FormData created, calling /api/upload/drawing', { customerId, quoteId });
 
     const response = await fetch('/api/upload/drawing', {
       method: 'POST',
       body: formData,
     });
+    console.log('>>> [UPLOAD-3] Response received', { status: response.status, ok: response.ok, statusText: response.statusText });
 
     if (!response.ok) {
       const errorData = await response.json();
+      console.error('>>> [UPLOAD-ERROR] Upload failed:', errorData);
       throw new Error(errorData.error || 'Failed to upload file');
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log('>>> [UPLOAD-4] Upload SUCCESS', result);
+    return result;
   }, [customerId, quoteId]);
 
   // Save drawing record to database
@@ -163,10 +170,12 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
 
   // Handle file selection
   const handleFile = useCallback(async (selectedFile: File) => {
+    console.log('>>> [1] handleFile STARTED', { fileName: selectedFile.name, fileSize: selectedFile.size, fileType: selectedFile.type });
     setFile(selectedFile);
     setError(null);
     setUploadProgress('uploading');
     setStep('analyzing');
+    console.log('>>> [2] State set: uploading/analyzing');
 
     // Initialize progress steps
     setAnalysisSteps([
@@ -182,9 +191,10 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
 
     try {
       // Step 1: Upload to R2 storage
-      console.log('[DrawingImport] Step 1: Uploading to R2...', { filename: selectedFile.name, size: selectedFile.size, type: selectedFile.type });
+      console.log('>>> [3] Checking required data', { quoteId, customerId });
+      console.log('>>> [4] About to call uploadToStorage');
       storedUploadResult = await uploadToStorage(selectedFile);
-      console.log('[DrawingImport] Upload complete:', storedUploadResult);
+      console.log('>>> [5] uploadToStorage RETURNED', storedUploadResult);
       setUploadResult(storedUploadResult);
       setAnalysisSteps(prev => prev.map((s, i) => i === 0 ? { ...s, done: true } : s));
       setAnalysisProgress(25);
@@ -204,7 +214,7 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
       }, 1600);
 
       // Step 2: Call the analyze-drawing API
-      console.log('[DrawingImport] Step 2: Analyzing with AI...');
+      console.log('>>> [6] About to call analyze-drawing API');
       const formData = new FormData();
       formData.append('file', selectedFile);
 
@@ -212,25 +222,27 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
         method: 'POST',
         body: formData,
       });
+      console.log('>>> [7] analyze-drawing response', { status: response.status, ok: response.ok });
 
       clearInterval(progressInterval);
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('>>> [ANALYZE-ERROR] Analysis failed:', errorData);
         throw new Error(errorData.details || errorData.error || 'Analysis failed');
       }
 
       const data = await response.json();
       analysisResult = data.analysis as AnalysisResult;
-      console.log('[DrawingImport] Analysis complete:', { rooms: analysisResult?.rooms?.length, warnings: analysisResult?.warnings?.length });
+      console.log('>>> [8] Analysis complete', { rooms: analysisResult?.rooms?.length, warnings: analysisResult?.warnings?.length });
 
       setAnalysisProgress(80);
       setUploadProgress('saving');
 
       // Step 3: Save drawing record with analysis data
-      console.log('[DrawingImport] Step 3: Saving drawing record...');
+      console.log('>>> [9] About to save drawing record');
       await saveDrawingRecord(storedUploadResult, analysisResult as unknown as Record<string, unknown>);
-      console.log('[DrawingImport] Drawing saved successfully!');
+      console.log('>>> [10] Drawing saved successfully!');
       setAnalysisSteps(prev => prev.map((s, i) => i === 3 ? { ...s, done: true } : s));
       setAnalysisProgress(100);
       setUploadProgress('complete');
@@ -278,7 +290,7 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
       setStep('review');
 
     } catch (err) {
-      console.error('Analysis error:', err);
+      console.error('>>> [ERROR] handleFile CAUGHT error:', err);
       setError(err instanceof Error ? err.message : 'Failed to analyze drawing');
       setUploadProgress('error');
 
@@ -288,7 +300,7 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
           await saveDrawingRecord(storedUploadResult);
           onDrawingsSaved?.();
         } catch (saveErr) {
-          console.error('Failed to save drawing after analysis error:', saveErr);
+          console.error('>>> [ERROR] Failed to save drawing after analysis error:', saveErr);
         }
       }
 
