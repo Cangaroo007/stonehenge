@@ -135,7 +135,7 @@ export async function POST(
       mimeType,
       fileSize: fileSize || 0,
       quoteId,
-      customerId: quote.customerId,
+      customerId: quote.customerId ?? 0,
       analysisData,
       isPrimary,
     });
