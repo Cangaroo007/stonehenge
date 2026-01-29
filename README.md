@@ -2,6 +2,8 @@
 
 Quote generation system for stone countertop fabrication.
 
+<!-- Force redeploy to pick up R2 environment variables -->
+
 ## Prerequisites
 
 - Node.js 18+ (https://nodejs.org)
