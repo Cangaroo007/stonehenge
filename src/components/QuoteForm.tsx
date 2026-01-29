@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import imageCompression from 'browser-image-compression';
 import { formatCurrency, calculateArea } from '@/lib/utils';
 import EdgeSelector from '@/app/(dashboard)/quotes/[id]/builder/components/EdgeSelector';
 
@@ -529,6 +530,48 @@ export default function QuoteForm({
     }
   }, []);
 
+  // Compress image if needed (same as DrawingImport)
+  const compressImageIfNeeded = useCallback(async (file: File): Promise<File> => {
+    if (!file.type.startsWith('image/')) {
+      console.log('[QuoteForm Compression] Skipping compression for non-image file:', file.type);
+      return file;
+    }
+
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB < 3) {
+      console.log('[QuoteForm Compression] File is already small enough:', fileSizeMB.toFixed(2), 'MB');
+      return file;
+    }
+
+    console.log('[QuoteForm Compression] Compressing image...', {
+      originalSize: fileSizeMB.toFixed(2) + 'MB',
+      fileName: file.name
+    });
+
+    try {
+      const options = {
+        maxSizeMB: 2,
+        maxWidthOrHeight: 3000,
+        useWebWorker: true,
+        fileType: file.type,
+      };
+
+      const compressedFile = await imageCompression(file, options);
+      const compressedSizeMB = compressedFile.size / (1024 * 1024);
+      
+      console.log('[QuoteForm Compression] Compression complete:', {
+        originalSize: fileSizeMB.toFixed(2) + 'MB',
+        compressedSize: compressedSizeMB.toFixed(2) + 'MB',
+        reduction: ((1 - compressedFile.size / file.size) * 100).toFixed(0) + '%'
+      });
+
+      return compressedFile;
+    } catch (error) {
+      console.error('[QuoteForm Compression] Failed to compress, using original:', error);
+      return file;
+    }
+  }, []);
+
   const processFile = useCallback(async (file: File) => {
     const isImage = file.type.startsWith('image/');
     const isPdf = file.type === 'application/pdf';
@@ -539,26 +582,30 @@ export default function QuoteForm({
     }
 
     setIsPdfFile(isPdf);
-
-    if (isImage) {
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-    } else {
-      setPreviewUrl(null);
-    }
-
     setAnalysisError(null);
     setAnalyzing(true);
     setAnalysisResult(null);
     setExtractedPieces([]);
 
-    // Store the file for R2 upload after quote creation
-    setUploadFile(file);
-    console.log('[QuoteForm] Storing file for later upload:', file.name);
-
     try {
+      // Compress image if needed
+      console.log('[QuoteForm] Processing file:', file.name, file.size);
+      const fileToUse = await compressImageIfNeeded(file);
+      
+      // Store the compressed file for R2 upload after quote creation
+      setUploadFile(fileToUse);
+      console.log('[QuoteForm] Storing file for later upload:', fileToUse.name);
+
+      // Create preview from the compressed file
+      if (isImage) {
+        const url = URL.createObjectURL(fileToUse);
+        setPreviewUrl(url);
+      } else {
+        setPreviewUrl(null);
+      }
+
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', fileToUse);
 
       const response = await fetch('/api/analyze-drawing', {
         method: 'POST',
@@ -623,7 +670,7 @@ export default function QuoteForm({
     } finally {
       setAnalyzing(false);
     }
-  }, []);
+  }, [compressImageIfNeeded]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -1080,7 +1127,7 @@ export default function QuoteForm({
                   </label>
                 </p>
                 <p className="mt-2 text-xs text-gray-500">
-                  Supports: PNG, JPG, PDF
+                  Supports: PNG, JPG, PDF (max 10MB, images auto-compressed)
                 </p>
               </div>
             )}
@@ -1156,6 +1203,50 @@ export default function QuoteForm({
                     </button>
                   </div>
                 </div>
+
+                {/* Drawing Preview */}
+                {previewUrl && (
+                  <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex-shrink-0">
+                      <img
+                        src={previewUrl}
+                        alt="Drawing preview"
+                        className="w-20 h-20 object-cover rounded border border-blue-300"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-blue-900">Drawing Uploaded</p>
+                      <p className="text-xs text-blue-700">
+                        {uploadFile?.name || 'Drawing file'} 
+                        {uploadFile && ` (${(uploadFile.size / (1024 * 1024)).toFixed(2)} MB)`}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        ✓ Will be saved to cloud storage when quote is created
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {isPdfFile && !previewUrl && (
+                  <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex-shrink-0">
+                      <div className="w-20 h-20 bg-red-100 border border-red-300 rounded flex items-center justify-center">
+                        <svg className="w-10 h-10 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4z"/>
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-blue-900">PDF Drawing Uploaded</p>
+                      <p className="text-xs text-blue-700">
+                        {uploadFile?.name || 'Drawing file'}
+                        {uploadFile && ` (${(uploadFile.size / (1024 * 1024)).toFixed(2)} MB)`}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        ✓ Will be saved to cloud storage when quote is created
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Metadata row */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">

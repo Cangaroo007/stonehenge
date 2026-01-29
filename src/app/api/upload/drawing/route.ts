@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { uploadToR2 } from '@/lib/storage/r2';
 import { v4 as uuidv4 } from 'uuid';
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
   'application/pdf',
   'image/png',
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 5MB' },
+        { error: 'File too large. Maximum size is 10MB' },
         { status: 400 }
       );
     }

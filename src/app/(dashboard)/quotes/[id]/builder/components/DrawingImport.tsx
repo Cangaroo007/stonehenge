@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import imageCompression from 'browser-image-compression';
 import EdgeSelector from './EdgeSelector';
 
 interface EdgeType {
@@ -119,6 +120,50 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>('idle');
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
 
+  // Compress image if needed
+  const compressImageIfNeeded = useCallback(async (file: File): Promise<File> => {
+    // Only compress images, skip PDFs
+    if (!file.type.startsWith('image/')) {
+      console.log('[Compression] Skipping compression for non-image file:', file.type);
+      return file;
+    }
+
+    // If file is already small enough (< 3MB), no need to compress
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB < 3) {
+      console.log('[Compression] File is already small enough:', fileSizeMB.toFixed(2), 'MB');
+      return file;
+    }
+
+    console.log('[Compression] Compressing image...', {
+      originalSize: fileSizeMB.toFixed(2) + 'MB',
+      fileName: file.name
+    });
+
+    try {
+      const options = {
+        maxSizeMB: 2, // Target max size
+        maxWidthOrHeight: 3000, // Max dimension (good for technical drawings)
+        useWebWorker: true,
+        fileType: file.type,
+      };
+
+      const compressedFile = await imageCompression(file, options);
+      const compressedSizeMB = compressedFile.size / (1024 * 1024);
+      
+      console.log('[Compression] Compression complete:', {
+        originalSize: fileSizeMB.toFixed(2) + 'MB',
+        compressedSize: compressedSizeMB.toFixed(2) + 'MB',
+        reduction: ((1 - compressedFile.size / file.size) * 100).toFixed(0) + '%'
+      });
+
+      return compressedFile;
+    } catch (error) {
+      console.error('[Compression] Failed to compress, using original:', error);
+      return file; // Fall back to original if compression fails
+    }
+  }, []);
+
   // Upload file to R2 storage
   const uploadToStorage = useCallback(async (fileToUpload: File): Promise<UploadResult> => {
     console.log('═══════════════════════════════════════════════════════');
@@ -217,22 +262,29 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
 
     // Initialize progress steps
     setAnalysisSteps([
+      { label: 'Optimizing image', done: false },
       { label: 'Uploading to storage', done: false },
       { label: 'Detecting pieces', done: false },
       { label: 'Extracting dimensions', done: false },
       { label: 'Saving drawing', done: false },
     ]);
-    setAnalysisProgress(10);
+    setAnalysisProgress(5);
 
     let storedUploadResult: UploadResult | null = null;
     let analysisResult: AnalysisResult | null = null;
 
     try {
+      // Step 0: Compress image if needed
+      console.log('>>> [STEP-0] Checking if compression needed...');
+      const fileToUpload = await compressImageIfNeeded(selectedFile);
+      setAnalysisSteps(prev => prev.map((s, i) => i === 0 ? { ...s, done: true } : s));
+      setAnalysisProgress(10);
+      
       // Step 1: Upload to R2 storage
       console.log('>>> [STEP-1] Starting R2 upload process');
-      console.log('>>> [STEP-1] Calling uploadToStorage with file:', selectedFile.name);
+      console.log('>>> [STEP-1] Calling uploadToStorage with file:', fileToUpload.name);
       
-      if (!selectedFile) {
+      if (!fileToUpload) {
         throw new Error('No file selected');
       }
       
@@ -241,11 +293,11 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
       }
       
       console.log('>>> [STEP-1] All validations passed, calling uploadToStorage NOW...');
-      storedUploadResult = await uploadToStorage(selectedFile);
+      storedUploadResult = await uploadToStorage(fileToUpload);
       console.log('>>> [STEP-1] ✅ uploadToStorage COMPLETED successfully:', storedUploadResult);
       setUploadResult(storedUploadResult);
-      setAnalysisSteps(prev => prev.map((s, i) => i === 0 ? { ...s, done: true } : s));
-      setAnalysisProgress(25);
+      setAnalysisSteps(prev => prev.map((s, i) => i === 1 ? { ...s, done: true } : s));
+      setAnalysisProgress(30);
       setUploadProgress('analyzing');
 
       // Simulate progress updates for analysis
@@ -254,17 +306,17 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
       }, 500);
 
       setTimeout(() => {
-        setAnalysisSteps(prev => prev.map((s, i) => i === 1 ? { ...s, done: true } : s));
+        setAnalysisSteps(prev => prev.map((s, i) => i === 2 ? { ...s, done: true } : s));
       }, 800);
 
       setTimeout(() => {
-        setAnalysisSteps(prev => prev.map((s, i) => i === 2 ? { ...s, done: true } : s));
+        setAnalysisSteps(prev => prev.map((s, i) => i === 3 ? { ...s, done: true } : s));
       }, 1600);
 
-      // Step 2: Call the analyze-drawing API
+      // Step 2: Call the analyze-drawing API (use compressed file for analysis too)
       console.log('>>> [6] About to call analyze-drawing API');
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      formData.append('file', fileToUpload);
 
       const response = await fetch('/api/analyze-drawing', {
         method: 'POST',
@@ -291,7 +343,7 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
       console.log('>>> [9] About to save drawing record');
       await saveDrawingRecord(storedUploadResult, analysisResult as unknown as Record<string, unknown>);
       console.log('>>> [10] Drawing saved successfully!');
-      setAnalysisSteps(prev => prev.map((s, i) => i === 3 ? { ...s, done: true } : s));
+      setAnalysisSteps(prev => prev.map((s, i) => i === 4 ? { ...s, done: true } : s));
       setAnalysisProgress(100);
       setUploadProgress('complete');
 
@@ -355,7 +407,7 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
       setStep('upload');
       setFile(null);
     }
-  }, [uploadToStorage, saveDrawingRecord, onDrawingsSaved]);
+  }, [uploadToStorage, saveDrawingRecord, onDrawingsSaved, compressImageIfNeeded, quoteId, customerId]);
 
   // Handle drag events
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -572,7 +624,7 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
         <p className="text-gray-600 mb-2">
           Drop drawing here or <span className="text-primary-600 font-medium">click to upload</span>
         </p>
-        <p className="text-sm text-gray-500">PDF, PNG, JPG (max 5MB)</p>
+        <p className="text-sm text-gray-500">PDF, PNG, JPG (max 10MB, images auto-compressed)</p>
       </div>
 
       <p className="mt-4 text-sm text-gray-500">
