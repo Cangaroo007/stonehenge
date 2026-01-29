@@ -6,6 +6,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { UserRole, CustomerUserRole } from '@prisma/client';
 import { CUSTOMER_USER_ROLE_LABELS } from '@/lib/permissions';
+import { CustomerDrawings } from './components/CustomerDrawings';
 
 interface Customer {
   id: number;
@@ -46,7 +47,7 @@ interface Quote {
   createdAt: string;
 }
 
-type TabType = 'details' | 'users' | 'quotes';
+type TabType = 'details' | 'users' | 'quotes' | 'drawings';
 
 export default function CustomerDetailPage() {
   const router = useRouter();
@@ -221,6 +222,16 @@ export default function CustomerDetailPage() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('drawings')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'drawings'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Drawings
+          </button>
         </nav>
       </div>
 
@@ -235,6 +246,7 @@ export default function CustomerDetailPage() {
         />
       )}
       {activeTab === 'quotes' && <QuotesTab quotes={quotes} customerId={customer.id} />}
+      {activeTab === 'drawings' && <CustomerDrawings customerId={customer.id} />}
 
       {/* User Form Modal */}
       {showUserModal && (
