@@ -114,6 +114,14 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Validate that the quote has a customer (required for drawing association)
+    if (!quote.customerId) {
+      return NextResponse.json(
+        { error: 'Quote must have a customer before uploading drawings' },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
     const { filename, storageKey, mimeType, fileSize, analysisData } = body;
 
@@ -135,7 +143,7 @@ export async function POST(
       mimeType,
       fileSize: fileSize || 0,
       quoteId,
-      customerId: quote.customerId ?? 0,
+      customerId: quote.customerId,
       analysisData,
       isPrimary,
     });

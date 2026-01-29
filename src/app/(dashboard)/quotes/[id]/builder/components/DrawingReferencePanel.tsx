@@ -19,6 +19,7 @@ interface DrawingReferencePanelProps {
 export function DrawingReferencePanel({ quoteId, refreshKey = 0 }: DrawingReferencePanelProps) {
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [selectedDrawing, setSelectedDrawing] = useState<Drawing | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -26,14 +27,19 @@ export function DrawingReferencePanel({ quoteId, refreshKey = 0 }: DrawingRefere
   useEffect(() => {
     async function fetchDrawings() {
       setLoading(true);
+      setError(null);
       try {
         const response = await fetch(`/api/quotes/${quoteId}/drawings`);
         if (response.ok) {
           const data = await response.json();
           setDrawings(data);
+        } else {
+          const data = await response.json().catch(() => ({}));
+          setError(data.error || 'Failed to load drawings');
         }
-      } catch (error) {
-        console.error('Error fetching drawings:', error);
+      } catch (err) {
+        console.error('Error fetching drawings:', err);
+        setError('Failed to load drawings');
       } finally {
         setLoading(false);
       }
@@ -51,6 +57,19 @@ export function DrawingReferencePanel({ quoteId, refreshKey = 0 }: DrawingRefere
         <div className="animate-pulse">
           <div className="h-4 bg-gray-200 rounded w-1/2 mb-3" />
           <div className="h-32 bg-gray-200 rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card p-4">
+        <div className="text-center text-red-500 py-4">
+          <svg className="h-10 w-10 mx-auto mb-2 text-red-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-sm">{error}</p>
         </div>
       </div>
     );
