@@ -594,7 +594,11 @@ export default function QuoteForm({
       
       // Store the compressed file for R2 upload after quote creation
       setUploadFile(fileToUse);
-      console.log('[QuoteForm] Storing file for later upload:', fileToUse.name);
+      console.log('[QuoteForm] ✅ File stored in uploadFile state:', {
+        name: fileToUse.name,
+        size: fileToUse.size,
+        type: fileToUse.type
+      });
 
       // Create preview from the compressed file
       if (isImage) {
@@ -816,6 +820,18 @@ export default function QuoteForm({
 
   // Save quote
   async function handleSave(status: string = 'draft') {
+    console.log('[QuoteForm] ═══════════════════════════════════════');
+    console.log('[QuoteForm] handleSave CALLED');
+    console.log('[QuoteForm] State at save time:', {
+      customerId,
+      hasUploadFile: !!uploadFile,
+      uploadFileName: uploadFile?.name,
+      uploadFileSize: uploadFile?.size,
+      isInitialData: !!initialData,
+      status
+    });
+    console.log('[QuoteForm] ═══════════════════════════════════════');
+    
     setSaving(true);
     try {
       const payload = {
@@ -876,9 +892,21 @@ export default function QuoteForm({
       if (res.ok) {
         const data = await res.json();
         
+        // DEBUG: Check all conditions for R2 upload
+        console.log('[QuoteForm] Quote save successful, checking R2 upload conditions:', {
+          hasUploadFile: !!uploadFile,
+          uploadFileName: uploadFile?.name,
+          uploadFileSize: uploadFile?.size,
+          hasCustomerId: !!customerId,
+          customerIdValue: customerId,
+          isInitialData: !!initialData,
+          quoteId: data.id,
+          shouldUpload: !!(uploadFile && customerId && !initialData)
+        });
+        
         // If we have a file to upload and a customerId, upload it to R2 now that we have the quoteId
         if (uploadFile && customerId && !initialData) {
-          console.log('[QuoteForm] Quote created, now uploading drawing to R2...', {
+          console.log('[QuoteForm] ✅ All conditions met, uploading drawing to R2...', {
             quoteId: data.id,
             customerId,
             filename: uploadFile.name
@@ -923,12 +951,18 @@ export default function QuoteForm({
               throw new Error(drawingError.error || 'Failed to save drawing record');
             }
             
-            console.log('[QuoteForm] Drawing saved successfully!');
+            console.log('[QuoteForm] ✅✅ Drawing saved successfully to R2 and database!');
           } catch (uploadErr) {
-            console.error('[QuoteForm] Error uploading drawing after quote creation:', uploadErr);
+            console.error('[QuoteForm] ❌ Error uploading drawing after quote creation:', uploadErr);
             // Don't fail the whole operation, but warn the user
             toast.error('Quote created but drawing upload failed. You can upload it again from the Quote Builder.');
           }
+        } else {
+          console.log('[QuoteForm] ⚠️ R2 upload SKIPPED. Reason:', {
+            noUploadFile: !uploadFile,
+            noCustomerId: !customerId,
+            isEditMode: !!initialData
+          });
         }
         
         toast.success(initialData ? 'Quote updated!' : 'Quote created!');
