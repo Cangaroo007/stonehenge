@@ -182,7 +182,9 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
 
     try {
       // Step 1: Upload to R2 storage
+      console.log('[DrawingImport] Step 1: Uploading to R2...', { filename: selectedFile.name, size: selectedFile.size, type: selectedFile.type });
       storedUploadResult = await uploadToStorage(selectedFile);
+      console.log('[DrawingImport] Upload complete:', storedUploadResult);
       setUploadResult(storedUploadResult);
       setAnalysisSteps(prev => prev.map((s, i) => i === 0 ? { ...s, done: true } : s));
       setAnalysisProgress(25);
@@ -202,6 +204,7 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
       }, 1600);
 
       // Step 2: Call the analyze-drawing API
+      console.log('[DrawingImport] Step 2: Analyzing with AI...');
       const formData = new FormData();
       formData.append('file', selectedFile);
 
@@ -219,12 +222,15 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
 
       const data = await response.json();
       analysisResult = data.analysis as AnalysisResult;
+      console.log('[DrawingImport] Analysis complete:', { rooms: analysisResult?.rooms?.length, warnings: analysisResult?.warnings?.length });
 
       setAnalysisProgress(80);
       setUploadProgress('saving');
 
       // Step 3: Save drawing record with analysis data
+      console.log('[DrawingImport] Step 3: Saving drawing record...');
       await saveDrawingRecord(storedUploadResult, analysisResult as unknown as Record<string, unknown>);
+      console.log('[DrawingImport] Drawing saved successfully!');
       setAnalysisSteps(prev => prev.map((s, i) => i === 3 ? { ...s, done: true } : s));
       setAnalysisProgress(100);
       setUploadProgress('complete');

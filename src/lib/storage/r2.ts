@@ -13,14 +13,25 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
+// Build R2 endpoint from either R2_ENDPOINT or R2_ACCOUNT_ID
+function getR2Endpoint(): string | null {
+  if (process.env.R2_ENDPOINT) {
+    return process.env.R2_ENDPOINT;
+  }
+  if (process.env.R2_ACCOUNT_ID) {
+    return `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  }
+  return null;
+}
+
 // Initialize S3 client for R2 (only if credentials are configured)
 function getR2Client(): S3Client | null {
-  const endpoint = process.env.R2_ENDPOINT;
+  const endpoint = getR2Endpoint();
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
 
   if (!endpoint || !accessKeyId || !secretAccessKey) {
-    console.warn('[R2] Missing R2 credentials, storage operations will be mocked');
+    console.warn('[R2] Missing R2 credentials. Set R2_ACCOUNT_ID (or R2_ENDPOINT), R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY. Storage operations will be mocked.');
     return null;
   }
 

@@ -63,7 +63,9 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // Upload to R2
+    console.log(`[Upload API] Uploading to R2: ${storageKey} (${buffer.length} bytes, ${file.type})`);
     await uploadToR2(storageKey, buffer, file.type);
+    console.log(`[Upload API] Upload successful: ${storageKey}`);
 
     return NextResponse.json({
       storageKey,
