@@ -408,6 +408,45 @@ model QuoteDrawingAnalysis {
 // PRICING ENTITIES
 // ============================================
 
+// Service rate types
+enum ServiceType {
+  CUTTING        // Full perimeter calculation
+  POLISHING      // Finished edges only (base rate, profiles add extra)
+  INSTALLATION   // Square meter calculation
+  WATERFALL_END  // Fixed per item
+}
+
+enum RateUnit {
+  LINEAR_METER   // Lm
+  SQUARE_METER   // m²
+  FIXED          // Per item
+  PER_KM         // Distance-based
+}
+
+model ServiceRate {
+  id            Int         @id @default(autoincrement())
+  serviceType   ServiceType @unique
+  name          String      // Display name
+  description   String?
+  
+  // Thickness-specific rates
+  rate20mm      Decimal     @db.Decimal(10, 2)
+  rate40mm      Decimal     @db.Decimal(10, 2)
+  
+  // Unit of measurement
+  unit          RateUnit
+  
+  // Minimum charge support
+  minimumCharge Decimal?    @db.Decimal(10, 2)
+  minimumQty    Decimal?    @db.Decimal(10, 2)  // e.g., 1.0 meter
+  
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("service_rates")
+}
+
 model EdgeType {
   id          String   @id @default(cuid())
   name        String   @unique  // "Pencil Round", "Bullnose", etc.

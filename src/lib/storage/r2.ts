@@ -30,11 +30,17 @@ function getR2Client(): S3Client | null {
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
 
+  console.log('[R2] getR2Client() called');
+  console.log('[R2] Endpoint:', endpoint ? '✅ configured' : '❌ missing');
+  console.log('[R2] Access Key:', accessKeyId ? '✅ configured' : '❌ missing');
+  console.log('[R2] Secret Key:', secretAccessKey ? '✅ configured' : '❌ missing');
+
   if (!endpoint || !accessKeyId || !secretAccessKey) {
-    console.warn('[R2] Missing R2 credentials. Set R2_ACCOUNT_ID (or R2_ENDPOINT), R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY. Storage operations will be mocked.');
+    console.warn('[R2] ⚠️ Missing R2 credentials. Set R2_ACCOUNT_ID (or R2_ENDPOINT), R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY. Storage operations will be mocked.');
     return null;
   }
 
+  console.log('[R2] ✅ All credentials present, creating S3Client');
   return new S3Client({
     region: 'auto',
     endpoint,
@@ -182,20 +188,35 @@ export async function getDownloadUrl(
   key: string,
   expiresIn: number = 3600
 ): Promise<string> {
+  console.log('[R2] getDownloadUrl called for:', key);
   const client = getR2Client();
 
   if (!client) {
     // Return a mock URL for development (via our API)
-    console.log(`[R2] Mock download URL for: ${key}`);
+    console.warn('[R2] ⚠️ No R2 client available, returning mock URL');
+    console.warn('[R2] Check R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY');
     return `/api/drawings/file?key=${encodeURIComponent(key)}`;
   }
 
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
+  console.log('[R2] Client available, generating presigned URL...');
+  console.log('[R2] Bucket:', BUCKET_NAME);
+  console.log('[R2] Key:', key);
+  console.log('[R2] Expires in:', expiresIn, 'seconds');
 
-  return getSignedUrl(client, command, { expiresIn });
+  try {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+
+    const url = await getSignedUrl(client, command, { expiresIn });
+    console.log('[R2] ✅ Presigned URL generated successfully');
+    console.log('[R2] URL length:', url.length, 'characters');
+    return url;
+  } catch (error) {
+    console.error('[R2] ❌ Failed to generate presigned URL:', error);
+    throw error;
+  }
 }
 
 /**
