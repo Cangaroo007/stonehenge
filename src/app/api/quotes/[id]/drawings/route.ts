@@ -101,12 +101,12 @@ export async function POST(
     }
 
     // Check if user can edit this quote
-    const canEditAll = await hasPermission(
+    const canEdit = await hasPermission(
       currentUser.id,
-      Permission.EDIT_ALL_QUOTES
+      Permission.EDIT_QUOTES
     );
     const hasAccess =
-      canEditAll ||
+      canEdit ||
       quote.createdBy === currentUser.id ||
       (currentUser.customerId && quote.customerId === currentUser.customerId);
 
