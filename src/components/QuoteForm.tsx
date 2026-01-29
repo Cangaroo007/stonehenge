@@ -292,6 +292,8 @@ export default function QuoteForm({
       metadata: initialData.drawingAnalysis.metadata,
     } : null
   );
+  // Store the actual file for R2 upload after quote creation
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   // Modal states
   const [showRoomSelector, setShowRoomSelector] = useState(false);
@@ -549,6 +551,10 @@ export default function QuoteForm({
     setAnalyzing(true);
     setAnalysisResult(null);
     setExtractedPieces([]);
+
+    // Store the file for R2 upload after quote creation
+    setUploadFile(file);
+    console.log('[QuoteForm] Storing file for later upload:', file.name);
 
     try {
       const formData = new FormData();
@@ -822,6 +828,62 @@ export default function QuoteForm({
 
       if (res.ok) {
         const data = await res.json();
+        
+        // If we have a file to upload and a customerId, upload it to R2 now that we have the quoteId
+        if (uploadFile && customerId && !initialData) {
+          console.log('[QuoteForm] Quote created, now uploading drawing to R2...', {
+            quoteId: data.id,
+            customerId,
+            filename: uploadFile.name
+          });
+          
+          try {
+            // Step 1: Upload to R2 storage
+            const formData = new FormData();
+            formData.append('file', uploadFile);
+            formData.append('customerId', customerId.toString());
+            formData.append('quoteId', data.id.toString());
+            
+            console.log('[QuoteForm] Calling /api/upload/drawing...');
+            const uploadResponse = await fetch('/api/upload/drawing', {
+              method: 'POST',
+              body: formData,
+            });
+            
+            if (!uploadResponse.ok) {
+              const uploadError = await uploadResponse.json();
+              console.error('[QuoteForm] R2 upload failed:', uploadError);
+              throw new Error(uploadError.error || 'Failed to upload drawing to storage');
+            }
+            
+            const uploadResult = await uploadResponse.json();
+            console.log('[QuoteForm] R2 upload successful:', uploadResult);
+            
+            // Step 2: Create drawing database record
+            console.log('[QuoteForm] Creating drawing database record...');
+            const drawingResponse = await fetch(`/api/quotes/${data.id}/drawings`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...uploadResult,
+                analysisData: analysisData?.rawResults,
+              }),
+            });
+            
+            if (!drawingResponse.ok) {
+              const drawingError = await drawingResponse.json();
+              console.error('[QuoteForm] Drawing record creation failed:', drawingError);
+              throw new Error(drawingError.error || 'Failed to save drawing record');
+            }
+            
+            console.log('[QuoteForm] Drawing saved successfully!');
+          } catch (uploadErr) {
+            console.error('[QuoteForm] Error uploading drawing after quote creation:', uploadErr);
+            // Don't fail the whole operation, but warn the user
+            toast.error('Quote created but drawing upload failed. You can upload it again from the Quote Builder.');
+          }
+        }
+        
         toast.success(initialData ? 'Quote updated!' : 'Quote created!');
         router.push(`/quotes/${data.id}`);
         router.refresh();
