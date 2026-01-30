@@ -57,6 +57,17 @@ const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'stonehenge-drawings';
 const memoryStorage = new Map<string, { data: Buffer; contentType: string }>();
 
 /**
+ * Check whether R2 storage is properly configured.
+ * Returns true if real R2 will be used, false if falling back to mock.
+ */
+export function isR2Configured(): boolean {
+  const endpoint = getR2Endpoint();
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  return !!(endpoint && accessKeyId && secretAccessKey);
+}
+
+/**
  * Upload a file to R2 storage
  * @param key - The R2 object key (path in bucket)
  * @param data - The file data as Buffer
@@ -70,21 +81,32 @@ export async function uploadToR2(
   const client = getR2Client();
 
   if (!client) {
-    // Mock upload for development
-    console.log(`[R2] Mock upload: ${key} (${data.length} bytes)`);
+    // In production, missing R2 credentials is an error - don't silently mock
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[R2] ❌ CRITICAL: R2 credentials not configured in production!');
+      console.error('[R2] Required env vars: R2_ACCOUNT_ID (or R2_ENDPOINT), R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY');
+      throw new Error('R2 storage not configured. File upload unavailable.');
+    }
+    // Mock upload for development only
+    console.warn(`[R2] ⚠️ Mock upload (dev only): ${key} (${data.length} bytes)`);
     memoryStorage.set(key, { data, contentType });
     return;
   }
 
-  await client.send(
-    new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: key,
-      Body: data,
-      ContentType: contentType,
-    })
-  );
-  console.log(`[R2] Uploaded: ${key}`);
+  try {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: key,
+        Body: data,
+        ContentType: contentType,
+      })
+    );
+    console.log(`[R2] ✅ Uploaded: ${key} (${data.length} bytes)`);
+  } catch (error) {
+    console.error(`[R2] ❌ Upload failed for ${key}:`, error);
+    throw error;
+  }
 }
 
 /**
@@ -96,6 +118,10 @@ export async function getFromR2(key: string): Promise<Buffer | null> {
   const client = getR2Client();
 
   if (!client) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[R2] ❌ Cannot retrieve file - R2 not configured in production');
+      return null;
+    }
     // Mock retrieval for development
     const stored = memoryStorage.get(key);
     if (stored) {
@@ -136,6 +162,10 @@ export async function deleteFromR2(storageKey: string): Promise<void> {
   const client = getR2Client();
 
   if (!client) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[R2] ❌ Cannot delete file - R2 not configured in production');
+      return;
+    }
     // Mock deletion for development
     console.log(`[R2] Mock delete: ${storageKey}`);
     memoryStorage.delete(storageKey);
