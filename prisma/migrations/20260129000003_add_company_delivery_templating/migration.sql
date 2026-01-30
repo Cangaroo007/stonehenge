@@ -19,7 +19,14 @@ CREATE TABLE IF NOT EXISTS "companies" (
 
 -- Add companyId to users table
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "company_id" INTEGER;
-ALTER TABLE "users" ADD CONSTRAINT "users_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'users_company_id_fkey'
+  ) THEN
+    ALTER TABLE "users" ADD CONSTRAINT "users_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- Create delivery_zones table
 CREATE TABLE IF NOT EXISTS "delivery_zones" (
@@ -61,8 +68,22 @@ ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "templating_required" BOOLEAN NOT 
 ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "templating_distance_km" DECIMAL(10,2);
 ALTER TABLE "quotes" ADD COLUMN IF NOT EXISTS "templating_cost" DECIMAL(10,2);
 
-ALTER TABLE "quotes" ADD CONSTRAINT "quotes_delivery_zone_id_fkey" FOREIGN KEY ("delivery_zone_id") REFERENCES "delivery_zones"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'quotes_delivery_zone_id_fkey'
+  ) THEN
+    ALTER TABLE "quotes" ADD CONSTRAINT "quotes_delivery_zone_id_fkey" FOREIGN KEY ("delivery_zone_id") REFERENCES "delivery_zones"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- Add companyId to price_books table
 ALTER TABLE "price_books" ADD COLUMN IF NOT EXISTS "company_id" INTEGER;
-ALTER TABLE "price_books" ADD CONSTRAINT "price_books_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'price_books_company_id_fkey'
+  ) THEN
+    ALTER TABLE "price_books" ADD CONSTRAINT "price_books_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
