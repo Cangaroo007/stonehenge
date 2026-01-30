@@ -1,4 +1,4 @@
-import { Client, TravelMode } from '@googlemaps/google-maps-services-js';
+import { Client, TravelMode, UnitSystem } from '@googlemaps/google-maps-services-js';
 import { DeliveryZone, TemplatingRate } from '@prisma/client';
 
 const client = new Client({});
@@ -29,7 +29,7 @@ export async function calculateDistance(
         origins: [origin],
         destinations: [destination],
         key: apiKey,
-        units: 'metric',
+        units: UnitSystem.metric,
         mode: TravelMode.driving
       }
     });
