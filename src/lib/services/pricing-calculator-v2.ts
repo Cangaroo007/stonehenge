@@ -334,7 +334,7 @@ function calculateEdgeCostV2(
   let totalLinearMeters = 0;
   let subtotal = 0;
 
-  for (const [key, data] of edgeTotals) {
+  for (const [key, data] of Array.from(edgeTotals.entries())) {
     // Select appropriate rate based on thickness
     let rate: number;
     if (data.thickness <= 20 && data.edgeType.rate20mm) {
@@ -410,7 +410,7 @@ function calculateCutoutCostV2(
   const items: CutoutBreakdown[] = [];
   let subtotal = 0;
 
-  for (const [key, data] of cutoutTotals) {
+  for (const [key, data] of Array.from(cutoutTotals.entries())) {
     const basePrice = data.cutoutType.baseRate.toNumber();
     let itemSubtotal = data.quantity * basePrice;
 
