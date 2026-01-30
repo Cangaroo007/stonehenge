@@ -19,7 +19,11 @@ export type AuditAction =
   | 'exported'
   | 'imported'
   | 'login'
-  | 'logout';
+  | 'logout'
+  | 'QUOTE_OVERRIDE_APPLIED'
+  | 'QUOTE_OVERRIDE_REMOVED'
+  | 'PIECE_OVERRIDE_APPLIED'
+  | 'PIECE_OVERRIDE_REMOVED';
 
 export type AuditEntityType = 
   | 'quote'
@@ -28,7 +32,9 @@ export type AuditEntityType =
   | 'material'
   | 'pricing_rule'
   | 'optimization'
-  | 'system';
+  | 'system'
+  | 'QUOTE'
+  | 'QUOTE_PIECE';
 
 interface AuditLogData {
   userId?: number;
@@ -59,6 +65,35 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
   } catch (error) {
     // Log to console but don't throw - audit logging shouldn't break the app
     console.error('Failed to create audit log:', error);
+  }
+}
+
+/**
+ * Generic activity logging (flexible interface)
+ */
+export async function logActivity(data: {
+  userId: number;
+  action: string;
+  entity: string;
+  entityId: string;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId: data.userId,
+        action: data.action as AuditAction,
+        entityType: data.entity as AuditEntityType,
+        entityId: data.entityId,
+        changes: data.details ? (data.details as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+        ipAddress: data.ipAddress,
+        userAgent: data.userAgent,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to log activity:', error);
   }
 }
 

@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { calculateQuotePrice } from '@/lib/services/pricing-calculator';
+import { calculateQuotePrice } from '@/lib/services/pricing-calculator-v2';
 import type { PricingOptions } from '@/lib/types/pricing';
 
 /**
  * POST /api/quotes/[id]/calculate
  *
- * Calculate the price for a quote, applying pricing rules based on:
+ * Calculate the price for a quote (Enhanced V2), applying:
  * - Customer's client type and tier
  * - Assigned price book (or override via request body)
  * - Volume thresholds
+ * - ServiceRate (cutting, polishing, installation, waterfall)
+ * - EdgeType thickness variants (20mm vs 40mm+)
+ * - CutoutType categories with minimum charges
+ * - Delivery costs (calculated + manual overrides)
+ * - Templating costs (calculated + manual overrides)
+ * - Quote-level pricing overrides
  *
  * Request body (optional):
  * {
@@ -26,7 +32,10 @@ import type { PricingOptions } from '@/lib/types/pricing';
  *   breakdown: {
  *     materials: { ... },
  *     edges: { ... },
- *     cutouts: { ... }
+ *     cutouts: { ... },
+ *     services: { items: [...], subtotal, total },
+ *     delivery: { address, distanceKm, zone, calculatedCost, overrideCost, finalCost },
+ *     templating: { required, distanceKm, calculatedCost, overrideCost, finalCost }
  *   },
  *   appliedRules: [...],
  *   discounts: [...],

@@ -10,6 +10,42 @@ datasource db {
 }
 
 // ============================================
+// COMPANY / ORGANIZATION (Multi-Tenancy)
+// ============================================
+
+model Company {
+  id                Int       @id @default(autoincrement())
+  name              String
+  abn               String?
+  address           String    // Physical workshop address
+  phone             String?
+  fax               String?
+  email             String?
+  
+  // Workshop location for distance calculations
+  workshopAddress   String    @map("workshop_address") // Used for Google Maps calculations
+  
+  // Branding
+  logoUrl           String?   @map("logo_url")
+  
+  // Settings
+  defaultTaxRate    Decimal   @default(10) @map("default_tax_rate") @db.Decimal(5, 2)
+  currency          String    @default("AUD")
+  
+  isActive          Boolean   @default(true) @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  users             User[]
+  deliveryZones     DeliveryZone[]
+  templatingRates   TemplatingRate[]
+  priceBooks        PriceBook[]
+  
+  @@map("companies")
+}
+
+// ============================================
 // USER & AUTHENTICATION
 // ============================================
 
@@ -68,6 +104,10 @@ model User {
   role         UserRole  @default(SALES_REP)
   isActive     Boolean   @default(true) @map("is_active")
 
+  // Company (Multi-tenancy)
+  companyId    Int?      @map("company_id")
+  company      Company?  @relation(fields: [companyId], references: [id])
+
   // Customer linking (for customer users)
   customerId       Int?                  @map("customer_id")
   customer         Customer?             @relation(fields: [customerId], references: [id])
@@ -89,6 +129,7 @@ model User {
   auditLogs    AuditLog[]
   quoteViews   QuoteView[]
   signatures   QuoteSignature[] @relation("QuoteSignatures")
+  quoteOverrides Quote[] @relation("QuoteOverrides")
 
   @@map("users")
 }
@@ -242,6 +283,49 @@ model FeaturePricing {
 }
 
 // ============================================
+// DELIVERY & TEMPLATING
+// ============================================
+
+model DeliveryZone {
+  id            Int       @id @default(autoincrement())
+  name          String    // "Local", "Regional", "Remote"
+  maxDistanceKm Int       @map("max_distance_km") // Upper bound for this zone
+  ratePerKm     Decimal   @map("rate_per_km") @db.Decimal(10, 2)
+  baseCharge    Decimal   @map("base_charge") @db.Decimal(10, 2)
+  isActive      Boolean   @default(true) @map("is_active")
+  
+  // Multi-tenancy
+  companyId     Int       @map("company_id")
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  quotes        Quote[]
+  
+  @@unique([companyId, name]) // Each company can have its own zones with same names
+  @@map("delivery_zones")
+}
+
+model TemplatingRate {
+  id          Int       @id @default(autoincrement())
+  name        String    @default("Standard Templating")
+  baseCharge  Decimal   @map("base_charge") @db.Decimal(10, 2) // Fixed component
+  ratePerKm   Decimal   @map("rate_per_km") @db.Decimal(10, 2) // Distance component
+  isActive    Boolean   @default(true) @map("is_active")
+  
+  // Multi-tenancy
+  companyId   Int       @map("company_id")
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  @@map("templating_rates")
+}
+
+// ============================================
 // QUOTES
 // ============================================
 
@@ -271,6 +355,28 @@ model Quote {
   calculatedTotal     Decimal?  @map("calculated_total") @db.Decimal(10, 2)
   calculatedAt        DateTime? @map("calculated_at")
   calculationBreakdown Json?    @map("calculation_breakdown")
+  
+  // Delivery
+  deliveryAddress      String?   @map("delivery_address")
+  deliveryDistanceKm   Decimal?  @map("delivery_distance_km") @db.Decimal(10, 2)
+  deliveryZoneId       Int?      @map("delivery_zone_id")
+  deliveryZone         DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
+  deliveryCost         Decimal?  @map("delivery_cost") @db.Decimal(10, 2)
+  overrideDeliveryCost Decimal?  @map("override_delivery_cost") @db.Decimal(10, 2)
+  
+  // Templating
+  templatingRequired   Boolean   @default(false) @map("templating_required")
+  templatingDistanceKm Decimal?  @map("templating_distance_km") @db.Decimal(10, 2)
+  templatingCost       Decimal?  @map("templating_cost") @db.Decimal(10, 2)
+  overrideTemplatingCost Decimal? @map("override_templating_cost") @db.Decimal(10, 2)
+  
+  // Manual overrides (preserves calculated values for reference)
+  overrideSubtotal    Decimal?  @map("override_subtotal") @db.Decimal(10, 2)
+  overrideTotal       Decimal?  @map("override_total") @db.Decimal(10, 2)
+  overrideReason      String?   @map("override_reason")
+  overrideBy          Int?      @map("override_by")
+  overrideByUser      User?     @relation("QuoteOverrides", fields: [overrideBy], references: [id])
+  overrideAt          DateTime? @map("override_at")
   
   // Terms
   validUntil     DateTime? @map("valid_until")
@@ -343,6 +449,12 @@ model QuotePiece {
   materialCost Decimal   @default(0) @map("material_cost") @db.Decimal(10, 2)
   featuresCost Decimal   @default(0) @map("features_cost") @db.Decimal(10, 2)
   totalCost    Decimal   @default(0) @map("total_cost") @db.Decimal(10, 2)
+  
+  // Manual overrides (for piece-level adjustments)
+  overrideMaterialCost Decimal?  @map("override_material_cost") @db.Decimal(10, 2)
+  overrideFeaturesCost Decimal?  @map("override_features_cost") @db.Decimal(10, 2)
+  overrideTotalCost    Decimal?  @map("override_total_cost") @db.Decimal(10, 2)
+  overrideReason       String?   @map("override_reason")
 
   sortOrder    Int       @default(0) @map("sort_order")
 
@@ -651,6 +763,11 @@ model PriceBook {
   description         String?
   category            String          @default("general")
   defaultThickness    Int             @default(20)
+  
+  // Multi-tenancy
+  companyId           Int?            @map("company_id")
+  company             Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
   rules               PriceBookRule[]
   quotes              Quote[]
   defaultForCustomers Customer[]      @relation("CustomerDefaultPriceBook")

@@ -110,3 +110,33 @@ export async function login(email: string, password: string): Promise<{ success:
 export async function logout(): Promise<void> {
   await removeAuthCookie();
 }
+
+/**
+ * Require authentication for API routes
+ * Throws an error if user is not authenticated or doesn't have required role
+ */
+export async function requireAuth(
+  request: Request,
+  allowedRoles?: string[]
+): Promise<UserPayload> {
+  const token = await getAuthCookie();
+  
+  if (!token) {
+    throw new Error('Unauthorized: No authentication token');
+  }
+  
+  const user = await verifyToken(token);
+  
+  if (!user) {
+    throw new Error('Unauthorized: Invalid token');
+  }
+  
+  // Check if user has required role
+  if (allowedRoles && allowedRoles.length > 0) {
+    if (!allowedRoles.includes(user.role)) {
+      throw new Error(`Unauthorized: Required role: ${allowedRoles.join(' or ')}`);
+    }
+  }
+  
+  return user;
+}
