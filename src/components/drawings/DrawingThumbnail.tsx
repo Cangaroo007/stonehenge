@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
-import { useDrawingUrl } from '@/hooks/useDrawingUrl';
 
 interface DrawingThumbnailProps {
   drawingId: string;
@@ -17,20 +15,12 @@ export function DrawingThumbnail({
   onClick,
   className = '',
 }: DrawingThumbnailProps) {
-  const { url, loading, error } = useDrawingUrl(drawingId);
   const [imageError, setImageError] = useState(false);
 
-  if (loading) {
-    return (
-      <div className={`bg-gray-100 animate-pulse rounded-lg flex items-center justify-center ${className}`}>
-        <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      </div>
-    );
-  }
+  // Use direct file endpoint to avoid presigned URL double-encoding
+  const url = `/api/drawings/${drawingId}/file`;
 
-  if (error || imageError || !url) {
+  if (imageError) {
     return (
       <div className={`bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 ${className}`}>
         <svg className="h-8 w-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -46,11 +36,12 @@ export function DrawingThumbnail({
       className={`relative rounded-lg overflow-hidden cursor-pointer group ${className}`}
       onClick={onClick}
     >
-      <Image
+      {/* Use img tag to avoid Next.js Image optimization double-encoding */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src={url}
         alt={filename}
-        fill
-        className="object-contain"
+        className="absolute inset-0 w-full h-full object-contain"
         onError={() => setImageError(true)}
       />
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">

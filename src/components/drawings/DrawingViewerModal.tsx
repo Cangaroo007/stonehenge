@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
-import { useDrawingUrl } from '@/hooks/useDrawingUrl';
 
 interface DrawingViewerModalProps {
   drawingId: string;
@@ -17,7 +15,8 @@ export function DrawingViewerModal({
   isOpen,
   onClose,
 }: DrawingViewerModalProps) {
-  const { url, loading } = useDrawingUrl(drawingId);
+  // Use direct file endpoint to avoid presigned URL double-encoding
+  const url = `/api/drawings/${drawingId}/file`;
   const [zoom, setZoom] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -142,31 +141,20 @@ export function DrawingViewerModal({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         >
-          {loading ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-white/20 border-t-white" />
-            </div>
-          ) : url ? (
-            <div
-              className="h-full flex items-center justify-center transition-transform"
-              style={{
-                transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
-              }}
-            >
-              <Image
-                src={url}
-                alt={filename}
-                width={1200}
-                height={800}
-                className="max-h-[90vh] w-auto object-contain select-none"
-                draggable={false}
-              />
-            </div>
-          ) : (
-            <div className="h-full flex items-center justify-center text-white">
-              Failed to load image
-            </div>
-          )}
+          <div
+            className="h-full flex items-center justify-center transition-transform"
+            style={{
+              transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={filename}
+              className="max-h-[90vh] w-auto object-contain select-none"
+              draggable={false}
+            />
+          </div>
         </div>
 
         {/* Footer hint */}
