@@ -450,9 +450,24 @@ model ServiceRate {
 model EdgeType {
   id          String   @id @default(cuid())
   name        String   @unique  // "Pencil Round", "Bullnose", etc.
+  code        String?  @unique  // Short code: "PR", "BN", "OG", etc.
   description String?
   category    String   @default("polish")  // "polish", "waterfall", "apron"
+  
+  // Legacy field (kept for backward compatibility)
   baseRate    Decimal  @db.Decimal(10, 2)  // $ per linear meter
+  
+  // Thickness-specific rates (ADDITIONAL to base polishing rate from ServiceRate)
+  rate20mm    Decimal? @db.Decimal(10, 2)  // Extra charge for 20mm
+  rate40mm    Decimal? @db.Decimal(10, 2)  // Extra charge for 40mm+
+  
+  // Minimum charge support (for premium edges like curved)
+  minimumCharge Decimal? @db.Decimal(10, 2)
+  minimumLength Decimal? @db.Decimal(10, 2)  // In meters, e.g., 1.0
+  
+  // Curved edge flag (special handling, premium pricing)
+  isCurved    Boolean  @default(false)
+  
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
@@ -463,15 +478,29 @@ model EdgeType {
   @@map("edge_types")
 }
 
+enum CutoutCategory {
+  STANDARD         // Hotplate, GPO, Tap, Drop-in Sink
+  UNDERMOUNT_SINK  // Undermount sink
+  FLUSH_COOKTOP    // Flush mount cooktop
+  DRAINER_GROOVE   // Drainer grooves
+}
+
 model CutoutType {
-  id          String   @id @default(cuid())
-  name        String   @unique  // "Undermount Sink", "Tap Hole", etc.
+  id          String          @id @default(cuid())
+  name        String          @unique  // "Undermount Sink", "Tap Hole", etc.
+  code        String?         @unique  // Short code: "HP", "UMS", etc.
   description String?
-  baseRate    Decimal  @db.Decimal(10, 2)  // $ per cutout (fixed price)
-  isActive    Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  category    CutoutCategory  @default(STANDARD)
+  
+  baseRate    Decimal         @db.Decimal(10, 2)  // $ per cutout (fixed price)
+  
+  // Minimum support (for future use)
+  minimumCharge Decimal?      @db.Decimal(10, 2)
+  
+  isActive    Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   pricingRuleCutouts PricingRuleCutout[]
 
