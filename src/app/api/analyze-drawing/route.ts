@@ -6,8 +6,9 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-// Anthropic's image size limit is 5MB
+// Anthropic's image size limit is 5MB, PDF limit is 32MB
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+const MAX_PDF_SIZE = 32 * 1024 * 1024; // 32MB in bytes
 
 async function compressImage(buffer: Buffer, mimeType: string): Promise<{ data: Buffer; mediaType: string }> {
   // Get image metadata to determine dimensions
@@ -37,6 +38,10 @@ async function compressImage(buffer: Buffer, mimeType: string): Promise<{ data: 
     data: outputBuffer,
     mediaType: 'image/jpeg',
   };
+}
+
+function isPdfFile(mimeType: string): boolean {
+  return mimeType === 'application/pdf';
 }
 
 const SYSTEM_PROMPT = `You are an expert stone benchtop fabricator analyzing drawings to extract piece specifications for quoting.
@@ -114,44 +119,82 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     let buffer: Buffer = Buffer.from(bytes);
     let mimeType = file.type || 'image/png';
+    const isPdf = isPdfFile(mimeType);
 
-    console.log(`Received image: ${file.name}, size: ${buffer.length} bytes, type: ${mimeType}`);
+    console.log(`[Analyze] Received file: ${file.name}, size: ${buffer.length} bytes, type: ${mimeType}, isPdf: ${isPdf}`);
 
-    // Check if compression is needed (>5MB or close to limit)
-    if (buffer.length > MAX_IMAGE_SIZE * 0.8) {
-      console.log(`Image size ${buffer.length} bytes exceeds threshold, compressing...`);
-      try {
-        const compressed = await compressImage(buffer, mimeType);
-        buffer = compressed.data;
-        mimeType = compressed.mediaType;
-        console.log(`Compressed to ${buffer.length} bytes`);
-      } catch (compressionError) {
-        console.error('Image compression failed:', compressionError);
+    // Build the content block for Claude based on file type
+    let fileContentBlock: Anthropic.Messages.ContentBlockParam;
+
+    if (isPdf) {
+      // PDFs are sent as document type — Claude supports PDFs natively
+      if (buffer.length > MAX_PDF_SIZE) {
         return NextResponse.json(
           {
-            error: 'Image too large and compression failed',
-            details: `Original size: ${(bytes.byteLength / 1024 / 1024).toFixed(1)}MB. Maximum allowed: 5MB. Please upload a smaller image or compress it before uploading.`,
+            error: 'PDF too large',
+            details: `PDF size: ${(buffer.length / 1024 / 1024).toFixed(1)}MB. Maximum allowed: 32MB.`,
           },
           { status: 400 }
         );
       }
-    }
 
-    // Final size check after compression
-    if (buffer.length > MAX_IMAGE_SIZE) {
-      return NextResponse.json(
-        {
-          error: 'Image still too large after compression',
-          details: `Compressed size: ${(buffer.length / 1024 / 1024).toFixed(1)}MB. Maximum allowed: 5MB. Please upload a lower resolution image.`,
+      console.log(`[Analyze] Sending PDF to Claude as document type (${buffer.length} bytes)`);
+      const base64Pdf = buffer.toString('base64');
+      fileContentBlock = {
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: 'application/pdf',
+          data: base64Pdf,
         },
-        { status: 400 }
-      );
-    }
+      } as unknown as Anthropic.Messages.ContentBlockParam;
+    } else {
+      // Images: compress if needed, then send as image type
+      if (buffer.length > MAX_IMAGE_SIZE * 0.8) {
+        console.log(`[Analyze] Image size ${buffer.length} bytes exceeds threshold, compressing...`);
+        try {
+          const compressed = await compressImage(buffer, mimeType);
+          buffer = compressed.data;
+          mimeType = compressed.mediaType;
+          console.log(`[Analyze] Compressed to ${buffer.length} bytes`);
+        } catch (compressionError) {
+          console.error('[Analyze] Image compression failed:', compressionError);
+          return NextResponse.json(
+            {
+              error: 'Image too large and compression failed',
+              details: `Original size: ${(bytes.byteLength / 1024 / 1024).toFixed(1)}MB. Maximum allowed: 5MB. Please upload a smaller image or compress it before uploading.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
 
-    const base64Image = buffer.toString('base64');
-    const mediaType = mimeType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+      // Final size check after compression
+      if (buffer.length > MAX_IMAGE_SIZE) {
+        return NextResponse.json(
+          {
+            error: 'Image still too large after compression',
+            details: `Compressed size: ${(buffer.length / 1024 / 1024).toFixed(1)}MB. Maximum allowed: 5MB. Please upload a lower resolution image.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      console.log(`[Analyze] Sending image to Claude as image type (${buffer.length} bytes, ${mimeType})`);
+      const base64Image = buffer.toString('base64');
+      const mediaType = mimeType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+      fileContentBlock = {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: mediaType,
+          data: base64Image,
+        },
+      };
+    }
 
     // Call Claude API
+    console.log('[Analyze] Calling Claude API...');
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
@@ -160,14 +203,7 @@ export async function POST(request: NextRequest) {
         {
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: base64Image,
-              },
-            },
+            fileContentBlock,
             {
               type: 'text',
               text: 'Analyze this stone fabrication drawing and extract all piece specifications. Return only valid JSON.',

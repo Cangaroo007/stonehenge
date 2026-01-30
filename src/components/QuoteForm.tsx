@@ -295,6 +295,8 @@ export default function QuoteForm({
   );
   // Store the actual file for R2 upload after quote creation
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  // Also keep a ref to avoid stale closure issues in handleSave
+  const uploadFileRef = useRef<File | null>(null);
 
   // Modal states
   const [showRoomSelector, setShowRoomSelector] = useState(false);
@@ -594,7 +596,8 @@ export default function QuoteForm({
       
       // Store the compressed file for R2 upload after quote creation
       setUploadFile(fileToUse);
-      console.log('[QuoteForm] ✅ File stored in uploadFile state:', {
+      uploadFileRef.current = fileToUse;
+      console.log('[QuoteForm] ✅ File stored in uploadFile state + ref:', {
         name: fileToUse.name,
         size: fileToUse.size,
         type: fileToUse.type
@@ -892,30 +895,34 @@ export default function QuoteForm({
       if (res.ok) {
         const data = await res.json();
         
+        // Use ref as fallback in case React state closure is stale
+        const fileToUpload = uploadFile || uploadFileRef.current;
+
         // DEBUG: Check all conditions for R2 upload
         console.log('[QuoteForm] Quote save successful, checking R2 upload conditions:', {
           hasUploadFile: !!uploadFile,
-          uploadFileName: uploadFile?.name,
-          uploadFileSize: uploadFile?.size,
+          hasUploadFileRef: !!uploadFileRef.current,
+          uploadFileName: fileToUpload?.name,
+          uploadFileSize: fileToUpload?.size,
           hasCustomerId: !!customerId,
           customerIdValue: customerId,
           isInitialData: !!initialData,
           quoteId: data.id,
-          shouldUpload: !!(uploadFile && customerId && !initialData)
+          shouldUpload: !!(fileToUpload && customerId && !initialData)
         });
-        
+
         // If we have a file to upload and a customerId, upload it to R2 now that we have the quoteId
-        if (uploadFile && customerId && !initialData) {
+        if (fileToUpload && customerId && !initialData) {
           console.log('[QuoteForm] ✅ All conditions met, uploading drawing to R2...', {
             quoteId: data.id,
             customerId,
-            filename: uploadFile.name
+            filename: fileToUpload.name
           });
-          
+
           try {
             // Step 1: Upload to R2 storage
             const formData = new FormData();
-            formData.append('file', uploadFile);
+            formData.append('file', fileToUpload);
             formData.append('customerId', customerId.toString());
             formData.append('quoteId', data.id.toString());
             
@@ -959,7 +966,9 @@ export default function QuoteForm({
           }
         } else {
           console.log('[QuoteForm] ⚠️ R2 upload SKIPPED. Reason:', {
-            noUploadFile: !uploadFile,
+            noUploadFile: !fileToUpload,
+            noUploadFileState: !uploadFile,
+            noUploadFileRef: !uploadFileRef.current,
             noCustomerId: !customerId,
             isEditMode: !!initialData
           });
