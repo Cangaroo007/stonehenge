@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DrawingStorage } from '@/lib/r2';
+import { DrawingStorage } from '@/lib/storage/r2';
 import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
