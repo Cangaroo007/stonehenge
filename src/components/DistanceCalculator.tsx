@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface DistanceResult {
   distanceKm: number;
@@ -55,6 +55,10 @@ export default function DistanceCalculator({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DistanceResult | null>(null);
   
+  // Google Places Autocomplete
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<any>(null);
+  
   // Delivery options
   const [deliveryRequired, setDeliveryRequired] = useState(initialDeliveryRequired);
   const [overrideDeliveryCost, setOverrideDeliveryCost] = useState<number | null>(
@@ -70,6 +74,52 @@ export default function DistanceCalculator({
       ? initialTemplatingCost
       : null
   );
+
+  // Initialize Google Places Autocomplete
+  useEffect(() => {
+    if (!inputRef.current || autocompleteRef.current) return;
+
+    // Load Google Maps script if not already loaded
+    if (typeof window !== 'undefined' && (typeof (window as any).google === 'undefined' || !(window as any).google.maps)) {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = initAutocomplete;
+      document.head.appendChild(script);
+    } else {
+      initAutocomplete();
+    }
+
+    function initAutocomplete() {
+      if (!inputRef.current || typeof window === 'undefined') return;
+
+      const google = (window as any).google;
+      if (!google || !google.maps || !google.maps.places) return;
+
+      autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
+        componentRestrictions: { country: 'au' }, // Restrict to Australia
+        fields: ['formatted_address', 'address_components'],
+        types: ['address'],
+      });
+
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current?.getPlace();
+        if (place?.formatted_address) {
+          setAddress(place.formatted_address);
+        }
+      });
+    }
+
+    return () => {
+      if (autocompleteRef.current && typeof window !== 'undefined') {
+        const google = (window as any).google;
+        if (google && google.maps && google.maps.event) {
+          google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        }
+      }
+    };
+  }, []);
 
   // Load initial data if provided
   useState(() => {
@@ -195,11 +245,12 @@ export default function DistanceCalculator({
         <label className="label">Delivery Address</label>
         <div className="flex gap-2">
           <input
+            ref={inputRef}
             type="text"
             className="input flex-1"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            placeholder="Enter site address for distance calculation"
+            placeholder="Start typing address... (autocomplete enabled)"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
