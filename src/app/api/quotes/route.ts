@@ -56,6 +56,16 @@ interface QuoteCreateData {
   createdBy: number | null;
   rooms: RoomData[];
   drawingAnalysis?: DrawingAnalysisData | null;
+  // Delivery & Templating
+  deliveryAddress?: string | null;
+  deliveryDistanceKm?: number | null;
+  deliveryZoneId?: number | null;
+  deliveryCost?: number | null;
+  overrideDeliveryCost?: number | null;
+  templatingRequired?: boolean;
+  templatingDistanceKm?: number | null;
+  templatingCost?: number | null;
+  overrideTemplatingCost?: number | null;
 }
 
 export async function GET() {
@@ -90,6 +100,16 @@ export async function POST(request: NextRequest) {
         notes: data.notes,
         validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         createdBy: data.createdBy,
+        // Delivery & Templating
+        deliveryAddress: data.deliveryAddress,
+        deliveryDistanceKm: data.deliveryDistanceKm,
+        deliveryZoneId: data.deliveryZoneId,
+        deliveryCost: data.deliveryCost,
+        overrideDeliveryCost: data.overrideDeliveryCost,
+        templatingRequired: data.templatingRequired || false,
+        templatingDistanceKm: data.templatingDistanceKm,
+        templatingCost: data.templatingCost,
+        overrideTemplatingCost: data.overrideTemplatingCost,
         rooms: {
           create: data.rooms.map((room: RoomData) => ({
             name: room.name,

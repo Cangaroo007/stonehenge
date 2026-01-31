@@ -21,16 +21,39 @@ model Company {
   phone             String?
   fax               String?
   email             String?
+  website           String?
   
   // Workshop location for distance calculations
   workshopAddress   String    @map("workshop_address") // Used for Google Maps calculations
   
   // Branding
   logoUrl           String?   @map("logo_url")
+  logoStorageKey    String?   @map("logo_storage_key") // R2 storage key for logo
+  primaryColor      String    @default("#1e40af") @map("primary_color")
+  
+  // Quote Template Text
+  quoteIntroText1   String?   @map("quote_intro_text_1") @db.Text
+  quoteIntroText2   String?   @map("quote_intro_text_2") @db.Text
+  quoteIntroText3   String?   @map("quote_intro_text_3") @db.Text
+  quotePleaseNote   String?   @map("quote_please_note") @db.Text
+  quoteTermsText1   String?   @map("quote_terms_text_1") @db.Text
+  quoteTermsText2   String?   @map("quote_terms_text_2") @db.Text
+  quoteTermsText3   String?   @map("quote_terms_text_3") @db.Text
+  quoteTermsText4   String?   @map("quote_terms_text_4") @db.Text
+  
+  // Quote Settings
+  quoteValidityDays Int       @default(30) @map("quote_validity_days")
+  depositPercent    Int       @default(50) @map("deposit_percent")
+  termsUrl          String?   @map("terms_url")
+  
+  // Signature
+  signatureName     String?   @map("signature_name")
+  signatureTitle    String?   @map("signature_title")
   
   // Settings
   defaultTaxRate    Decimal   @default(10) @map("default_tax_rate") @db.Decimal(5, 2)
   currency          String    @default("AUD")
+  defaultUnitSystem String    @default("METRIC") @map("default_unit_system")
   
   isActive          Boolean   @default(true) @map("is_active")
   createdAt         DateTime  @default(now()) @map("created_at")

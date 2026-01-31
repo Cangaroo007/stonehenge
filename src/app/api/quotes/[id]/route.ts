@@ -69,6 +69,16 @@ interface QuoteUpdateData {
   // Calculation save support
   saveCalculation?: boolean;
   calculation?: CalculationData | null;
+  // Delivery & Templating
+  deliveryAddress?: string | null;
+  deliveryDistanceKm?: number | null;
+  deliveryZoneId?: number | null;
+  deliveryCost?: number | null;
+  overrideDeliveryCost?: number | null;
+  templatingRequired?: boolean;
+  templatingDistanceKm?: number | null;
+  templatingCost?: number | null;
+  overrideTemplatingCost?: number | null;
 }
 
 export async function GET(
@@ -87,6 +97,7 @@ export async function GET(
           },
         },
         priceBook: true,
+        deliveryZone: true,
         rooms: {
           orderBy: { sortOrder: 'asc' },
           include: {
@@ -220,6 +231,16 @@ export async function PUT(
           taxAmount: data.taxAmount,
           total: data.total,
           notes: data.notes,
+          // Delivery & Templating
+          deliveryAddress: data.deliveryAddress,
+          deliveryDistanceKm: data.deliveryDistanceKm,
+          deliveryZoneId: data.deliveryZoneId,
+          deliveryCost: data.deliveryCost,
+          overrideDeliveryCost: data.overrideDeliveryCost,
+          templatingRequired: data.templatingRequired,
+          templatingDistanceKm: data.templatingDistanceKm,
+          templatingCost: data.templatingCost,
+          overrideTemplatingCost: data.overrideTemplatingCost,
           rooms: {
             create: data.rooms.map((room: RoomData) => ({
               name: room.name,
