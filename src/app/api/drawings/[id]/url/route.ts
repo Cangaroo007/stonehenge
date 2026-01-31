@@ -1,89 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
-import { getDownloadUrl } from '@/lib/storage/r2';
+import { DrawingStorage } from '@/lib/r2';
 import prisma from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 
 /**
  * GET /api/drawings/[id]/url
- * Get a presigned URL for viewing a drawing
+ * Generate a presigned URL for viewing a drawing
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  console.log('[Drawing URL API] 📸 === REQUEST RECEIVED ===');
+  
   try {
-    const { id } = await params;
-    const currentUser = await getCurrentUser();
+    const { id: drawingId } = await params;
+    console.log('[Drawing URL API] Drawing ID:', drawingId);
 
+    // Check authentication
+    const currentUser = await getCurrentUser();
     if (!currentUser) {
+      console.error('[Drawing URL API] ❌ Unauthorized');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get the drawing
+    // Get drawing from database
     const drawing = await prisma.drawing.findUnique({
-      where: { id },
-      include: {
-        quote: {
-          select: {
-            id: true,
-            customerId: true,
-            createdBy: true,
-          },
-        },
+      where: { id: drawingId },
+      select: { 
+        storageKey: true,
+        filename: true,
+        mimeType: true,
       },
     });
 
     if (!drawing) {
+      console.error('[Drawing URL API] ❌ Drawing not found:', drawingId);
       return NextResponse.json({ error: 'Drawing not found' }, { status: 404 });
     }
 
-    // Check access permissions
-    const canViewAll = await hasPermission(
-      currentUser.id,
-      Permission.VIEW_ALL_QUOTES
-    );
-
-    const hasAccess =
-      canViewAll ||
-      drawing.quote.createdBy === currentUser.id ||
-      (currentUser.customerId && drawing.quote.customerId === currentUser.customerId);
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    // Generate presigned URL
-    console.log('[Drawing URL API] Generating presigned URL for drawing:', {
-      drawingId: drawing.id,
-      filename: drawing.filename,
+    console.log('[Drawing URL API] Drawing found:', { 
       storageKey: drawing.storageKey,
-      quoteId: drawing.quoteId
+      filename: drawing.filename 
     });
 
-    try {
-      const url = await getDownloadUrl(drawing.storageKey);
-      console.log('[Drawing URL API] ✅ Presigned URL generated successfully');
-      return NextResponse.json({ url });
-    } catch (error) {
-      // R2 error - log details and return placeholder response
-      console.error('[Drawing URL API] ❌ Failed to generate presigned URL:', {
-        error: error instanceof Error ? error.message : String(error),
-        storageKey: drawing.storageKey,
-        drawingId: drawing.id
-      });
-      
-      return NextResponse.json({
-        url: null,
-        placeholder: true,
-        message: error instanceof Error ? error.message : 'R2 storage error',
-        error: 'Failed to generate presigned URL'
-      });
-    }
+    // Generate presigned URL (valid for 1 hour)
+    const presignedUrl = await DrawingStorage.getPresignedUrl(drawing.storageKey);
+    
+    console.log('[Drawing URL API] ✅ Presigned URL generated successfully');
+
+    return NextResponse.json({ 
+      url: presignedUrl,
+      filename: drawing.filename,
+      mimeType: drawing.mimeType,
+    });
   } catch (error) {
-    console.error('Error getting drawing URL:', error);
+    console.error('[Drawing URL API] ❌ Error:', error);
     return NextResponse.json(
-      { error: 'Failed to get drawing URL' },
+      { error: error instanceof Error ? error.message : 'Failed to generate URL' },
       { status: 500 }
     );
   }
