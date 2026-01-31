@@ -1,6 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { createDrawing } from '@/lib/services/drawingService';
+import prisma from '@/lib/db';
+
+/**
+ * GET /api/quotes/[id]/drawings
+ * Get all drawings for a quote
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const quoteId = parseInt(id, 10);
+
+    if (isNaN(quoteId)) {
+      return NextResponse.json({ error: 'Invalid quote ID' }, { status: 400 });
+    }
+
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const drawings = await prisma.drawing.findMany({
+      where: { quoteId },
+      orderBy: [
+        { isPrimary: 'desc' },
+        { uploadedAt: 'desc' },
+      ],
+      select: {
+        id: true,
+        filename: true,
+        storageKey: true,
+        mimeType: true,
+        fileSize: true,
+        isPrimary: true,
+        uploadedAt: true,
+      },
+    });
+
+    return NextResponse.json(drawings);
+  } catch (error) {
+    console.error('[Get Drawings] Error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch drawings' },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * POST /api/quotes/[id]/drawings
