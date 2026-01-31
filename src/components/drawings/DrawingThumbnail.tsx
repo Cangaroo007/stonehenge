@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface DrawingThumbnailProps {
   drawingId: string;
@@ -15,12 +15,41 @@ export function DrawingThumbnail({
   onClick,
   className = '',
 }: DrawingThumbnailProps) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
 
-  // Use direct file endpoint to avoid presigned URL double-encoding
-  const url = `/api/drawings/${drawingId}/file`;
+  useEffect(() => {
+    let cancelled = false;
 
-  if (imageError) {
+    async function fetchPresignedUrl() {
+      try {
+        const response = await fetch(`/api/drawings/${drawingId}/url`);
+        if (!response.ok) throw new Error('Failed to get URL');
+        const data = await response.json();
+        if (!cancelled && data.url && !data.placeholder) {
+          setImageUrl(data.url);
+        } else if (!cancelled) {
+          setImageError(true);
+        }
+      } catch {
+        if (!cancelled) setImageError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchPresignedUrl();
+    return () => { cancelled = true; };
+  }, [drawingId]);
+
+  if (loading) {
+    return (
+      <div className={`bg-gray-100 rounded-lg animate-pulse ${className}`} />
+    );
+  }
+
+  if (imageError || !imageUrl) {
     return (
       <div className={`bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 ${className}`}>
         <svg className="h-8 w-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -36,10 +65,9 @@ export function DrawingThumbnail({
       className={`relative rounded-lg overflow-hidden cursor-pointer group ${className}`}
       onClick={onClick}
     >
-      {/* Use img tag to avoid Next.js Image optimization double-encoding */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={url}
+        src={imageUrl}
         alt={filename}
         className="absolute inset-0 w-full h-full object-contain"
         onError={() => setImageError(true)}
