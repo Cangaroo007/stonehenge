@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import imageCompression from 'browser-image-compression';
 import { formatCurrency, calculateArea } from '@/lib/utils';
 import EdgeSelector from '@/app/(dashboard)/quotes/[id]/builder/components/EdgeSelector';
+import DistanceCalculator from '@/components/DistanceCalculator';
 
 interface Customer {
   id: number;
@@ -247,6 +248,22 @@ export default function QuoteForm({
   const [projectName, setProjectName] = useState(initialData?.projectName || '');
   const [projectAddress, setProjectAddress] = useState(initialData?.projectAddress || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
+  
+  // Delivery & Templating state
+  const [deliveryExpanded, setDeliveryExpanded] = useState(false);
+  const [deliveryData, setDeliveryData] = useState({
+    deliveryAddress: initialData?.projectAddress || '',
+    deliveryDistanceKm: null as number | null,
+    deliveryZoneId: null as number | null,
+    deliveryCost: null as number | null,
+    deliveryRequired: true,
+    templatingRequired: false,
+    templatingDistanceKm: null as number | null,
+    templatingCost: null as number | null,
+    overrideDeliveryCost: null as number | null,
+    overrideTemplatingCost: null as number | null,
+  });
+  
   const [rooms, setRooms] = useState<QuoteRoom[]>(
     initialData?.rooms.map((r) => ({
       id: String(r.id),
@@ -336,9 +353,21 @@ export default function QuoteForm({
         subtotal += calculatePieceCost(piece).total;
       });
     });
+    
+    // Add delivery and templating to subtotal
+    const deliveryCost = deliveryData.deliveryRequired ? (deliveryData.deliveryCost || 0) : 0;
+    const templatingCost = deliveryData.templatingRequired ? (deliveryData.templatingCost || 0) : 0;
+    subtotal += deliveryCost + templatingCost;
+    
     const taxAmount = subtotal * (taxRate / 100);
     const total = subtotal + taxAmount;
-    return { subtotal, taxAmount, total };
+    return { 
+      subtotal, 
+      taxAmount, 
+      total,
+      deliveryCost,
+      templatingCost,
+    };
   }
 
   const totals = calculateTotals();
@@ -844,6 +873,16 @@ export default function QuoteForm({
         projectAddress,
         notes,
         status,
+        // Delivery & Templating data
+        deliveryAddress: deliveryData.deliveryAddress || projectAddress,
+        deliveryDistanceKm: deliveryData.deliveryDistanceKm,
+        deliveryZoneId: deliveryData.deliveryZoneId,
+        deliveryCost: deliveryData.deliveryRequired ? deliveryData.deliveryCost : 0,
+        overrideDeliveryCost: deliveryData.overrideDeliveryCost,
+        templatingRequired: deliveryData.templatingRequired,
+        templatingDistanceKm: deliveryData.templatingDistanceKm,
+        templatingCost: deliveryData.templatingCost,
+        overrideTemplatingCost: deliveryData.overrideTemplatingCost,
         rooms: rooms.map((r, ri) => ({
           name: r.name,
           sortOrder: ri,
@@ -1074,6 +1113,60 @@ export default function QuoteForm({
             />
           </div>
         </div>
+      </div>
+
+      {/* Delivery & Templating Section */}
+      <div className="card">
+        <button
+          type="button"
+          onClick={() => setDeliveryExpanded(!deliveryExpanded)}
+          className="w-full p-4 flex items-center justify-between bg-gray-50 rounded-t-xl hover:bg-gray-100 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="text-lg font-semibold text-gray-900">Delivery & Templating</span>
+            {!deliveryExpanded && deliveryData.deliveryCost !== null && (
+              <span className="text-sm text-green-600 flex items-center gap-1">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Calculated
+              </span>
+            )}
+          </div>
+          <svg
+            className={`h-5 w-5 text-gray-500 transition-transform ${deliveryExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {deliveryExpanded && (
+          <div className="p-6 border-t border-gray-200">
+            <DistanceCalculator
+              initialAddress={projectAddress || deliveryData.deliveryAddress}
+              initialDeliveryRequired={deliveryData.deliveryRequired}
+              initialDeliveryCost={deliveryData.deliveryCost}
+              initialTemplatingRequired={deliveryData.templatingRequired}
+              initialTemplatingCost={deliveryData.templatingCost}
+              initialDistanceKm={deliveryData.deliveryDistanceKm}
+              initialZoneId={deliveryData.deliveryZoneId}
+              onChange={(data) => {
+                setDeliveryData(data);
+                // Auto-sync delivery address to project address if not set
+                if (!projectAddress && data.deliveryAddress) {
+                  setProjectAddress(data.deliveryAddress);
+                }
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Drawing Analysis Section */}
@@ -1930,6 +2023,22 @@ export default function QuoteForm({
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="space-y-1">
             <div className="flex justify-between gap-8">
+              <span className="text-gray-600">Pieces Subtotal:</span>
+              <span className="font-medium">{formatCurrency(totals.subtotal - totals.deliveryCost - totals.templatingCost)}</span>
+            </div>
+            {totals.deliveryCost > 0 && (
+              <div className="flex justify-between gap-8">
+                <span className="text-gray-600">Delivery:</span>
+                <span className="font-medium">{formatCurrency(totals.deliveryCost)}</span>
+              </div>
+            )}
+            {totals.templatingCost > 0 && (
+              <div className="flex justify-between gap-8">
+                <span className="text-gray-600">Templating:</span>
+                <span className="font-medium">{formatCurrency(totals.templatingCost)}</span>
+              </div>
+            )}
+            <div className="flex justify-between gap-8 pt-2 border-t border-gray-200">
               <span className="text-gray-600">Subtotal:</span>
               <span className="font-medium">{formatCurrency(totals.subtotal)}</span>
             </div>

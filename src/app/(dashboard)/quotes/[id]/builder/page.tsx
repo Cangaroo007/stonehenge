@@ -11,6 +11,7 @@ import PricingSummary from './components/PricingSummary';
 import QuoteActions from './components/QuoteActions';
 import DrawingImport from './components/DrawingImport';
 import { DrawingReferencePanel } from './components/DrawingReferencePanel';
+import DeliveryTemplatingCard from './components/DeliveryTemplatingCard';
 import { CutoutType, PieceCutout } from './components/CutoutSelector';
 import type { CalculationResult } from '@/lib/types/pricing';
 
@@ -561,6 +562,13 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
         <div className="lg:col-span-1 space-y-6">
           {/* Drawing Reference Panel */}
           <DrawingReferencePanel quoteId={quoteId} refreshKey={drawingsRefreshKey} />
+
+          {/* Delivery & Templating Card */}
+          <DeliveryTemplatingCard
+            quoteId={quoteId}
+            initialProjectAddress={quote.projectName}
+            onUpdate={triggerRecalculate}
+          />
 
           {/* Piece Editor */}
           {(isAddingPiece || selectedPiece) ? (

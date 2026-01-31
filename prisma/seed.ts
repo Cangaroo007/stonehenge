@@ -625,6 +625,102 @@ async function main() {
   console.log('✅ Created demo quote:', quote.quoteNumber);
 
   // ============================================
+  // CREATE COMPANY (for multi-tenancy support)
+  // ============================================
+  console.log('Seeding company...');
+  
+  const company = await prisma.company.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      name: 'Northcoast Stone Pty Ltd',
+      abn: '57 120 880 355',
+      address: '20 Hitech Drive, KUNDA PARK Queensland 4556, Australia',
+      phone: '0754767636',
+      fax: '0754768636',
+      email: 'admin@northcoaststone.com.au',
+      workshopAddress: '20 Hitech Drive, Kunda Park, Queensland 4556, Australia',
+      defaultTaxRate: 10.00,
+      currency: 'AUD',
+      isActive: true,
+    },
+  });
+  
+  console.log('✅ Company created');
+
+  // Update user to belong to company
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { companyId: company.id },
+  });
+
+  // ============================================
+  // CREATE DELIVERY ZONES
+  // ============================================
+  console.log('Seeding delivery zones...');
+  
+  const deliveryZones = [
+    {
+      name: 'Local',
+      maxDistanceKm: 30,
+      ratePerKm: 2.50,
+      baseCharge: 50.00,
+      companyId: company.id,
+      isActive: true,
+    },
+    {
+      name: 'Regional',
+      maxDistanceKm: 100,
+      ratePerKm: 3.00,
+      baseCharge: 75.00,
+      companyId: company.id,
+      isActive: true,
+    },
+    {
+      name: 'Remote',
+      maxDistanceKm: 500,
+      ratePerKm: 3.50,
+      baseCharge: 100.00,
+      companyId: company.id,
+      isActive: true,
+    },
+  ];
+
+  for (const zone of deliveryZones) {
+    await prisma.deliveryZone.upsert({
+      where: { 
+        companyId_name: { 
+          companyId: company.id, 
+          name: zone.name 
+        } 
+      },
+      update: zone,
+      create: zone,
+    });
+  }
+  
+  console.log('✅ Created', deliveryZones.length, 'delivery zones');
+
+  // ============================================
+  // CREATE TEMPLATING RATE
+  // ============================================
+  console.log('Seeding templating rate...');
+  
+  await prisma.templatingRate.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      name: 'Standard Templating',
+      baseCharge: 150.00,
+      ratePerKm: 2.00,
+      companyId: company.id,
+      isActive: true,
+    },
+  });
+  
+  console.log('✅ Created templating rate');
+
+  // ============================================
   // CREATE SETTINGS
   // ============================================
   const settings = [
