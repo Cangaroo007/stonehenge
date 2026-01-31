@@ -1,54 +1,51 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
 import { isR2Configured } from '@/lib/storage/r2';
+import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 
 /**
  * GET /api/storage/status
- * Diagnostic endpoint to check R2 storage configuration.
- * Only accessible to authenticated users.
+ * Check R2 storage configuration status (no auth required for diagnostics)
  */
 export async function GET() {
-  try {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const configured = isR2Configured();
+  
+  const status = {
+    configured,
+    environment: process.env.NODE_ENV,
+    hasAccountId: !!process.env.R2_ACCOUNT_ID || !!process.env.R2_ENDPOINT,
+    hasAccessKey: !!process.env.R2_ACCESS_KEY_ID,
+    hasSecretKey: !!process.env.R2_SECRET_ACCESS_KEY,
+    bucketName: process.env.R2_BUCKET_NAME || 'stonehenge-drawings (default)',
+    canConnectToR2: false,
+    r2Error: null as string | null,
+  };
+
+  // Try to actually connect to R2 if configured
+  if (configured) {
+    try {
+      const endpoint = process.env.R2_ENDPOINT || 
+        `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+      
+      const client = new S3Client({
+        region: 'auto',
+        endpoint,
+        credentials: {
+          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+        },
+      });
+
+      await client.send(new HeadBucketCommand({
+        Bucket: process.env.R2_BUCKET_NAME || 'stonehenge-drawings',
+      }));
+
+      status.canConnectToR2 = true;
+    } catch (error) {
+      status.r2Error = error instanceof Error ? error.message : String(error);
     }
-
-    const configured = isR2Configured();
-
-    const hasAccountId = !!(process.env.R2_ACCOUNT_ID || process.env.R2_ENDPOINT);
-    const hasAccessKey = !!process.env.R2_ACCESS_KEY_ID;
-    const hasSecretKey = !!process.env.R2_SECRET_ACCESS_KEY;
-    const bucketName = process.env.R2_BUCKET_NAME || 'stonehenge-drawings';
-    const nodeEnv = process.env.NODE_ENV;
-
-    console.log('[Storage Status] R2 configuration check:', {
-      configured,
-      hasAccountId,
-      hasAccessKey,
-      hasSecretKey,
-      bucketName,
-      nodeEnv,
-    });
-
-    return NextResponse.json({
-      configured,
-      environment: nodeEnv,
-      credentials: {
-        accountId: hasAccountId ? 'set' : 'MISSING',
-        accessKeyId: hasAccessKey ? 'set' : 'MISSING',
-        secretAccessKey: hasSecretKey ? 'set' : 'MISSING',
-      },
-      bucketName,
-      message: configured
-        ? 'R2 storage is configured and ready'
-        : 'R2 storage is NOT configured — uploads will fail in production',
-    });
-  } catch (error) {
-    console.error('[Storage Status] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to check storage status' },
-      { status: 500 }
-    );
   }
+  
+  return NextResponse.json(status);
 }
+
+export const dynamic = 'force-dynamic';
