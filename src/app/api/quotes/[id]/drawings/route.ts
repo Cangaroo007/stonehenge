@@ -11,19 +11,25 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  console.log('[Get Drawings API] 📖 === REQUEST RECEIVED ===');
   try {
     const { id } = await params;
     const quoteId = parseInt(id, 10);
+    console.log('[Get Drawings API] Quote ID:', { id, quoteId, isValid: !isNaN(quoteId) });
 
     if (isNaN(quoteId)) {
+      console.error('[Get Drawings API] ❌ Invalid quote ID');
       return NextResponse.json({ error: 'Invalid quote ID' }, { status: 400 });
     }
 
     const currentUser = await getCurrentUser();
+    console.log('[Get Drawings API] User:', { userId: currentUser?.id, isAuth: !!currentUser });
     if (!currentUser) {
+      console.error('[Get Drawings API] ❌ Unauthorized');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    console.log('[Get Drawings API] Fetching drawings for quoteId:', quoteId);
     const drawings = await prisma.drawing.findMany({
       where: { quoteId },
       orderBy: [
@@ -41,9 +47,11 @@ export async function GET(
       },
     });
 
+    console.log('[Get Drawings API] ✅ Found drawings:', drawings.length);
+    console.log('[Get Drawings API] Drawings:', JSON.stringify(drawings.map(d => ({ id: d.id, filename: d.filename })), null, 2));
     return NextResponse.json(drawings);
   } catch (error) {
-    console.error('[Get Drawings] Error:', error);
+    console.error('[Get Drawings API] ❌ Error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch drawings' },
       { status: 500 }
