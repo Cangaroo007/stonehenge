@@ -316,6 +316,70 @@ export default function PricingSummary({
             </div>
           )}
 
+          {/* Delivery Section */}
+          {calculation?.breakdown.delivery && calculation.breakdown.delivery.finalCost > 0 && (
+            <div className="pb-3 border-b border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">DELIVERY</h4>
+              <div className="space-y-1 text-sm">
+                {calculation.breakdown.delivery.address && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Address:</span>
+                    <span className="text-right text-xs max-w-[200px] truncate">
+                      {calculation.breakdown.delivery.address}
+                    </span>
+                  </div>
+                )}
+                {calculation.breakdown.delivery.distanceKm && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Distance:</span>
+                    <span>{calculation.breakdown.delivery.distanceKm.toFixed(1)} km</span>
+                  </div>
+                )}
+                {calculation.breakdown.delivery.zone && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Zone:</span>
+                    <span>{calculation.breakdown.delivery.zone}</span>
+                  </div>
+                )}
+                {calculation.breakdown.delivery.overrideCost !== null && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Override Applied:</span>
+                    <span>{formatCurrency(calculation.breakdown.delivery.overrideCost)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-medium pt-1">
+                  <span>Delivery Cost:</span>
+                  <span>{formatCurrency(calculation.breakdown.delivery.finalCost)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Templating Section */}
+          {calculation?.breakdown.templating && calculation.breakdown.templating.required && calculation.breakdown.templating.finalCost > 0 && (
+            <div className="pb-3 border-b border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">TEMPLATING</h4>
+              <div className="space-y-1 text-sm">
+                {calculation.breakdown.templating.distanceKm && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Distance:</span>
+                    <span>{calculation.breakdown.templating.distanceKm.toFixed(1)} km</span>
+                  </div>
+                )}
+                {calculation.breakdown.templating.overrideCost !== null && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Override Applied:</span>
+                    <span>{formatCurrency(calculation.breakdown.templating.overrideCost)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-medium pt-1">
+                  <span>Templating Cost:</span>
+                  <span>{formatCurrency(calculation.breakdown.templating.finalCost)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Applied Discounts */}
           {calculation?.discounts && calculation.discounts.length > 0 && (
             <div className="pb-3 border-b border-gray-200">

@@ -73,6 +73,21 @@ export interface CalculationResult {
       discount: number;
       total: number;
     };
+    delivery?: {
+      address: string | null;
+      distanceKm: number | null;
+      zone: string | null;
+      calculatedCost: number | null;
+      overrideCost: number | null;
+      finalCost: number;
+    };
+    templating?: {
+      required: boolean;
+      distanceKm: number | null;
+      calculatedCost: number | null;
+      overrideCost: number | null;
+      finalCost: number;
+    };
   };
   appliedRules: AppliedRule[];
   discounts: DiscountBreakdown[];
