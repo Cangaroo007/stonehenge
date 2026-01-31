@@ -1,74 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
-import { getDrawingsForQuote, createDrawing } from '@/lib/services/drawingService';
-import prisma from '@/lib/db';
-
-/**
- * GET /api/quotes/[id]/drawings
- * Get all drawings for a quote
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const currentUser = await getCurrentUser();
-
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const quoteId = parseInt(id);
-    if (isNaN(quoteId)) {
-      return NextResponse.json({ error: 'Invalid quote ID' }, { status: 400 });
-    }
-
-    // Check if user can view this quote
-    const canViewAll = await hasPermission(
-      currentUser.id,
-      Permission.VIEW_ALL_QUOTES
-    );
-
-    // Get the quote to check ownership
-    const quote = await prisma.quote.findUnique({
-      where: { id: quoteId },
-      select: {
-        id: true,
-        customerId: true,
-        createdBy: true,
-      },
-    });
-
-    if (!quote) {
-      return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
-    }
-
-    // Check access
-    const hasAccess =
-      canViewAll ||
-      quote.createdBy === currentUser.id ||
-      (currentUser.customerId && quote.customerId === currentUser.customerId);
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const drawings = await getDrawingsForQuote(quoteId);
-    return NextResponse.json(drawings);
-  } catch (error) {
-    console.error('Error fetching drawings:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch drawings' },
-      { status: 500 }
-    );
-  }
-}
+import { createDrawing } from '@/lib/services/drawingService';
 
 /**
  * POST /api/quotes/[id]/drawings
- * Create a new drawing record for a quote
+ * Create a drawing database record after successful R2 upload
  */
 export async function POST(
   request: NextRequest,
@@ -76,66 +12,44 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const currentUser = await getCurrentUser();
+    const quoteId = parseInt(id, 10);
 
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const quoteId = parseInt(id);
     if (isNaN(quoteId)) {
       return NextResponse.json({ error: 'Invalid quote ID' }, { status: 400 });
     }
 
-    // Get the quote to find customerId and check access
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { storageKey, filename, mimeType, fileSize, analysisData } = body;
+
+    if (!storageKey || !filename || !mimeType) {
+      return NextResponse.json(
+        { error: 'Missing required fields: storageKey, filename, mimeType' },
+        { status: 400 }
+      );
+    }
+
+    // Get customerId from the quote
+    const prisma = (await import('@/lib/db')).default;
     const quote = await prisma.quote.findUnique({
       where: { id: quoteId },
-      select: {
-        customerId: true,
-        createdBy: true,
-      },
+      select: { customerId: true },
     });
 
     if (!quote) {
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     }
 
-    // Check if user can edit this quote
-    const canEdit = await hasPermission(
-      currentUser.id,
-      Permission.EDIT_QUOTES
-    );
-    const hasAccess =
-      canEdit ||
-      quote.createdBy === currentUser.id ||
-      (currentUser.customerId && quote.customerId === currentUser.customerId);
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    // Validate that the quote has a customer (required for drawing association)
-    if (!quote.customerId) {
-      return NextResponse.json(
-        { error: 'Quote must have a customer before uploading drawings' },
-        { status: 400 }
-      );
-    }
-
-    const body = await request.json();
-    const { filename, storageKey, mimeType, fileSize, analysisData } = body;
-
-    // Validate required fields
-    if (!filename || !storageKey || !mimeType) {
-      return NextResponse.json(
-        { error: 'Missing required fields: filename, storageKey, mimeType' },
-        { status: 400 }
-      );
-    }
-
-    // Check if this is the first drawing (make it primary)
-    const existingDrawings = await getDrawingsForQuote(quoteId);
-    const isPrimary = existingDrawings.length === 0;
+    console.log('[Create Drawing] Creating database record:', {
+      quoteId,
+      customerId: quote.customerId,
+      storageKey,
+      filename,
+    });
 
     const drawing = await createDrawing({
       filename,
@@ -145,14 +59,16 @@ export async function POST(
       quoteId,
       customerId: quote.customerId,
       analysisData,
-      isPrimary,
+      isPrimary: false,
     });
 
-    return NextResponse.json(drawing, { status: 201 });
+    console.log('[Create Drawing] ✅ Drawing record created:', drawing.id);
+
+    return NextResponse.json(drawing);
   } catch (error) {
-    console.error('Error saving drawing:', error);
+    console.error('[Create Drawing] ❌ Error:', error);
     return NextResponse.json(
-      { error: 'Failed to save drawing' },
+      { error: error instanceof Error ? error.message : 'Failed to create drawing record' },
       { status: 500 }
     );
   }
