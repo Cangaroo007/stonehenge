@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DrawingStorage } from '@/lib/storage/r2';
+import { getDownloadUrl } from '@/lib/storage/r2';
 import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
@@ -31,6 +31,7 @@ export async function GET(
         storageKey: true,
         filename: true,
         mimeType: true,
+        quoteId: true,
       },
     });
 
@@ -39,13 +40,15 @@ export async function GET(
       return NextResponse.json({ error: 'Drawing not found' }, { status: 404 });
     }
 
-    console.log('[Drawing URL API] Drawing found:', { 
+    console.log('[Drawing URL API] Generating presigned URL for drawing:', { 
+      drawingId,
+      filename: drawing.filename,
       storageKey: drawing.storageKey,
-      filename: drawing.filename 
+      quoteId: drawing.quoteId,
     });
 
     // Generate presigned URL (valid for 1 hour)
-    const presignedUrl = await DrawingStorage.getPresignedUrl(drawing.storageKey);
+    const presignedUrl = await getDownloadUrl(drawing.storageKey, 3600);
     
     console.log('[Drawing URL API] ✅ Presigned URL generated successfully');
 
