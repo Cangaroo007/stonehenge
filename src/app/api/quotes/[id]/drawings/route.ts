@@ -44,6 +44,13 @@ export async function POST(
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     }
 
+    if (!quote.customerId) {
+      return NextResponse.json(
+        { error: 'Quote has no customer assigned' },
+        { status: 400 }
+      );
+    }
+
     console.log('[Create Drawing] Creating database record:', {
       quoteId,
       customerId: quote.customerId,
