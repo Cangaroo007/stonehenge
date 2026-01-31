@@ -2,7 +2,7 @@
 
 Quote generation system for stone countertop fabrication.
 
-<!-- Force redeploy to pick up R2 environment variables -->
+<!-- Deployment trigger: Database migrations cleaned, ready to deploy -->
 
 ## Prerequisites
 
@@ -11,94 +11,58 @@ Quote generation system for stone countertop fabrication.
 
 ## Quick Start
 
-### 1. Install Dependencies
-
 ```bash
+# 1. Install dependencies
 npm install
-```
 
-### 2. Start Database
-
-```bash
-docker compose up -d
-```
-
-### 3. Set Up Environment
-
-```bash
+# 2. Set up environment variables
 cp .env.example .env
-```
+# Edit .env with your database credentials
 
-### 4. Run Database Migrations
+# 3. Start PostgreSQL with Docker
+docker-compose up -d
 
-```bash
+# 4. Run database migrations
 npx prisma migrate dev
-```
 
-### 5. Seed Demo Data
+# 5. Seed the database (optional)
+npm run seed
 
-```bash
-npx prisma db seed
-```
-
-### 6. Start Development Server
-
-```bash
+# 6. Start the development server
 npm run dev
 ```
 
-### 7. Open Application
-
 Visit http://localhost:3000
 
-**Demo Login:**
-- Email: admin@northcoaststone.com.au
-- Password: demo1234
+## Production Deployment
 
-## Project Structure
+The app auto-deploys to Railway from the `main` branch.
 
-```
-stonehenge/
-├── src/
-│   ├── app/                # Next.js pages
-│   ├── components/         # React components
-│   └── lib/                # Utilities, database
-├── prisma/
-│   ├── schema.prisma       # Database schema
-│   └── seed.ts             # Demo data
-├── uploads/                # Uploaded files (local)
-├── docker-compose.yml      # PostgreSQL container
-└── package.json
-```
+- **Database**: PostgreSQL on Railway
+- **Storage**: Cloudflare R2
+- **URL**: https://stonehenge-production.up.railway.app
 
 ## Key Features
 
-- Create and manage quotes
-- Material catalog with pricing
-- Pricing rules (edge profiles, cutouts, features)
+- AI-powered drawing analysis
+- Real-time quote calculation
+- Slab optimization
 - PDF quote generation
-- Customer management (basic)
-- File uploads for drawings
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm start` | Start production server |
-| `npx prisma studio` | Open database GUI |
-| `npx prisma migrate dev` | Run migrations |
-| `npx prisma db seed` | Seed demo data |
+- Customer portal
+- Role-based permissions
 
 ## Tech Stack
 
-- **Framework:** Next.js 14
-- **Database:** PostgreSQL
-- **ORM:** Prisma
-- **Styling:** TailwindCSS
-- **PDF Generation:** @react-pdf/renderer
+- **Framework**: Next.js 14 (App Router)
+- **Database**: PostgreSQL with Prisma ORM
+- **Storage**: Cloudflare R2
+- **AI**: Anthropic Claude (vision API)
+- **Deployment**: Railway
 
-## Deployment to Railway
+## Environment Variables
 
-See DEPLOY.md for full deployment instructions.
+See `.env.example` for required configuration.
+
+## Support
+
+For issues or questions, contact the development team.
