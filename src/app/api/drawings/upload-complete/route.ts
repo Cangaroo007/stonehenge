@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
         quoteId,
         customerId: quote.customerId,
         isPrimary: false,
-        analysisData: null,
+        // analysisData omitted (defaults to null in DB)
       },
     });
 
