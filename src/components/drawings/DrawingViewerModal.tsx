@@ -15,38 +15,12 @@ export function DrawingViewerModal({
   isOpen,
   onClose,
 }: DrawingViewerModalProps) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [urlError, setUrlError] = useState(false);
+  // Use server-side file proxy to avoid CORS/presigned URL issues
+  const url = `/api/drawings/${drawingId}/file`;
   const [zoom, setZoom] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-
-  // Fetch presigned URL when modal opens
-  useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
-
-    async function fetchPresignedUrl() {
-      try {
-        const response = await fetch(`/api/drawings/${drawingId}/url`);
-        if (!response.ok) throw new Error('Failed to get URL');
-        const data = await response.json();
-        if (!cancelled && data.url && !data.placeholder) {
-          setImageUrl(data.url);
-        } else if (!cancelled) {
-          setUrlError(true);
-        }
-      } catch {
-        if (!cancelled) setUrlError(true);
-      }
-    }
-
-    setImageUrl(null);
-    setUrlError(false);
-    fetchPresignedUrl();
-    return () => { cancelled = true; };
-  }, [isOpen, drawingId]);
 
   // Reset zoom and position when modal opens
   useEffect(() => {
@@ -173,25 +147,13 @@ export function DrawingViewerModal({
               transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
             }}
           >
-            {urlError && (
-              <div className="text-white/60 text-center">
-                <p>Failed to load drawing</p>
-              </div>
-            )}
-            {!imageUrl && !urlError && (
-              <div className="animate-pulse text-white/40">Loading...</div>
-            )}
-            {imageUrl && (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imageUrl}
-                  alt={filename}
-                  className="max-h-[90vh] w-auto object-contain select-none"
-                  draggable={false}
-                />
-              </>
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={filename}
+              className="max-h-[90vh] w-auto object-contain select-none"
+              draggable={false}
+            />
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface DrawingThumbnailProps {
   drawingId: string;
@@ -15,41 +15,12 @@ export function DrawingThumbnail({
   onClick,
   className = '',
 }: DrawingThumbnailProps) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Use server-side file proxy to avoid CORS/presigned URL issues
+  const url = `/api/drawings/${drawingId}/file`;
 
-    async function fetchPresignedUrl() {
-      try {
-        const response = await fetch(`/api/drawings/${drawingId}/url`);
-        if (!response.ok) throw new Error('Failed to get URL');
-        const data = await response.json();
-        if (!cancelled && data.url && !data.placeholder) {
-          setImageUrl(data.url);
-        } else if (!cancelled) {
-          setImageError(true);
-        }
-      } catch {
-        if (!cancelled) setImageError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchPresignedUrl();
-    return () => { cancelled = true; };
-  }, [drawingId]);
-
-  if (loading) {
-    return (
-      <div className={`bg-gray-100 rounded-lg animate-pulse ${className}`} />
-    );
-  }
-
-  if (imageError || !imageUrl) {
+  if (imageError) {
     return (
       <div className={`bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 ${className}`}>
         <svg className="h-8 w-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -67,7 +38,7 @@ export function DrawingThumbnail({
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={imageUrl}
+        src={url}
         alt={filename}
         className="absolute inset-0 w-full h-full object-contain"
         onError={() => setImageError(true)}
