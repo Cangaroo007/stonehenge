@@ -225,21 +225,40 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
     upload: UploadResult,
     analysisData?: Record<string, unknown>
   ) => {
-    const response = await fetch(`/api/quotes/${quoteId}/drawings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...upload,
-        analysisData,
-      }),
-    });
+    console.log('[SaveDrawing] 🔵 Starting database record creation...');
+    console.log('[SaveDrawing] Upload data:', upload);
+    console.log('[SaveDrawing] Quote ID:', quoteId);
+    console.log('[SaveDrawing] API URL:', `/api/quotes/${quoteId}/drawings`);
+    
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}/drawings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...upload,
+          analysisData,
+        }),
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to save drawing record');
+      console.log('[SaveDrawing] Response received:', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[SaveDrawing] ❌ API returned error:', errorData);
+        throw new Error(errorData.error || 'Failed to save drawing record');
+      }
+
+      const result = await response.json();
+      console.log('[SaveDrawing] ✅ Database record created successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('[SaveDrawing] ❌ FATAL ERROR:', error);
+      throw error;
     }
-
-    return response.json();
   }, [quoteId]);
 
   // Handle file selection
