@@ -12,6 +12,7 @@ import QuoteActions from './components/QuoteActions';
 import DrawingImport from './components/DrawingImport';
 import { DrawingReferencePanel } from './components/DrawingReferencePanel';
 import DeliveryTemplatingCard from './components/DeliveryTemplatingCard';
+import { OptimizationDisplay } from './components/OptimizationDisplay';
 import { CutoutType, PieceCutout } from './components/CutoutSelector';
 import type { CalculationResult } from '@/lib/types/pricing';
 
@@ -113,6 +114,7 @@ export default function QuoteBuilderPage() {
   const [showDrawingImport, setShowDrawingImport] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const [drawingsRefreshKey, setDrawingsRefreshKey] = useState(0);
+  const [optimizationRefreshKey, setOptimizationRefreshKey] = useState(0);
 
   // Trigger recalculation after piece changes
   const triggerRecalculate = useCallback(() => {
@@ -487,13 +489,18 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
         calculation={calculation}
         onSave={handleSaveQuote}
         onStatusChange={handleStatusChange}
+        onOptimizationSaved={() => setOptimizationRefreshKey(n => n + 1)}
         saving={saving}
       />
 
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Pieces List - 2 columns on large screens */}
-        <div className="lg:col-span-2">
+        {/* Left Column: Pieces List - 2 columns on large screens */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Optimization Display */}
+          <OptimizationDisplay quoteId={quoteId} refreshKey={optimizationRefreshKey} />
+          
+          {/* Pieces Card */}
           <div className="card">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-4">

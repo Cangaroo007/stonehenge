@@ -10,6 +10,7 @@ interface QuoteActionsProps {
   calculation: CalculationResult | null;
   onSave: () => Promise<void>;
   onStatusChange?: (newStatus: string) => Promise<void>;
+  onOptimizationSaved?: () => void;
   saving?: boolean;
 }
 
@@ -19,6 +20,7 @@ export default function QuoteActions({
   calculation,
   onSave,
   onStatusChange,
+  onOptimizationSaved,
   saving = false,
 }: QuoteActionsProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -293,6 +295,7 @@ export default function QuoteActions({
           onClose={() => setShowOptimizer(false)}
           onSaved={() => {
             setShowOptimizer(false);
+            onOptimizationSaved?.(); // Trigger refresh of OptimizationDisplay
           }}
         />
       )}

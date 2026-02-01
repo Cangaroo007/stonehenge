@@ -153,6 +153,7 @@ model User {
   quoteViews   QuoteView[]
   signatures   QuoteSignature[] @relation("QuoteSignatures")
   quoteOverrides Quote[] @relation("QuoteOverrides")
+  quoteVersions QuoteVersion[]  // Add reverse relation for QuoteVersion
 
   @@map("users")
 }
@@ -420,6 +421,7 @@ model Quote {
   views           QuoteView[]
   signature       QuoteSignature?
   drawings        Drawing[]
+  versions        QuoteVersion[]  // Add reverse relation for QuoteVersion
 
   priceBookId     String?     @map("price_book_id")
   priceBook       PriceBook?  @relation(fields: [priceBookId], references: [id])
@@ -895,4 +897,73 @@ model Drawing {
   @@index([quoteId])
   @@index([customerId])
   @@map("drawings")
+}
+
+// ============================================
+// QUOTE VERSION HISTORY
+// ============================================
+
+enum QuoteChangeType {
+  CREATED              // Initial creation
+  UPDATED              // General update
+  PIECES_ADDED         // New pieces added
+  PIECES_REMOVED       // Pieces deleted
+  PIECES_MODIFIED      // Piece dimensions/features changed
+  PRICING_RECALCULATED // Pricing was recalculated
+  PRICING_OVERRIDE     // Manual price override applied
+  DELIVERY_CHANGED     // Delivery/templating updated
+  STATUS_CHANGED       // Status transition (draft→sent, etc.)
+  SENT_TO_CLIENT       // Quote emailed to client
+  CLIENT_VIEWED        // Client opened the quote
+  CLIENT_APPROVED      // Client accepted/signed
+  CLIENT_REJECTED      // Client declined
+  REVISION_REQUESTED   // Client requested changes
+  ROLLED_BACK          // Restored from previous version
+  IMPORTED_FROM_AI     // Pieces imported from AI analysis
+}
+
+model QuoteVersion {
+  id              Int           @id @default(autoincrement())
+  
+  // Link to parent quote
+  quoteId         Int           @map("quote_id")
+  quote           Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  
+  // Version number (per quote, starts at 1)
+  version         Int
+  
+  // Complete snapshot of quote state at this version
+  // Includes: rooms, pieces, features, pricing, delivery, etc.
+  snapshotData    Json          @map("snapshot_data")
+  
+  // What triggered this version
+  changeType      QuoteChangeType @map("change_type")
+  changeReason    String?       @map("change_reason") // Optional user-provided reason
+  changeSummary   String?       @map("change_summary") // Auto-generated summary of changes
+  
+  // What specifically changed (for diff display)
+  // Format: { field: { old: value, new: value }, ... }
+  changes         Json?
+  
+  // Who made the change
+  changedByUserId Int           @map("changed_by_user_id")
+  changedByUser   User          @relation(fields: [changedByUserId], references: [id])
+  changedAt       DateTime      @default(now()) @map("changed_at")
+  
+  // If this version was created by rolling back
+  rolledBackFromVersion Int?    @map("rolled_back_from_version")
+  
+  // Pricing snapshot at this version
+  subtotal        Decimal       @db.Decimal(10, 2)
+  taxAmount       Decimal       @map("tax_amount") @db.Decimal(10, 2)
+  totalAmount     Decimal       @map("total_amount") @db.Decimal(10, 2)
+  
+  // Piece count for quick reference
+  pieceCount      Int           @default(0) @map("piece_count")
+  
+  @@unique([quoteId, version])
+  @@index([quoteId])
+  @@index([changedByUserId])
+  @@index([changedAt])
+  @@map("quote_versions")
 }
