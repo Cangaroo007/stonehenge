@@ -11,7 +11,7 @@ import PricingSummary from './components/PricingSummary';
 import QuoteActions from './components/QuoteActions';
 import DrawingImport from './components/DrawingImport';
 import { DrawingReferencePanel } from './components/DrawingReferencePanel';
-import DeliveryTemplatingCard from './components/DeliveryTemplatingCard';
+// import DeliveryTemplatingCard from './components/DeliveryTemplatingCard'; // TEMPORARILY DISABLED
 import { CutoutType, PieceCutout } from './components/CutoutSelector';
 import type { CalculationResult } from '@/lib/types/pricing';
 
@@ -563,12 +563,12 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
           {/* Drawing Reference Panel */}
           <DrawingReferencePanel quoteId={quoteId} refreshKey={drawingsRefreshKey} />
 
-          {/* Delivery & Templating Card */}
-          <DeliveryTemplatingCard
+          {/* Delivery & Templating Card - TEMPORARILY DISABLED */}
+          {/* <DeliveryTemplatingCard
             quoteId={quoteId}
             initialProjectAddress={quote.projectName}
             onUpdate={triggerRecalculate}
-          />
+          /> */}
 
           {/* Piece Editor */}
           {(isAddingPiece || selectedPiece) ? (
