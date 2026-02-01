@@ -46,6 +46,9 @@ export async function POST(
     const body = await request.json();
     const { slabWidth = 3000, slabHeight = 1400, kerfWidth = 3, allowRotation = true } = body;
 
+    console.log(`[Optimize API] Starting optimization for quote ${quoteId}`);
+    console.log(`[Optimize API] Settings: ${slabWidth}x${slabHeight}mm, kerf: ${kerfWidth}mm, rotation: ${allowRotation}`);
+
     // Get quote with pieces
     const quote = await prisma.quote.findUnique({
       where: { id: quoteId },
@@ -99,6 +102,8 @@ export async function POST(
       );
     }
 
+    console.log(`[Optimize API] Processing ${pieces.length} pieces`);
+
     // Run optimization
     const result = optimizeSlabs({
       pieces,
@@ -108,7 +113,10 @@ export async function POST(
       allowRotation,
     });
 
+    console.log(`[Optimize API] Optimization complete: ${result.totalSlabs} slabs, ${result.wastePercent.toFixed(2)}% waste`);
+
     // Save to database
+    console.log('[Optimize API] Saving optimization to database...');
     const optimization = await prisma.slabOptimization.create({
       data: {
         quoteId,
@@ -123,14 +131,27 @@ export async function POST(
       },
     });
 
+    console.log(`[Optimize API] ✅ Saved optimization ${optimization.id} to database`);
+
+    // Verify save by reading it back
+    const verification = await prisma.slabOptimization.findUnique({
+      where: { id: optimization.id },
+    });
+
+    if (!verification) {
+      console.error('[Optimize API] ❌ CRITICAL: Save verification failed - data not found!');
+    } else {
+      console.log(`[Optimize API] ✅ Verified: optimization ${verification.id} persisted successfully`);
+    }
+
     return NextResponse.json({
       optimization,
       result,
     });
   } catch (error) {
-    console.error('Failed to optimize:', error);
+    console.error('[Optimize API] ❌ Failed to optimize:', error);
     return NextResponse.json(
-      { error: 'Optimization failed' },
+      { error: 'Optimization failed', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

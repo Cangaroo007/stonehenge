@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { optimizeSlabs } from '@/lib/services/slab-optimizer';
-import { OptimizationResult, OptimizationInput } from '@/types/slab-optimization';
+import { OptimizationResult } from '@/types/slab-optimization';
 import { SlabResults } from '@/components/slab-optimizer';
 import { generateCutListCSV, downloadCSV } from '@/lib/services/cut-list-generator';
 
@@ -43,17 +42,18 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load pieces from quote on mount
+  // Load pieces from quote AND saved optimization on mount
   useEffect(() => {
-    const loadPieces = async () => {
+    const loadData = async () => {
       setIsLoadingPieces(true);
       setError(null);
 
       try {
-        const response = await fetch(`/api/quotes/${quoteId}`);
-        if (!response.ok) throw new Error('Failed to fetch quote');
+        // Fetch quote with pieces
+        const quoteResponse = await fetch(`/api/quotes/${quoteId}`);
+        if (!quoteResponse.ok) throw new Error('Failed to fetch quote');
 
-        const quote = await response.json();
+        const quote = await quoteResponse.json();
 
         // Extract pieces from rooms
         const quotePieces: PieceInput[] = [];
@@ -66,7 +66,12 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
                 height: String(piece.widthMm),
                 label: piece.name || 'Piece',
                 thickness: String(piece.thicknessMm || 20),
-                finishedEdges: { top: false, bottom: false, left: false, right: false },
+                finishedEdges: {
+                  top: !!piece.edgeTop,
+                  bottom: !!piece.edgeBottom,
+                  left: !!piece.edgeLeft,
+                  right: !!piece.edgeRight,
+                },
               });
             });
           });
@@ -78,6 +83,40 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
         }
 
         setPieces(quotePieces);
+
+        // Try to load saved optimization
+        try {
+          const optimizationResponse = await fetch(`/api/quotes/${quoteId}/optimize`);
+          if (optimizationResponse.ok) {
+            const savedOptimization = await optimizationResponse.json();
+            
+            if (savedOptimization && savedOptimization.placements) {
+              console.log('✅ Loaded saved optimization from database');
+              
+              // Restore slab settings
+              setSlabWidth(String(savedOptimization.slabWidth || 3000));
+              setSlabHeight(String(savedOptimization.slabHeight || 1400));
+              setKerfWidth(String(savedOptimization.kerfWidth || 3));
+              
+              // Reconstruct result from saved data
+              const reconstructedResult: OptimizationResult = {
+                placements: savedOptimization.placements,
+                slabs: [], // Will be reconstructed from placements
+                totalSlabs: savedOptimization.totalSlabs,
+                totalUsedArea: 0, // Calculated from placements
+                totalWasteArea: savedOptimization.totalWaste,
+                wastePercent: Number(savedOptimization.wastePercent),
+                unplacedPieces: [],
+                laminationSummary: savedOptimization.laminationSummary,
+              };
+              
+              setResult(reconstructedResult);
+            }
+          }
+        } catch (err) {
+          // No saved optimization found - that's okay
+          console.log('No saved optimization found (new optimization)');
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load quote pieces');
       } finally {
@@ -85,7 +124,7 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
       }
     };
 
-    loadPieces();
+    loadData();
   }, [quoteId]);
 
   // Add new piece
@@ -123,8 +162,8 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
     ));
   };
 
-  // Run optimization
-  const runOptimization = () => {
+  // Run optimization - now calls API route to save to database
+  const runOptimization = async () => {
     setError(null);
     setIsOptimizing(true);
 
@@ -138,32 +177,33 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
       if (isNaN(slabH) || slabH <= 0) throw new Error('Invalid slab height');
       if (isNaN(kerf) || kerf < 0) throw new Error('Invalid kerf width');
 
-      const validPieces = pieces
-        .filter(p => p.width && p.height)
-        .map(p => ({
-          id: p.id,
-          width: parseInt(p.width) || 0,
-          height: parseInt(p.height) || 0,
-          label: p.label || `Piece ${p.id}`,
-          thickness: parseInt(p.thickness) || 20,
-          finishedEdges: p.finishedEdges,
-        }))
-        .filter(p => p.width > 0 && p.height > 0);
-
-      if (validPieces.length === 0) {
+      if (pieces.length === 0) {
         throw new Error('Add at least one valid piece');
       }
 
-      const input: OptimizationInput = {
-        pieces: validPieces,
-        slabWidth: slabW,
-        slabHeight: slabH,
-        kerfWidth: kerf,
-        allowRotation,
-      };
+      console.log('🔄 Running optimization via API (will save to database)...');
 
-      const optimizationResult = optimizeSlabs(input);
-      setResult(optimizationResult);
+      // Call API route to run optimization AND save to database
+      const response = await fetch(`/api/quotes/${quoteId}/optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slabWidth: slabW,
+          slabHeight: slabH,
+          kerfWidth: kerf,
+          allowRotation,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Optimization failed');
+      }
+
+      const data = await response.json();
+      console.log('✅ Optimization saved to database:', data.optimization.id);
+      
+      setResult(data.result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Optimization failed');
     } finally {
