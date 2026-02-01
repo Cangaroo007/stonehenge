@@ -33,7 +33,10 @@ export async function GET(request: Request) {
         contentType = 'image/svg+xml';
       }
 
-      return new Response(fileData, {
+      // Convert Buffer to Uint8Array for Response compatibility
+      const arrayBuffer = new Uint8Array(fileData).buffer;
+      
+      return new Response(arrayBuffer, {
         headers: {
           'Content-Type': contentType,
           'Cache-Control': 'public, max-age=31536000, immutable',
