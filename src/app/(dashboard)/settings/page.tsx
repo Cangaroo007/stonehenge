@@ -1,9 +1,28 @@
+import Link from 'next/link';
+
 export const dynamic = 'force-dynamic';
 
 export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+
+      {/* Company Settings Card */}
+      <Link href="/settings/company" className="block">
+        <div className="card p-6 hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-blue-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">Company Settings</h2>
+              <p className="text-sm text-gray-600">
+                Manage company details, branding, logo, and quote templates
+              </p>
+            </div>
+            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+      </Link>
 
       <div className="card p-6">
         <h2 className="text-lg font-semibold mb-4">Company Information</h2>

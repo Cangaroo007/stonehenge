@@ -50,14 +50,32 @@ export async function GET(
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     }
 
-    // Company details
+    // Fetch company settings from database (with fallbacks to env vars)
+    const companyData = await prisma.company.findFirst();
+    
     const company = {
-      name: process.env.COMPANY_NAME || 'Northcoast Stone Pty Ltd',
-      abn: process.env.COMPANY_ABN || '57 120 880 355',
-      address: process.env.COMPANY_ADDRESS || '20 Hitech Drive, KUNDA PARK Queensland 4556, Australia',
-      phone: process.env.COMPANY_PHONE || '0754767636',
-      fax: process.env.COMPANY_FAX || '0754768636',
-      email: process.env.COMPANY_EMAIL || 'admin@northcoaststone.com.au',
+      name: companyData?.name || process.env.COMPANY_NAME || 'Northcoast Stone Pty Ltd',
+      abn: companyData?.abn || process.env.COMPANY_ABN || '57 120 880 355',
+      address: companyData?.address || process.env.COMPANY_ADDRESS || '20 Hitech Drive, KUNDA PARK Queensland 4556, Australia',
+      phone: companyData?.phone || process.env.COMPANY_PHONE || '0754767636',
+      fax: companyData?.fax || process.env.COMPANY_FAX || '0754768636',
+      email: companyData?.email || process.env.COMPANY_EMAIL || 'admin@northcoaststone.com.au',
+    };
+
+    // Quote template settings (with defaults)
+    const settings = {
+      introText1: companyData?.quoteIntroText1 || 'Please see below for our price breakdown for your quotation as per the plans supplied. Any differences in stonework at measure and fabrication stage will be charged accordingly.',
+      introText2: companyData?.quoteIntroText2 || 'This quote is for supply, fabrication and local installation of stonework.',
+      introText3: companyData?.quoteIntroText3 || 'Thank you for the opportunity in submitting this quotation. We look forward to working with you.',
+      pleaseNote: companyData?.quotePleaseNote || 'This Quote is based on the proviso that all stonework is the same colour and fabricated and installed at the same time. Any variation from this assumption will require re-quoting.',
+      termsText1: companyData?.quoteTermsText1 || `Upon acceptance of this quotation I hereby certify that the above information is true and correct. I have read and understand the TERMS AND CONDITIONS OF TRADE OF ${company.name.toUpperCase()} which forms part of, and is intended to read in conjunction with this quotation. I agree to be bound by these conditions. I authorise the use of my personal information as detailed in the Privacy Act Clause therein. I agree that if I am a Director or a shareholder (owning at least 15% of the shares) of the client I shall be personally liable for the performance of the client's obligations under this act.`,
+      termsText2: companyData?.quoteTermsText2 || `Please read this quote carefully for all details regarding edge thickness, stone colour and work description. We require a ${companyData?.depositPercent || 50}% deposit and completed purchase order upon acceptance of this quote.`,
+      termsText3: companyData?.quoteTermsText3 || `Please contact our office via email ${company.email} if you wish to proceed.`,
+      termsText4: companyData?.quoteTermsText4 || `This quote is valid for ${companyData?.quoteValidityDays || 30} days, on the exception of being signed off as a job, where it will be valid for a 3 month period.`,
+      signatureName: companyData?.signatureName || 'Beau Kavanagh',
+      signatureTitle: companyData?.signatureTitle || null,
+      depositPercent: companyData?.depositPercent || 50,
+      validityDays: companyData?.quoteValidityDays || 30,
     };
 
     // Parse decimal values
@@ -231,21 +249,21 @@ export async function GET(
     // Introduction paragraphs
     y = drawWrappedText(
       page1,
-      'Please see below for our price breakdown for your quotation as per the plans supplied. Any differences in stonework at measure and fabrication stage will be charged accordingly.',
+      settings.introText1,
       margin, y, contentWidth, helvetica, 10, darkGray
     );
     y -= 10;
 
     y = drawWrappedText(
       page1,
-      'This quote is for supply, fabrication and local installation of stonework.',
+      settings.introText2,
       margin, y, contentWidth, helvetica, 10, darkGray
     );
     y -= 10;
 
     y = drawWrappedText(
       page1,
-      'Thank you for the opportunity in submitting this quotation. We look forward to working with you.',
+      settings.introText3,
       margin, y, contentWidth, helvetica, 10, darkGray
     );
     y -= 25;
@@ -270,7 +288,7 @@ export async function GET(
 
     drawWrappedText(
       page1,
-      'This Quote is based on the proviso that all stonework is the same colour and fabricated and installed at the same time. Any variation from this assumption will require re-quoting.',
+      settings.pleaseNote,
       margin + 10, y - 30, contentWidth - 20, helveticaBold, 9, darkGray
     );
     y -= noteBoxHeight + 20;
@@ -291,28 +309,28 @@ export async function GET(
     // Terms paragraphs
     y = drawWrappedText(
       page1,
-      `Upon acceptance of this quotation I hereby certify that the above information is true and correct. I have read and understand the TERMS AND CONDITIONS OF TRADE OF ${company.name.toUpperCase()} which forms part of, and is intended to read in conjunction with this quotation. I agree to be bound by these conditions. I authorise the use of my personal information as detailed in the Privacy Act Clause therein. I agree that if I am a Director or a shareholder (owning at least 15% of the shares) of the client I shall be personally liable for the performance of the client's obligations under this act.`,
+      settings.termsText1,
       margin, y, contentWidth, helvetica, 8, gray
     );
     y -= 15;
 
     y = drawWrappedText(
       page1,
-      'Please read this quote carefully for all details regarding edge thickness, stone colour and work description. We require a 50% deposit and completed purchase order upon acceptance of this quote.',
+      settings.termsText2,
       margin, y, contentWidth, helvetica, 8, gray
     );
     y -= 15;
 
     y = drawWrappedText(
       page1,
-      `Please contact our office via email ${company.email} if you wish to proceed.`,
+      settings.termsText3,
       margin, y, contentWidth, helvetica, 8, gray
     );
     y -= 15;
 
     y = drawWrappedText(
       page1,
-      'This quote is valid for 30 days, on the exception of being signed off as a job, where it will be valid for a 3 month period.',
+      settings.termsText4,
       margin, y, contentWidth, helvetica, 8, gray
     );
     y -= 35;
@@ -320,8 +338,12 @@ export async function GET(
     // Signature
     page1.drawText('Yours Sincerely', { x: margin, y, size: 10, font: helvetica, color: black });
     y -= 40;
-    page1.drawText('Beau Kavanagh', { x: margin, y, size: 10, font: helveticaBold, color: black });
+    page1.drawText(settings.signatureName, { x: margin, y, size: 10, font: helveticaBold, color: black });
     y -= 15;
+    if (settings.signatureTitle) {
+      page1.drawText(settings.signatureTitle, { x: margin, y, size: 10, font: helvetica, color: gray });
+      y -= 15;
+    }
     page1.drawText(company.name, { x: margin, y, size: 10, font: helvetica, color: gray });
 
     // Page 1 footer
