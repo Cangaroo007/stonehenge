@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Script from 'next/script';
 
 interface DistanceResult {
   distanceKm: number;
@@ -56,10 +55,9 @@ export default function DistanceCalculator({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DistanceResult | null>(null);
   
-  // Google Places Autocomplete
+  // Google Places Autocomplete - DISABLED to prevent crashes
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<any>(null);
-  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
   
   // Delivery options
   const [deliveryRequired, setDeliveryRequired] = useState(initialDeliveryRequired);
@@ -77,43 +75,12 @@ export default function DistanceCalculator({
       : null
   );
 
-  // Initialize Google Places Autocomplete
+  // Google Places Autocomplete initialization - DISABLED
+  // TODO: Re-enable after fixing Google Maps loading issue
   useEffect(() => {
-    if (!googleMapsLoaded || !inputRef.current || autocompleteRef.current) return;
-
-    const google = (window as any).google;
-    if (!google || !google.maps || !google.maps.places) return;
-
-    try {
-      autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
-        componentRestrictions: { country: 'au' },
-        fields: ['formatted_address', 'address_components'],
-        types: ['address'],
-      });
-
-      autocompleteRef.current.addListener('place_changed', () => {
-        const place = autocompleteRef.current?.getPlace();
-        if (place?.formatted_address) {
-          setAddress(place.formatted_address);
-        }
-      });
-    } catch (err) {
-      console.error('Failed to initialize Google Autocomplete:', err);
-    }
-
-    return () => {
-      if (autocompleteRef.current && typeof window !== 'undefined') {
-        const google = (window as any).google;
-        if (google && google.maps && google.maps.event) {
-          try {
-            google.maps.event.clearInstanceListeners(autocompleteRef.current);
-          } catch (err) {
-            console.error('Failed to clear autocomplete listeners:', err);
-          }
-        }
-      }
-    };
-  }, [googleMapsLoaded]);
+    // Temporarily disabled to prevent page crashes
+    return;
+  }, []);
 
   // Load initial data if provided
   useEffect(() => {
@@ -417,14 +384,6 @@ export default function DistanceCalculator({
           Enter a delivery address and click "Calculate Distance" to get delivery and templating costs
         </div>
       )}
-
-      {/* Google Maps Script */}
-      <Script
-        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
-        onLoad={() => setGoogleMapsLoaded(true)}
-        onError={(e) => console.error('Failed to load Google Maps', e)}
-        strategy="lazyOnload"
-      />
     </div>
   );
 }
