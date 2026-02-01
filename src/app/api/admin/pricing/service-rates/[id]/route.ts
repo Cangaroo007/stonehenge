@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireAuthLegacy as requireAuth } from '@/lib/auth';
 
 // GET /api/admin/pricing/service-rates/[id] - Get single service rate
 export async function GET(

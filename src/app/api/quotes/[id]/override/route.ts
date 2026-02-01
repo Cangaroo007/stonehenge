@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireAuthLegacy as requireAuth } from '@/lib/auth';
 import { logActivity } from '@/lib/audit';
 
 // POST /api/quotes/[id]/override

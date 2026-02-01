@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { hasPermissionAsync, Permission } from '@/lib/permissions';
 import { createAuditLog, getClientIp, getUserAgent, getChanges } from '@/lib/audit';
 import { hashPassword } from '@/lib/auth';
 import prisma from '@/lib/db';
@@ -22,7 +22,7 @@ export async function GET(
     }
 
     // Check permission
-    const canView = await hasPermission(currentUser.id, Permission.VIEW_USERS);
+    const canView = await hasPermissionAsync(currentUser.id, Permission.VIEW_USERS);
     if (!canView) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -86,7 +86,7 @@ export async function PUT(
     }
 
     // Check permission
-    const canManage = await hasPermission(currentUser.id, Permission.MANAGE_USERS);
+    const canManage = await hasPermissionAsync(currentUser.id, Permission.MANAGE_USERS);
     if (!canManage) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -222,7 +222,7 @@ export async function DELETE(
     }
 
     // Check permission
-    const canManage = await hasPermission(currentUser.id, Permission.MANAGE_USERS);
+    const canManage = await hasPermissionAsync(currentUser.id, Permission.MANAGE_USERS);
     if (!canManage) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

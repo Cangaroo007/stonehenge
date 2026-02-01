@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import prisma from './db';
+import { UserRole } from '@prisma/client';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'default-secret-change-me'
@@ -112,10 +113,64 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Require authentication for API routes
- * Throws an error if user is not authenticated or doesn't have required role
+ * Require authentication for API routes - Modern version (no request param)
+ * Returns auth result with user or error details
  */
 export async function requireAuth(
+  allowedRoles?: string[]
+): Promise<{ user: UserPayload & { companyId: number; role: UserRole } } | { error: string; status: number }> {
+  const token = await getAuthCookie();
+  
+  if (!token) {
+    return { error: 'Unauthorized: No authentication token', status: 401 };
+  }
+  
+  const user = await verifyToken(token);
+  
+  if (!user) {
+    return { error: 'Unauthorized: Invalid token', status: 401 };
+  }
+  
+  // Get full user details including companyId
+  const fullUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      companyId: true,
+      customerId: true,
+    },
+  });
+
+  if (!fullUser || !fullUser.companyId) {
+    return { error: 'User not found or no company assigned', status: 403 };
+  }
+  
+  // Check if user has required role
+  if (allowedRoles && allowedRoles.length > 0) {
+    if (!allowedRoles.includes(fullUser.role)) {
+      return { error: `Unauthorized: Required role: ${allowedRoles.join(' or ')}`, status: 403 };
+    }
+  }
+  
+  return { 
+    user: {
+      id: fullUser.id,
+      email: fullUser.email,
+      name: fullUser.name,
+      role: fullUser.role,
+      companyId: fullUser.companyId,
+      customerId: fullUser.customerId,
+    }
+  };
+}
+
+/**
+ * Legacy requireAuth for backwards compatibility with existing routes
+ */
+export async function requireAuthLegacy(
   request: Request,
   allowedRoles?: string[]
 ): Promise<UserPayload> {

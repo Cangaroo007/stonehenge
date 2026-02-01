@@ -118,9 +118,26 @@ export const CUSTOMER_USER_ROLE_PERMISSIONS: Record<CustomerUserRole, Permission
 };
 
 /**
- * Check if user has a specific permission
+ * Check if user has a specific permission (synchronous version for loaded user data)
  */
-export async function hasPermission(
+export function hasPermission(
+  user: { role: UserRole; permissions?: { permission: Permission }[] },
+  permission: Permission
+): boolean {
+  // CUSTOM role uses database permissions
+  if (user.role === UserRole.CUSTOM) {
+    return user.permissions?.some(p => p.permission === permission) ?? false;
+  }
+
+  // Predefined staff roles use ROLE_PERMISSIONS mapping
+  const rolePermissions = ROLE_PERMISSIONS[user.role];
+  return rolePermissions.includes(permission);
+}
+
+/**
+ * Check if user has a specific permission (async version that loads user data)
+ */
+export async function hasPermissionAsync(
   userId: number,
   permission: Permission
 ): Promise<boolean> {
@@ -135,34 +152,7 @@ export async function hasPermission(
     return false;
   }
 
-  // CUSTOM role uses database permissions
-  if (user.role === UserRole.CUSTOM) {
-    return user.permissions.some(p => p.permission === permission);
-  }
-
-  // CUSTOMER role - check CustomerUserRole
-  if (user.role === UserRole.CUSTOMER) {
-    const customerUserRole = user.customerUserRole;
-    
-    // If no customer user role set, default to CUSTOMER_VIEWER
-    if (!customerUserRole) {
-      const viewerPermissions = CUSTOMER_USER_ROLE_PERMISSIONS[CustomerUserRole.CUSTOMER_VIEWER];
-      return viewerPermissions.includes(permission);
-    }
-    
-    // CUSTOM customer role uses database permissions
-    if (customerUserRole === CustomerUserRole.CUSTOM) {
-      return user.permissions.some(p => p.permission === permission);
-    }
-    
-    // Predefined customer roles
-    const customerPermissions = CUSTOMER_USER_ROLE_PERMISSIONS[customerUserRole];
-    return customerPermissions.includes(permission);
-  }
-
-  // Predefined staff roles use ROLE_PERMISSIONS mapping
-  const rolePermissions = ROLE_PERMISSIONS[user.role];
-  return rolePermissions.includes(permission);
+  return hasPermission(user, permission);
 }
 
 /**
@@ -173,7 +163,7 @@ export async function hasAnyPermission(
   permissions: Permission[]
 ): Promise<boolean> {
   for (const permission of permissions) {
-    if (await hasPermission(userId, permission)) {
+    if (await hasPermissionAsync(userId, permission)) {
       return true;
     }
   }
@@ -188,7 +178,7 @@ export async function hasAllPermissions(
   permissions: Permission[]
 ): Promise<boolean> {
   for (const permission of permissions) {
-    if (!(await hasPermission(userId, permission))) {
+    if (!(await hasPermissionAsync(userId, permission))) {
       return false;
     }
   }
@@ -246,12 +236,12 @@ export async function canAccessQuote(
   }
 
   // Check if user has VIEW_ALL_QUOTES permission
-  if (await hasPermission(userId, Permission.VIEW_ALL_QUOTES)) {
+  if (await hasPermissionAsync(userId, Permission.VIEW_ALL_QUOTES)) {
     return true;
   }
 
   // Check if user has VIEW_OWN_QUOTES and created this quote
-  if (await hasPermission(userId, Permission.VIEW_OWN_QUOTES)) {
+  if (await hasPermissionAsync(userId, Permission.VIEW_OWN_QUOTES)) {
     const quote = await prisma.quote.findUnique({
       where: { id: quoteId },
     });

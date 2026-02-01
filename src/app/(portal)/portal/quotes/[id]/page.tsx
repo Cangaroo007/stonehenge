@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import { UserRole } from '@prisma/client';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { hasPermissionAsync, Permission } from '@/lib/permissions';
 import QuoteViewTracker from '@/app/(dashboard)/quotes/[id]/components/QuoteViewTracker';
 import QuoteSignatureSection from '@/app/(dashboard)/quotes/[id]/components/QuoteSignatureSection';
 
@@ -64,8 +64,8 @@ export default async function CustomerQuoteDetailPage({
   }
 
   // Check permissions
-  const canDownload = await hasPermission(user.id, Permission.DOWNLOAD_QUOTES);
-  const canApprove = await hasPermission(user.id, Permission.APPROVE_QUOTES);
+  const canDownload = await hasPermissionAsync(user.id, Permission.DOWNLOAD_QUOTES);
+  const canApprove = await hasPermissionAsync(user.id, Permission.APPROVE_QUOTES);
 
   return (
     <div className="space-y-6">

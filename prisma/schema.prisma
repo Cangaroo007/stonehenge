@@ -408,6 +408,9 @@ model Quote {
   notes          String?
   internalNotes  String?   @map("internal_notes")
   
+  // Version tracking
+  currentVersion    Int           @default(1) @map("current_version")
+  
   // Metadata
   createdBy      Int?      @map("created_by")
   createdByUser  User?     @relation(fields: [createdBy], references: [id])

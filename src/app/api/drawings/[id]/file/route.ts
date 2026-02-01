@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { hasPermissionAsync, Permission } from '@/lib/permissions';
 import { getFromR2 } from '@/lib/storage/r2';
 import prisma from '@/lib/db';
 
@@ -39,7 +39,7 @@ export async function GET(
     }
 
     // Check access permissions
-    const canViewAll = await hasPermission(
+    const canViewAll = await hasPermissionAsync(
       currentUser.id,
       Permission.VIEW_ALL_QUOTES
     );

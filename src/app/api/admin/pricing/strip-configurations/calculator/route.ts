@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireAuthLegacy as requireAuth } from '@/lib/auth';
 
 interface PieceInput {
   id: number;

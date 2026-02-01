@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { hasPermissionAsync, Permission } from '@/lib/permissions';
 import prisma from '@/lib/db';
 
 /**
@@ -25,7 +25,7 @@ export async function GET(
     }
 
     // Check if user can view this quote
-    const canViewAll = await hasPermission(currentUser.id, Permission.VIEW_ALL_QUOTES);
+    const canViewAll = await hasPermissionAsync(currentUser.id, Permission.VIEW_ALL_QUOTES);
     
     // Get the quote to check ownership
     const quote = await prisma.quote.findUnique({
