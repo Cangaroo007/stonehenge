@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { uploadToR2, deleteFromR2 } from '@/lib/storage/r2';
 
 export const dynamic = 'force-dynamic';
@@ -9,9 +8,9 @@ export const dynamic = 'force-dynamic';
 // POST /api/company/logo - Upload company logo to R2
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const user = await getCurrentUser();
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -99,9 +98,9 @@ export async function POST(request: Request) {
 // DELETE /api/company/logo - Remove company logo
 export async function DELETE() {
   try {
-    const session = await getServerSession(authOptions);
+    const user = await getCurrentUser();
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
