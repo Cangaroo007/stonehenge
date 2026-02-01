@@ -385,12 +385,18 @@ export default function OptimizePage() {
             <div className="space-y-3">
               {pieces.map((piece, index) => {
                 const is40mmPlus = parseInt(piece.thickness) >= 40;
-                const hasFinishedEdges = is40mmPlus && (
+                const hasFinishedEdges = (
                   piece.finishedEdges.top || 
                   piece.finishedEdges.bottom || 
                   piece.finishedEdges.left || 
                   piece.finishedEdges.right
                 );
+                const edgeCount = [
+                  piece.finishedEdges.top, 
+                  piece.finishedEdges.bottom, 
+                  piece.finishedEdges.left, 
+                  piece.finishedEdges.right
+                ].filter(Boolean).length;
                 
                 return (
                   <div key={piece.id} className="p-3 bg-gray-50 rounded-lg space-y-3">
@@ -438,68 +444,64 @@ export default function OptimizePage() {
                       </button>
                     </div>
                     
-                    {/* Finished edges (only for 40mm+) */}
-                    {is40mmPlus && (
-                      <div className="ml-7 pl-3 border-l-2 border-blue-200">
-                        <div className="text-xs font-medium text-gray-700 mb-2">
-                          Finished Edges (for lamination)
-                          {hasFinishedEdges && (
-                            <span className="ml-2 text-blue-600">
-                              → Will generate {
-                                [piece.finishedEdges.top, piece.finishedEdges.bottom, 
-                                 piece.finishedEdges.left, piece.finishedEdges.right]
-                                .filter(Boolean).length
-                              } strip{
-                                [piece.finishedEdges.top, piece.finishedEdges.bottom, 
-                                 piece.finishedEdges.left, piece.finishedEdges.right]
-                                .filter(Boolean).length !== 1 ? 's' : ''
-                              }
-                            </span>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-4 gap-2">
-                          <label className="flex items-center gap-1 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={piece.finishedEdges.top}
-                              onChange={(e) => updatePieceEdge(piece.id, 'top', e.target.checked)}
-                              className="rounded text-blue-600"
-                            />
-                            <span>Top</span>
-                          </label>
-                          <label className="flex items-center gap-1 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={piece.finishedEdges.bottom}
-                              onChange={(e) => updatePieceEdge(piece.id, 'bottom', e.target.checked)}
-                              className="rounded text-blue-600"
-                            />
-                            <span>Bottom</span>
-                          </label>
-                          <label className="flex items-center gap-1 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={piece.finishedEdges.left}
-                              onChange={(e) => updatePieceEdge(piece.id, 'left', e.target.checked)}
-                              className="rounded text-blue-600"
-                            />
-                            <span>Left</span>
-                          </label>
-                          <label className="flex items-center gap-1 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={piece.finishedEdges.right}
-                              onChange={(e) => updatePieceEdge(piece.id, 'right', e.target.checked)}
-                              className="rounded text-blue-600"
-                            />
-                            <span>Right</span>
-                          </label>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Each finished edge generates a 40mm lamination strip
-                        </p>
+                    {/* Finished edges - Show for ALL thicknesses */}
+                    <div className="ml-7 pl-3 border-l-2 border-blue-200">
+                      <div className="text-xs font-medium text-gray-700 mb-2">
+                        Finished Edges
+                        {hasFinishedEdges && is40mmPlus && (
+                          <span className="ml-2 text-blue-600">
+                            → Will generate {edgeCount} lamination strip{edgeCount !== 1 ? 's' : ''}
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <div className="grid grid-cols-4 gap-2">
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={piece.finishedEdges.top}
+                            onChange={(e) => updatePieceEdge(piece.id, 'top', e.target.checked)}
+                            className="rounded text-blue-600"
+                          />
+                          <span>Top</span>
+                        </label>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={piece.finishedEdges.bottom}
+                            onChange={(e) => updatePieceEdge(piece.id, 'bottom', e.target.checked)}
+                            className="rounded text-blue-600"
+                          />
+                          <span>Bottom</span>
+                        </label>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={piece.finishedEdges.left}
+                            onChange={(e) => updatePieceEdge(piece.id, 'left', e.target.checked)}
+                            className="rounded text-blue-600"
+                          />
+                          <span>Left</span>
+                        </label>
+                        <label className="flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={piece.finishedEdges.right}
+                            onChange={(e) => updatePieceEdge(piece.id, 'right', e.target.checked)}
+                            className="rounded text-blue-600"
+                          />
+                          <span>Right</span>
+                        </label>
+                      </div>
+                      {is40mmPlus ? (
+                        <p className="text-xs text-blue-600 mt-1 font-medium">
+                          ✓ 40mm+ thickness: Each edge generates a lamination strip
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Finished edges for this piece (no lamination strips for {piece.thickness}mm)
+                        </p>
+                      )}
+                    </div>
                   </div>
                 );
               })}

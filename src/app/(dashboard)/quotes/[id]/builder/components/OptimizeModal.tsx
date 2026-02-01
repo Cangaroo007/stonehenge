@@ -383,12 +383,18 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                     {pieces.map((piece, index) => {
                       const is40mmPlus = parseInt(piece.thickness) >= 40;
-                      const hasFinishedEdges = is40mmPlus && (
+                      const hasFinishedEdges = (
                         piece.finishedEdges.top || 
                         piece.finishedEdges.bottom || 
                         piece.finishedEdges.left || 
                         piece.finishedEdges.right
                       );
+                      const edgeCount = [
+                        piece.finishedEdges.top, 
+                        piece.finishedEdges.bottom, 
+                        piece.finishedEdges.left, 
+                        piece.finishedEdges.right
+                      ].filter(Boolean).length;
                       
                       return (
                         <div key={piece.id} className="bg-white rounded-lg p-3 border border-gray-200">
@@ -447,45 +453,41 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
                             </div>
                           </div>
 
-                          {/* Finished Edges - Only show for 40mm+ with enhanced UI */}
-                          {is40mmPlus && (
-                            <div className="mt-2 pt-2 border-t border-gray-100">
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="block text-xs font-medium text-gray-700">
-                                  Finished Edges (for lamination)
-                                </label>
-                                {hasFinishedEdges && (
-                                  <span className="text-xs text-blue-600 font-medium">
-                                    → {
-                                      [piece.finishedEdges.top, piece.finishedEdges.bottom, 
-                                       piece.finishedEdges.left, piece.finishedEdges.right]
-                                      .filter(Boolean).length
-                                    } strip{
-                                      [piece.finishedEdges.top, piece.finishedEdges.bottom, 
-                                       piece.finishedEdges.left, piece.finishedEdges.right]
-                                      .filter(Boolean).length !== 1 ? 's' : ''
-                                    }
-                                  </span>
-                                )}
-                              </div>
-                              <div className="grid grid-cols-4 gap-2">
-                                {(['top', 'bottom', 'left', 'right'] as const).map((edge) => (
-                                  <label key={edge} className="flex items-center gap-1 text-xs">
-                                    <input
-                                      type="checkbox"
-                                      checked={piece.finishedEdges[edge]}
-                                      onChange={(e) => updatePieceEdge(piece.id, edge, e.target.checked)}
-                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    <span className="capitalize">{edge}</span>
-                                  </label>
-                                ))}
-                              </div>
-                              <p className="text-xs text-gray-500 mt-1">
-                                Each finished edge generates a 40mm lamination strip
-                              </p>
+                          {/* Finished Edges - Show for ALL thicknesses */}
+                          <div className="mt-2 pt-2 border-t border-gray-100">
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-xs font-medium text-gray-700">
+                                Finished Edges
+                              </label>
+                              {hasFinishedEdges && is40mmPlus && (
+                                <span className="text-xs text-blue-600 font-medium">
+                                  → {edgeCount} lamination strip{edgeCount !== 1 ? 's' : ''}
+                                </span>
+                              )}
                             </div>
-                          )}
+                            <div className="grid grid-cols-4 gap-2">
+                              {(['top', 'bottom', 'left', 'right'] as const).map((edge) => (
+                                <label key={edge} className="flex items-center gap-1 text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={piece.finishedEdges[edge]}
+                                    onChange={(e) => updatePieceEdge(piece.id, edge, e.target.checked)}
+                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <span className="capitalize">{edge}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {is40mmPlus ? (
+                              <p className="text-xs text-blue-600 mt-1 font-medium">
+                                ✓ 40mm+ thickness: Each edge generates a lamination strip
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Finished edges for this piece (no lamination strips for {piece.thickness}mm)
+                              </p>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
