@@ -381,84 +381,114 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
                   </div>
 
                   <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {pieces.map((piece) => (
-                      <div key={piece.id} className="bg-white rounded-lg p-3 border border-gray-200">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <input
-                            type="text"
-                            value={piece.label}
-                            onChange={(e) => updatePiece(piece.id, 'label', e.target.value)}
-                            className="flex-1 px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="Piece name"
-                          />
-                          <button
-                            onClick={() => removePiece(piece.id)}
-                            className="text-red-500 hover:text-red-700 p-1"
-                            title="Remove piece"
-                          >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">Width</label>
+                    {pieces.map((piece, index) => {
+                      const is40mmPlus = parseInt(piece.thickness) >= 40;
+                      const hasFinishedEdges = is40mmPlus && (
+                        piece.finishedEdges.top || 
+                        piece.finishedEdges.bottom || 
+                        piece.finishedEdges.left || 
+                        piece.finishedEdges.right
+                      );
+                      
+                      return (
+                        <div key={piece.id} className="bg-white rounded-lg p-3 border border-gray-200">
+                          <div className="flex items-start justify-between gap-2 mb-2">
                             <input
-                              type="number"
-                              value={piece.width}
-                              onChange={(e) => updatePiece(piece.id, 'width', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500"
-                              placeholder="mm"
+                              type="text"
+                              value={piece.label}
+                              onChange={(e) => updatePiece(piece.id, 'label', e.target.value)}
+                              className="flex-1 px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Piece name"
                             />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">Height</label>
-                            <input
-                              type="number"
-                              value={piece.height}
-                              onChange={(e) => updatePiece(piece.id, 'height', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500"
-                              placeholder="mm"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">Thickness</label>
-                            <select
-                              value={piece.thickness}
-                              onChange={(e) => updatePiece(piece.id, 'thickness', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500"
+                            <button
+                              onClick={() => removePiece(piece.id)}
+                              className="text-red-500 hover:text-red-700 p-1"
+                              title="Remove piece"
                             >
-                              <option value="20">20mm</option>
-                              <option value="30">30mm</option>
-                              <option value="40">40mm</option>
-                              <option value="60">60mm</option>
-                            </select>
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
                           </div>
-                        </div>
 
-                        {/* Finished Edges - Only show for 40mm+ */}
-                        {parseInt(piece.thickness) >= 40 && (
-                          <div className="mt-2 pt-2 border-t border-gray-100">
-                            <label className="block text-xs text-gray-600 mb-1">Finished Edges:</label>
-                            <div className="flex gap-2 text-xs">
-                              {(['top', 'bottom', 'left', 'right'] as const).map((edge) => (
-                                <label key={edge} className="flex items-center gap-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={piece.finishedEdges[edge]}
-                                    onChange={(e) => updatePieceEdge(piece.id, edge, e.target.checked)}
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                  />
-                                  <span className="capitalize">{edge}</span>
-                                </label>
-                              ))}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Width</label>
+                              <input
+                                type="number"
+                                value={piece.width}
+                                onChange={(e) => updatePiece(piece.id, 'width', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500"
+                                placeholder="mm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Height</label>
+                              <input
+                                type="number"
+                                value={piece.height}
+                                onChange={(e) => updatePiece(piece.id, 'height', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500"
+                                placeholder="mm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Thickness</label>
+                              <select
+                                value={piece.thickness}
+                                onChange={(e) => updatePiece(piece.id, 'thickness', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="20">20mm</option>
+                                <option value="30">30mm</option>
+                                <option value="40">40mm</option>
+                                <option value="60">60mm</option>
+                              </select>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          {/* Finished Edges - Only show for 40mm+ with enhanced UI */}
+                          {is40mmPlus && (
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs font-medium text-gray-700">
+                                  Finished Edges (for lamination)
+                                </label>
+                                {hasFinishedEdges && (
+                                  <span className="text-xs text-blue-600 font-medium">
+                                    → {
+                                      [piece.finishedEdges.top, piece.finishedEdges.bottom, 
+                                       piece.finishedEdges.left, piece.finishedEdges.right]
+                                      .filter(Boolean).length
+                                    } strip{
+                                      [piece.finishedEdges.top, piece.finishedEdges.bottom, 
+                                       piece.finishedEdges.left, piece.finishedEdges.right]
+                                      .filter(Boolean).length !== 1 ? 's' : ''
+                                    }
+                                  </span>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-4 gap-2">
+                                {(['top', 'bottom', 'left', 'right'] as const).map((edge) => (
+                                  <label key={edge} className="flex items-center gap-1 text-xs">
+                                    <input
+                                      type="checkbox"
+                                      checked={piece.finishedEdges[edge]}
+                                      onChange={(e) => updatePieceEdge(piece.id, edge, e.target.checked)}
+                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="capitalize">{edge}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Each finished edge generates a 40mm lamination strip
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
