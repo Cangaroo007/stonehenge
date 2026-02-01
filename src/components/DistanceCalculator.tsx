@@ -122,7 +122,7 @@ export default function DistanceCalculator({
   }, []);
 
   // Load initial data if provided
-  useState(() => {
+  useEffect(() => {
     if (initialDistanceKm && initialZoneId && initialDeliveryCost !== null) {
       setResult({
         distanceKm: initialDistanceKm,
@@ -140,7 +140,7 @@ export default function DistanceCalculator({
         templatingCost: initialTemplatingCost,
       });
     }
-  });
+  }, [initialDistanceKm, initialZoneId, initialDeliveryCost, initialTemplatingCost, initialAddress]);
 
   const handleCalculate = async () => {
     if (!address.trim()) {
