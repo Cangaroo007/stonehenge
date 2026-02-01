@@ -10,9 +10,10 @@ import ClientTypeForm from './components/ClientTypeForm';
 import ClientTierForm from './components/ClientTierForm';
 import PricingRuleForm from './components/PricingRuleForm';
 import PriceBookForm from './components/PriceBookForm';
+import StripConfigurationForm from './components/StripConfigurationForm';
 import { cn } from '@/lib/utils';
 
-type TabKey = 'edge-types' | 'cutout-types' | 'thickness-options' | 'client-types' | 'client-tiers' | 'pricing-rules' | 'price-books';
+type TabKey = 'edge-types' | 'cutout-types' | 'thickness-options' | 'client-types' | 'client-tiers' | 'pricing-rules' | 'price-books' | 'strip-configurations';
 
 interface Tab {
   key: TabKey;
@@ -24,6 +25,7 @@ const tabs: Tab[] = [
   { key: 'edge-types', label: 'Edge Types', apiPath: '/api/admin/pricing/edge-types' },
   { key: 'cutout-types', label: 'Cutout Types', apiPath: '/api/admin/pricing/cutout-types' },
   { key: 'thickness-options', label: 'Thickness', apiPath: '/api/admin/pricing/thickness-options' },
+  { key: 'strip-configurations', label: 'Strip Configurations', apiPath: '/api/admin/pricing/strip-configurations' },
   { key: 'client-types', label: 'Client Types', apiPath: '/api/admin/pricing/client-types' },
   { key: 'client-tiers', label: 'Client Tiers', apiPath: '/api/admin/pricing/client-tiers' },
   { key: 'pricing-rules', label: 'Pricing Rules', apiPath: '/api/admin/pricing/pricing-rules' },
@@ -54,6 +56,14 @@ const columnConfigs: Record<TabKey, Column[]> = {
     { key: 'name', label: 'Name' },
     { key: 'value', label: 'Value (mm)' },
     { key: 'multiplier', label: 'Multiplier', render: (v) => `${Number(v).toFixed(2)}x` },
+    { key: 'isDefault', label: 'Default', render: (v) => (v ? 'Yes' : 'No') },
+    { key: 'isActive', label: 'Status', render: (v) => <StatusBadge active={v as boolean} /> },
+  ],
+  'strip-configurations': [
+    { key: 'name', label: 'Name' },
+    { key: 'usageType', label: 'Usage Type', render: (v) => formatUsageType(v as string) },
+    { key: 'finalThickness', label: 'Final Thickness', render: (v) => `${v}mm` },
+    { key: 'totalMaterialWidth', label: 'Total Width', render: (v) => `${v}mm` },
     { key: 'isDefault', label: 'Default', render: (v) => (v ? 'Yes' : 'No') },
     { key: 'isActive', label: 'Status', render: (v) => <StatusBadge active={v as boolean} /> },
   ],
@@ -106,6 +116,17 @@ function formatAdjustment(type: string, value: number): string {
     return `${Number(value) >= 0 ? '+' : ''}${Number(value).toFixed(2)}%`;
   }
   return `${Number(value) >= 0 ? '+' : ''}$${Number(value).toFixed(2)}`;
+}
+
+function formatUsageType(type: string): string {
+  const labels: Record<string, string> = {
+    EDGE_LAMINATION: 'Edge Lamination',
+    WATERFALL_STANDARD: 'Waterfall (Standard)',
+    WATERFALL_EXTENDED: 'Waterfall (Extended)',
+    APRON: 'Apron',
+    CUSTOM: 'Custom',
+  };
+  return labels[type] || type;
 }
 
 export default function PricingAdminPage() {
@@ -243,6 +264,8 @@ export default function PricingAdminPage() {
         return <CutoutTypeForm {...props} />;
       case 'thickness-options':
         return <ThicknessForm {...props} />;
+      case 'strip-configurations':
+        return <StripConfigurationForm {...props} />;
       case 'client-types':
         return <ClientTypeForm {...props} />;
       case 'client-tiers':

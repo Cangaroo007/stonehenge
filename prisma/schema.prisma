@@ -64,6 +64,7 @@ model Company {
   deliveryZones     DeliveryZone[]
   templatingRates   TemplatingRate[]
   priceBooks        PriceBook[]
+  stripConfigurations StripConfiguration[]
   
   @@map("companies")
 }
@@ -966,4 +967,57 @@ model QuoteVersion {
   @@index([changedByUserId])
   @@index([changedAt])
   @@map("quote_versions")
+}
+
+// ============================================
+// STRIP CUTTING CONFIGURATION
+// ============================================
+
+enum StripUsageType {
+  EDGE_LAMINATION      // Simple 40mm edge buildup
+  WATERFALL_STANDARD   // Standard waterfall (around 300mm)
+  WATERFALL_EXTENDED   // Extended waterfall (custom height)
+  APRON                // Front apron piece
+  CUSTOM               // User-defined
+}
+
+model StripConfiguration {
+  id                    Int       @id @default(autoincrement())
+  companyId             Int       @map("company_id")
+  company               Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  // Display
+  name                  String    // "Standard 40mm Edge", "60mm Waterfall", etc.
+  description           String?   // Optional notes about usage
+  
+  // Target appearance
+  finalThickness        Int       @map("final_thickness")  // Target edge appearance in mm (40, 60, 80)
+  
+  // Cut dimensions (in mm)
+  primaryStripWidth     Int?      @map("primary_strip_width")      // Main visible piece width (null if single piece cut)
+  laminationStripWidth  Int       @map("lamination_strip_width")   // Lamination strip width (typically 40mm)
+  kerfAllowance         Int       @default(8) @map("kerf_allowance")  // Blade loss in mm
+  
+  // Computed: totalMaterialWidth = (primaryStripWidth ?? 0) + laminationStripWidth + kerfAllowance
+  totalMaterialWidth    Int       @map("total_material_width")  // Total slab material needed
+  
+  // Usage context
+  usageType             StripUsageType @map("usage_type")
+  
+  // For slab optimizer - which edge types use this strip config
+  applicableEdgeTypes   String[]  @map("applicable_edge_types")  // Array of edge type codes, e.g., ["40MM_PENCIL", "40MM_BULLNOSE"]
+  
+  // Status
+  isDefault             Boolean   @default(false) @map("is_default")  // Default for this usage type
+  isActive              Boolean   @default(true) @map("is_active")
+  sortOrder             Int       @default(0) @map("sort_order")
+  
+  // Timestamps
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  
+  @@unique([companyId, name])
+  @@index([companyId, usageType])
+  @@index([companyId, isActive])
+  @@map("strip_configurations")
 }
