@@ -254,7 +254,7 @@ export default function DistanceCalculator({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div>
               <span className="text-xs text-blue-700 block font-medium">Distance</span>
-              <span className="text-lg font-bold text-blue-900">{result.distanceKm.toFixed(1)} km</span>
+              <span className="text-lg font-bold text-blue-900">{(Number(result.distanceKm) || 0).toFixed(1)} km</span>
             </div>
             <div>
               <span className="text-xs text-blue-700 block font-medium">Duration</span>
@@ -269,7 +269,7 @@ export default function DistanceCalculator({
             <div>
               <span className="text-xs text-blue-700 block font-medium">Base Charge</span>
               <span className="text-lg font-bold text-blue-900">
-                ${result.deliveryZone?.baseCharge.toFixed(2) || '—'}
+                ${(Number(result.deliveryZone?.baseCharge) || 0).toFixed(2) || '—'}
               </span>
             </div>
           </div>
@@ -294,7 +294,7 @@ export default function DistanceCalculator({
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Calculated Cost:</span>
                   <span className="font-medium">
-                    ${result.deliveryCost?.toFixed(2) || '—'}
+                    ${(Number(result.deliveryCost) || 0).toFixed(2) || '—'}
                   </span>
                 </div>
 
@@ -308,7 +308,7 @@ export default function DistanceCalculator({
                       className="input flex-1"
                       value={overrideDeliveryCost !== null ? overrideDeliveryCost : ''}
                       onChange={(e) => handleOverrideDeliveryChange(e.target.value)}
-                      placeholder={result.deliveryCost?.toFixed(2) || '0.00'}
+                      placeholder={(Number(result.deliveryCost) || 0).toFixed(2) || '0.00'}
                     />
                   </div>
                 </div>
@@ -316,7 +316,7 @@ export default function DistanceCalculator({
                 <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
                   <span className="font-semibold text-gray-900">Final Delivery Cost:</span>
                   <span className="text-lg font-bold text-primary-600">
-                    ${finalDeliveryCost?.toFixed(2) || '0.00'}
+                    ${(Number(finalDeliveryCost) || 0).toFixed(2) || '0.00'}
                   </span>
                 </div>
               </div>
@@ -347,7 +347,7 @@ export default function DistanceCalculator({
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Calculated Cost:</span>
                   <span className="font-medium">
-                    ${result.templatingCost?.toFixed(2) || '—'}
+                    ${(Number(result.templatingCost) || 0).toFixed(2) || '—'}
                   </span>
                 </div>
 
@@ -361,7 +361,7 @@ export default function DistanceCalculator({
                       className="input flex-1"
                       value={overrideTemplatingCost !== null ? overrideTemplatingCost : ''}
                       onChange={(e) => handleOverrideTemplatingChange(e.target.value)}
-                      placeholder={result.templatingCost?.toFixed(2) || '0.00'}
+                      placeholder={(Number(result.templatingCost) || 0).toFixed(2) || '0.00'}
                     />
                   </div>
                 </div>
@@ -369,7 +369,7 @@ export default function DistanceCalculator({
                 <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
                   <span className="font-semibold text-gray-900">Final Templating Cost:</span>
                   <span className="text-lg font-bold text-primary-600">
-                    ${finalTemplatingCost?.toFixed(2) || '0.00'}
+                    ${(Number(finalTemplatingCost) || 0).toFixed(2) || '0.00'}
                   </span>
                 </div>
               </div>

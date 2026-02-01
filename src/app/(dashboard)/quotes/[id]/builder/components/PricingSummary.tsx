@@ -233,7 +233,7 @@ export default function PricingSummary({
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Total Area:</span>
-                  <span>{calculation.breakdown.materials.totalAreaM2.toFixed(2)} m²</span>
+                  <span>{(Number(calculation.breakdown.materials.totalAreaM2) || 0).toFixed(2)} m²</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Rate:</span>
@@ -241,7 +241,7 @@ export default function PricingSummary({
                     {formatCurrency(calculation.breakdown.materials.baseRate)}/m²
                     {calculation.breakdown.materials.thicknessMultiplier !== 1 && (
                       <span className="ml-1">
-                        × {calculation.breakdown.materials.thicknessMultiplier.toFixed(1)}
+                        × {(Number(calculation.breakdown.materials.thicknessMultiplier) || 1).toFixed(1)}
                       </span>
                     )}
                   </span>
@@ -273,7 +273,7 @@ export default function PricingSummary({
                   <div key={edge.edgeTypeId} className="flex justify-between text-gray-600">
                     <span>{edge.edgeTypeName}:</span>
                     <span>
-                      {edge.linearMeters.toFixed(1)} lm × {formatCurrency(edge.appliedRate)} = {formatCurrency(edge.subtotal)}
+                      {(Number(edge.linearMeters) || 0).toFixed(1)} lm × {formatCurrency(edge.appliedRate)} = {formatCurrency(edge.subtotal)}
                     </span>
                   </div>
                 ))}
@@ -332,7 +332,7 @@ export default function PricingSummary({
                 {calculation.breakdown.delivery.distanceKm && (
                   <div className="flex justify-between text-gray-600">
                     <span>Distance:</span>
-                    <span>{calculation.breakdown.delivery.distanceKm.toFixed(1)} km</span>
+                    <span>{(Number(calculation.breakdown.delivery.distanceKm) || 0).toFixed(1)} km</span>
                   </div>
                 )}
                 {calculation.breakdown.delivery.zone && (
@@ -363,7 +363,7 @@ export default function PricingSummary({
                 {calculation.breakdown.templating.distanceKm && (
                   <div className="flex justify-between text-gray-600">
                     <span>Distance:</span>
-                    <span>{calculation.breakdown.templating.distanceKm.toFixed(1)} km</span>
+                    <span>{(Number(calculation.breakdown.templating.distanceKm) || 0).toFixed(1)} km</span>
                   </div>
                 )}
                 {calculation.breakdown.templating.overrideCost !== null && (
@@ -413,7 +413,7 @@ export default function PricingSummary({
               <span className="font-medium">{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">GST ({(GST_RATE * 100).toFixed(0)}%):</span>
+              <span className="text-gray-600">GST ({(Number(GST_RATE) * 100 || 0).toFixed(0)}%):</span>
               <span className="font-medium">{formatCurrency(gst)}</span>
             </div>
             <div className="flex justify-between pt-2 border-t border-gray-300">

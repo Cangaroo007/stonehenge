@@ -110,12 +110,12 @@ export default function DeliveryTemplatingCard({
           <div className="flex items-center gap-3 text-sm">
             {currentDeliveryCost !== null && currentDeliveryCost > 0 && (
               <span className="text-gray-600">
-                Delivery: <span className="font-medium">${currentDeliveryCost.toFixed(2)}</span>
+                Delivery: <span className="font-medium">${(Number(currentDeliveryCost) || 0).toFixed(2)}</span>
               </span>
             )}
             {currentTemplatingCost !== null && currentTemplatingCost > 0 && (
               <span className="text-gray-600">
-                Templating: <span className="font-medium">${currentTemplatingCost.toFixed(2)}</span>
+                Templating: <span className="font-medium">${(Number(currentTemplatingCost) || 0).toFixed(2)}</span>
               </span>
             )}
             <span className="text-green-600 flex items-center gap-1">
