@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Script from 'next/script';
 
 interface DistanceResult {
   distanceKm: number;
@@ -58,6 +59,7 @@ export default function DistanceCalculator({
   // Google Places Autocomplete
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<any>(null);
+  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
   
   // Delivery options
   const [deliveryRequired, setDeliveryRequired] = useState(initialDeliveryRequired);
@@ -77,28 +79,14 @@ export default function DistanceCalculator({
 
   // Initialize Google Places Autocomplete
   useEffect(() => {
-    if (!inputRef.current || autocompleteRef.current) return;
+    if (!googleMapsLoaded || !inputRef.current || autocompleteRef.current) return;
 
-    // Load Google Maps script if not already loaded
-    if (typeof window !== 'undefined' && (typeof (window as any).google === 'undefined' || !(window as any).google.maps)) {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = initAutocomplete;
-      document.head.appendChild(script);
-    } else {
-      initAutocomplete();
-    }
+    const google = (window as any).google;
+    if (!google || !google.maps || !google.maps.places) return;
 
-    function initAutocomplete() {
-      if (!inputRef.current || typeof window === 'undefined') return;
-
-      const google = (window as any).google;
-      if (!google || !google.maps || !google.maps.places) return;
-
+    try {
       autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
-        componentRestrictions: { country: 'au' }, // Restrict to Australia
+        componentRestrictions: { country: 'au' },
         fields: ['formatted_address', 'address_components'],
         types: ['address'],
       });
@@ -109,17 +97,23 @@ export default function DistanceCalculator({
           setAddress(place.formatted_address);
         }
       });
+    } catch (err) {
+      console.error('Failed to initialize Google Autocomplete:', err);
     }
 
     return () => {
       if (autocompleteRef.current && typeof window !== 'undefined') {
         const google = (window as any).google;
         if (google && google.maps && google.maps.event) {
-          google.maps.event.clearInstanceListeners(autocompleteRef.current);
+          try {
+            google.maps.event.clearInstanceListeners(autocompleteRef.current);
+          } catch (err) {
+            console.error('Failed to clear autocomplete listeners:', err);
+          }
         }
       }
     };
-  }, []);
+  }, [googleMapsLoaded]);
 
   // Load initial data if provided
   useEffect(() => {
@@ -423,6 +417,14 @@ export default function DistanceCalculator({
           Enter a delivery address and click "Calculate Distance" to get delivery and templating costs
         </div>
       )}
+
+      {/* Google Maps Script */}
+      <Script
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
+        onLoad={() => setGoogleMapsLoaded(true)}
+        onError={(e) => console.error('Failed to load Google Maps', e)}
+        strategy="lazyOnload"
+      />
     </div>
   );
 }
