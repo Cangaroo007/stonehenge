@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
+import { createQuoteVersion, createQuoteSnapshot } from '@/lib/services/quote-version-service';
 
 interface RoomData {
   name: string;
@@ -135,6 +137,21 @@ export async function PUT(
     const quoteId = parseInt(id);
     const data: QuoteUpdateData = await request.json();
 
+    // Get user ID for version tracking
+    let userId = 1; // fallback
+    try {
+      const authResult = await requireAuth();
+      if (!('error' in authResult)) {
+        userId = authResult.user.id;
+      }
+    } catch { /* use fallback */ }
+
+    // Take snapshot before any changes for version diff
+    let previousSnapshot;
+    try {
+      previousSnapshot = await createQuoteSnapshot(quoteId);
+    } catch { /* quote may not exist yet in version system */ }
+
     // Handle calculation save (partial update)
     if (data.saveCalculation && data.calculation) {
       const GST_RATE = 0.10;
@@ -164,6 +181,13 @@ export async function PUT(
         },
       });
 
+      // Record version
+      try {
+        await createQuoteVersion(quoteId, userId, 'PRICING_RECALCULATED', undefined, previousSnapshot);
+      } catch (versionError) {
+        console.error('Error creating version (non-blocking):', versionError);
+      }
+
       return NextResponse.json(quote);
     }
 
@@ -184,6 +208,13 @@ export async function PUT(
           priceBook: true,
         },
       });
+
+      // Record version
+      try {
+        await createQuoteVersion(quoteId, userId, 'STATUS_CHANGED', undefined, previousSnapshot);
+      } catch (versionError) {
+        console.error('Error creating version (non-blocking):', versionError);
+      }
 
       return NextResponse.json(quote);
     }
@@ -279,6 +310,13 @@ export async function PUT(
           drawingAnalysis: true,
         },
       });
+
+      // Record version
+      try {
+        await createQuoteVersion(quoteId, userId, 'UPDATED', undefined, previousSnapshot);
+      } catch (versionError) {
+        console.error('Error creating version (non-blocking):', versionError);
+      }
 
       return NextResponse.json(quote);
     }

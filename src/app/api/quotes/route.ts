@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
+import { createInitialVersion } from '@/lib/services/quote-version-service';
 
 interface RoomData {
   name: string;
@@ -158,6 +160,15 @@ export async function POST(request: NextRequest) {
         }),
       },
     });
+
+    // Create initial version for version history
+    try {
+      const authResult = await requireAuth();
+      const userId = 'error' in authResult ? (data.createdBy ?? 1) : authResult.user.id;
+      await createInitialVersion(quote.id, userId);
+    } catch (versionError) {
+      console.error('Error creating initial version (non-blocking):', versionError);
+    }
 
     return NextResponse.json(quote, { status: 201 });
   } catch (error) {
