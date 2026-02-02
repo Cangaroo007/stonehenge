@@ -22,9 +22,6 @@ import type {
   PricingRuleWithOverrides,
 } from '@/lib/types/pricing';
 
-// Re-export the original calculator for backward compatibility
-export { calculateQuotePrice as calculateQuotePriceV1 } from './pricing-calculator';
-
 /**
  * Enhanced pricing calculation result
  */
