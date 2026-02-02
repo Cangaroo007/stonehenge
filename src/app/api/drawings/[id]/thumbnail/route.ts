@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDownloadUrl, getFromR2 } from '@/lib/storage/r2';
 import prisma from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import {
-  generateAndStoreThumbnail,
-  getThumbnailBuffer,
-} from '@/lib/services/pdfThumbnail';
+import { generateAndStoreThumbnail } from '@/lib/services/pdfThumbnail';
 
 /**
  * GET /api/drawings/[id]/thumbnail
