@@ -163,6 +163,9 @@ export async function createQuoteSnapshot(quoteId: number): Promise<QuoteSnapsho
         areaSqm: Number(piece.areaSqm),
         materialId: piece.materialId,
         materialName: piece.materialName,
+        materialCost: Number(piece.materialCost),
+        featuresCost: Number(piece.featuresCost),
+        totalCost: Number(piece.totalCost),
         edgeTop: piece.edgeTop,
         edgeBottom: piece.edgeBottom,
         edgeLeft: piece.edgeLeft,
@@ -691,8 +694,11 @@ export async function rollbackToVersion(
   // Get current snapshot for comparison
   const currentSnapshot = await createQuoteSnapshot(quoteId);
 
-  // Restore the quote data from snapshot
+  // Restore the quote data from snapshot (full restore including rooms/pieces)
   await prisma.$transaction(async (tx) => {
+    // Delete existing rooms (cascade deletes pieces and features)
+    await tx.quoteRoom.deleteMany({ where: { quoteId } });
+
     // Update quote header fields
     await tx.quote.update({
       where: { id: quoteId },
@@ -719,12 +725,43 @@ export async function rollbackToVersion(
         deliveryCost: snapshot.pricing.deliveryCost,
         templatingCost: snapshot.pricing.templatingCost,
         validUntil: snapshot.validUntil ? new Date(snapshot.validUntil) : null,
+        // Recreate rooms with pieces from snapshot
+        rooms: {
+          create: snapshot.rooms.map((room) => ({
+            name: room.name,
+            sortOrder: room.sortOrder,
+            pieces: {
+              create: room.pieces.map((piece) => ({
+                name: piece.name,
+                description: piece.name,
+                widthMm: piece.widthMm,
+                lengthMm: piece.lengthMm,
+                thicknessMm: piece.thicknessMm,
+                areaSqm: piece.areaSqm,
+                materialId: piece.materialId,
+                materialName: piece.materialName,
+                materialCost: (piece as Record<string, unknown>).materialCost as number ?? 0,
+                featuresCost: (piece as Record<string, unknown>).featuresCost as number ?? 0,
+                totalCost: (piece as Record<string, unknown>).totalCost as number ?? 0,
+                sortOrder: 0,
+                edgeTop: piece.edgeTop,
+                edgeBottom: piece.edgeBottom,
+                edgeLeft: piece.edgeLeft,
+                edgeRight: piece.edgeRight,
+                features: {
+                  create: piece.features.map((f) => ({
+                    name: f.name,
+                    quantity: f.quantity,
+                    unitPrice: f.unitPrice,
+                    totalPrice: f.totalPrice,
+                  })),
+                },
+              })),
+            },
+          })),
+        },
       },
     });
-
-    // Note: Full room/piece restoration would be complex and potentially dangerous
-    // For now, we only restore header/pricing data
-    // In a production system, you might want to add a full restore option
   });
 
   // Create the rollback version

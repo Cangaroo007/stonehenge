@@ -8,11 +8,38 @@ export interface FieldChange {
   newValue: unknown;
 }
 
+export interface PieceDetail {
+  name: string;
+  room: string;
+  dimensions: string;
+  thickness: number;
+  material: string | null;
+  cost: number;
+  edges: string[];
+}
+
+export interface PieceModification {
+  name: string;
+  room: string;
+  changes: string[];
+  oldCost: number;
+  newCost: number;
+  costDiff: number;
+}
+
 export interface ChangeSummary {
   fieldChanges: FieldChange[];
-  piecesAdded: Array<{ name: string; room: string; dimensions: string }>;
-  piecesRemoved: Array<{ name: string; room: string; dimensions: string }>;
-  piecesModified: Array<{ name: string; room: string; changes: string[] }>;
+  piecesAdded: PieceDetail[];
+  piecesRemoved: PieceDetail[];
+  piecesModified: PieceModification[];
+  costImpact: {
+    oldTotal: number;
+    newTotal: number;
+    diff: number;
+    oldSubtotal: number;
+    newSubtotal: number;
+    subtotalDiff: number;
+  };
   description: string;
 }
 
@@ -34,7 +61,11 @@ export interface SnapshotForDiff {
       widthMm: number;
       lengthMm: number;
       thicknessMm: number;
+      areaSqm?: number;
       materialName: string | null;
+      materialCost?: number;
+      featuresCost?: number;
+      totalCost?: number;
       edgeTop: string | null;
       edgeBottom: string | null;
       edgeLeft: string | null;
@@ -54,6 +85,15 @@ export interface SnapshotForDiff {
   };
 }
 
+function formatEdges(piece: { edgeTop: string | null; edgeBottom: string | null; edgeLeft: string | null; edgeRight: string | null }): string[] {
+  const edges: string[] = [];
+  if (piece.edgeTop) edges.push(`Top: ${piece.edgeTop}`);
+  if (piece.edgeBottom) edges.push(`Bottom: ${piece.edgeBottom}`);
+  if (piece.edgeLeft) edges.push(`Left: ${piece.edgeLeft}`);
+  if (piece.edgeRight) edges.push(`Right: ${piece.edgeRight}`);
+  return edges;
+}
+
 /**
  * Generates a detailed change summary comparing two snapshots (client-safe)
  */
@@ -62,9 +102,9 @@ export function generateDetailedChangeSummary(
   newSnapshot: SnapshotForDiff
 ): ChangeSummary {
   const fieldChanges: FieldChange[] = [];
-  const piecesAdded: ChangeSummary['piecesAdded'] = [];
-  const piecesRemoved: ChangeSummary['piecesRemoved'] = [];
-  const piecesModified: ChangeSummary['piecesModified'] = [];
+  const piecesAdded: PieceDetail[] = [];
+  const piecesRemoved: PieceDetail[] = [];
+  const piecesModified: PieceModification[] = [];
 
   // Compare top-level fields
   const fieldMap: Array<{ key: keyof Pick<SnapshotForDiff, 'status' | 'clientType' | 'clientTier' | 'notes' | 'projectName' | 'projectAddress'>; label: string }> = [
@@ -105,7 +145,7 @@ export function generateDetailedChangeSummary(
   // Compare pricing
   const pricingFields: Array<{ key: keyof SnapshotForDiff['pricing']; label: string }> = [
     { key: 'subtotal', label: 'Subtotal' },
-    { key: 'taxAmount', label: 'Tax Amount' },
+    { key: 'taxAmount', label: 'GST' },
     { key: 'total', label: 'Total' },
     { key: 'deliveryCost', label: 'Delivery Cost' },
     { key: 'templatingCost', label: 'Templating Cost' },
@@ -142,23 +182,25 @@ export function generateDetailedChangeSummary(
   }
 
   // Compare pieces
-  type PieceInfo = { name: string; room: string; widthMm: number; lengthMm: number; thicknessMm: number; materialName: string | null; edgeTop: string | null; edgeBottom: string | null; edgeLeft: string | null; edgeRight: string | null };
+  type PieceInfo = {
+    name: string; room: string; widthMm: number; lengthMm: number; thicknessMm: number;
+    materialName: string | null; materialCost: number; featuresCost: number; totalCost: number;
+    edgeTop: string | null; edgeBottom: string | null; edgeLeft: string | null; edgeRight: string | null;
+  };
   const oldPieces = new Map<number, PieceInfo>();
   const newPieces = new Map<number, PieceInfo>();
 
   for (const room of oldSnapshot.rooms) {
     for (const piece of room.pieces) {
       oldPieces.set(piece.id, {
-        name: piece.name,
-        room: room.name,
-        widthMm: piece.widthMm,
-        lengthMm: piece.lengthMm,
-        thicknessMm: piece.thicknessMm,
+        name: piece.name, room: room.name,
+        widthMm: piece.widthMm, lengthMm: piece.lengthMm, thicknessMm: piece.thicknessMm,
         materialName: piece.materialName,
-        edgeTop: piece.edgeTop,
-        edgeBottom: piece.edgeBottom,
-        edgeLeft: piece.edgeLeft,
-        edgeRight: piece.edgeRight,
+        materialCost: piece.materialCost ?? 0,
+        featuresCost: piece.featuresCost ?? 0,
+        totalCost: piece.totalCost ?? 0,
+        edgeTop: piece.edgeTop, edgeBottom: piece.edgeBottom,
+        edgeLeft: piece.edgeLeft, edgeRight: piece.edgeRight,
       });
     }
   }
@@ -166,16 +208,14 @@ export function generateDetailedChangeSummary(
   for (const room of newSnapshot.rooms) {
     for (const piece of room.pieces) {
       newPieces.set(piece.id, {
-        name: piece.name,
-        room: room.name,
-        widthMm: piece.widthMm,
-        lengthMm: piece.lengthMm,
-        thicknessMm: piece.thicknessMm,
+        name: piece.name, room: room.name,
+        widthMm: piece.widthMm, lengthMm: piece.lengthMm, thicknessMm: piece.thicknessMm,
         materialName: piece.materialName,
-        edgeTop: piece.edgeTop,
-        edgeBottom: piece.edgeBottom,
-        edgeLeft: piece.edgeLeft,
-        edgeRight: piece.edgeRight,
+        materialCost: piece.materialCost ?? 0,
+        featuresCost: piece.featuresCost ?? 0,
+        totalCost: piece.totalCost ?? 0,
+        edgeTop: piece.edgeTop, edgeBottom: piece.edgeBottom,
+        edgeLeft: piece.edgeLeft, edgeRight: piece.edgeRight,
       });
     }
   }
@@ -187,7 +227,14 @@ export function generateDetailedChangeSummary(
   for (const id of newPieceIds) {
     if (!oldPieces.has(id)) {
       const p = newPieces.get(id)!;
-      piecesAdded.push({ name: p.name, room: p.room, dimensions: `${p.widthMm} x ${p.lengthMm}mm` });
+      piecesAdded.push({
+        name: p.name, room: p.room,
+        dimensions: `${p.widthMm} x ${p.lengthMm}mm`,
+        thickness: p.thicknessMm,
+        material: p.materialName,
+        cost: p.totalCost,
+        edges: formatEdges(p),
+      });
     }
   }
 
@@ -195,7 +242,14 @@ export function generateDetailedChangeSummary(
   for (const id of oldPieceIds) {
     if (!newPieces.has(id)) {
       const p = oldPieces.get(id)!;
-      piecesRemoved.push({ name: p.name, room: p.room, dimensions: `${p.widthMm} x ${p.lengthMm}mm` });
+      piecesRemoved.push({
+        name: p.name, room: p.room,
+        dimensions: `${p.widthMm} x ${p.lengthMm}mm`,
+        thickness: p.thicknessMm,
+        material: p.materialName,
+        cost: p.totalCost,
+        edges: formatEdges(p),
+      });
     }
   }
 
@@ -220,12 +274,29 @@ export function generateDetailedChangeSummary(
       if (oldP.edgeBottom !== newP.edgeBottom) changes.push(`Bottom edge: ${oldP.edgeBottom ?? 'none'} → ${newP.edgeBottom ?? 'none'}`);
       if (oldP.edgeLeft !== newP.edgeLeft) changes.push(`Left edge: ${oldP.edgeLeft ?? 'none'} → ${newP.edgeLeft ?? 'none'}`);
       if (oldP.edgeRight !== newP.edgeRight) changes.push(`Right edge: ${oldP.edgeRight ?? 'none'} → ${newP.edgeRight ?? 'none'}`);
+      if (oldP.totalCost !== newP.totalCost) {
+        changes.push(`Cost: $${oldP.totalCost.toFixed(2)} → $${newP.totalCost.toFixed(2)}`);
+      }
 
       if (changes.length > 0) {
-        piecesModified.push({ name: newP.name, room: newP.room, changes });
+        piecesModified.push({
+          name: newP.name, room: newP.room, changes,
+          oldCost: oldP.totalCost, newCost: newP.totalCost,
+          costDiff: newP.totalCost - oldP.totalCost,
+        });
       }
     }
   }
+
+  // Cost impact
+  const costImpact = {
+    oldTotal: oldSnapshot.pricing.total,
+    newTotal: newSnapshot.pricing.total,
+    diff: newSnapshot.pricing.total - oldSnapshot.pricing.total,
+    oldSubtotal: oldSnapshot.pricing.subtotal,
+    newSubtotal: newSnapshot.pricing.subtotal,
+    subtotalDiff: newSnapshot.pricing.subtotal - oldSnapshot.pricing.subtotal,
+  };
 
   // Build description
   const parts: string[] = [];
@@ -233,7 +304,11 @@ export function generateDetailedChangeSummary(
   if (piecesAdded.length > 0) parts.push(`${piecesAdded.length} piece(s) added`);
   if (piecesRemoved.length > 0) parts.push(`${piecesRemoved.length} piece(s) removed`);
   if (piecesModified.length > 0) parts.push(`${piecesModified.length} piece(s) modified`);
+  if (costImpact.diff !== 0) {
+    const sign = costImpact.diff > 0 ? '+' : '';
+    parts.push(`${sign}$${costImpact.diff.toFixed(2)} total impact`);
+  }
   const description = parts.length > 0 ? parts.join(', ') : 'No significant changes detected';
 
-  return { fieldChanges, piecesAdded, piecesRemoved, piecesModified, description };
+  return { fieldChanges, piecesAdded, piecesRemoved, piecesModified, costImpact, description };
 }
