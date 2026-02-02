@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['sharp'],
+  serverExternalPackages: ['sharp', 'pdf-to-img', '@napi-rs/canvas'],
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',

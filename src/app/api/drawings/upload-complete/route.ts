@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { uploadToR2, isR2Configured } from '@/lib/storage/r2';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '@/lib/db';
+import { generateAndStoreThumbnail } from '@/lib/services/pdfThumbnail';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -176,6 +177,21 @@ export async function POST(request: NextRequest) {
       drawingId: drawing.id,
       duration: `${dbDuration}ms`,
     });
+
+    // STEP 8.5: Generate PDF thumbnail (fire-and-forget, non-blocking)
+    if (file.type === 'application/pdf') {
+      generateAndStoreThumbnail(drawing.id, buffer, storageKey).catch(
+        (err) => {
+          console.error(
+            '[Unified Upload] ⚠️ Thumbnail generation failed (non-blocking):',
+            err instanceof Error ? err.message : err
+          );
+        }
+      );
+      console.log(
+        '[Unified Upload] 🖼️ PDF thumbnail generation started in background'
+      );
+    }
 
     // STEP 9: Success response
     const totalDuration = Date.now() - startTime;
