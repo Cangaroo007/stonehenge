@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+import VersionDiffView from './VersionDiffView';
+import type { ChangeSummary, SnapshotForDiff } from '@/lib/quote-version-diff';
+import { generateDetailedChangeSummary } from '@/lib/quote-version-diff';
 
 interface Version {
   id: number;
@@ -17,11 +20,13 @@ interface Version {
   totalAmount: string;
   pieceCount: number;
   isCurrent: boolean;
+  snapshotData: SnapshotForDiff | null;
 }
 
 interface VersionHistoryTabProps {
   quoteId: number;
   onVersionSelect?: (version: number) => void;
+  onVersionRestored?: () => void;
 }
 
 const CHANGE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -43,11 +48,12 @@ const CHANGE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   IMPORTED_FROM_AI: { label: 'AI Import', color: 'bg-purple-100 text-purple-700' },
 };
 
-export default function VersionHistoryTab({ quoteId, onVersionSelect }: VersionHistoryTabProps) {
+export default function VersionHistoryTab({ quoteId, onVersionSelect, onVersionRestored }: VersionHistoryTabProps) {
   const [versions, setVersions] = useState<Version[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentVersion, setCurrentVersion] = useState<number>(0);
-  const [selectedVersion, setSelectedVersion] = useState<any | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [diffData, setDiffData] = useState<Record<number, ChangeSummary | 'loading' | 'initial' | 'error'>>({});
   const [showRollbackConfirm, setShowRollbackConfirm] = useState<number | null>(null);
   const [rollbackReason, setRollbackReason] = useState('');
   const [rolling, setRolling] = useState(false);
@@ -71,17 +77,45 @@ export default function VersionHistoryTab({ quoteId, onVersionSelect }: VersionH
     fetchVersions();
   }, [quoteId]);
 
-  const handleViewVersion = async (version: number) => {
-    try {
-      const response = await fetch(`/api/quotes/${quoteId}/versions/${version}`);
-      if (!response.ok) throw new Error('Failed to fetch');
-      const data = await response.json();
-      setSelectedVersion(data);
-      onVersionSelect?.(version);
-    } catch (error) {
-      console.error('Error:', error);
-      toast.error('Failed to load version details');
+  const handleToggleExpand = (versionId: number, versionNumber: number) => {
+    if (expandedId === versionId) {
+      setExpandedId(null);
+      return;
     }
+
+    setExpandedId(versionId);
+
+    // If we already have diff data for this version, don't re-fetch
+    if (diffData[versionId] && diffData[versionId] !== 'error') {
+      return;
+    }
+
+    // Find this version and the previous version
+    const sortedVersions = [...versions].sort((a, b) => a.version - b.version);
+    const thisVersionIdx = sortedVersions.findIndex(v => v.id === versionId);
+
+    if (thisVersionIdx <= 0) {
+      // First version - no previous to compare
+      setDiffData(prev => ({ ...prev, [versionId]: 'initial' }));
+      return;
+    }
+
+    const thisVersion = sortedVersions[thisVersionIdx];
+    const prevVersion = sortedVersions[thisVersionIdx - 1];
+
+    if (!thisVersion.snapshotData || !prevVersion.snapshotData) {
+      setDiffData(prev => ({ ...prev, [versionId]: 'loading' }));
+      // Snapshots should be included in the API response
+      // If not available, show error
+      setDiffData(prev => ({ ...prev, [versionId]: 'error' }));
+      return;
+    }
+
+    const summary = generateDetailedChangeSummary(
+      prevVersion.snapshotData,
+      thisVersion.snapshotData
+    );
+    setDiffData(prev => ({ ...prev, [versionId]: summary }));
   };
 
   const handleRollback = async (version: number) => {
@@ -101,10 +135,10 @@ export default function VersionHistoryTab({ quoteId, onVersionSelect }: VersionH
       toast.success(`Restored to version ${version}`);
       setShowRollbackConfirm(null);
       setRollbackReason('');
-      fetchVersions();
-      
+      onVersionRestored?.();
+
       // Refresh the page to show updated quote
-      window.location.reload();
+      setTimeout(() => window.location.reload(), 500);
     } catch (error) {
       console.error('Error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to rollback');
@@ -145,13 +179,15 @@ export default function VersionHistoryTab({ quoteId, onVersionSelect }: VersionH
               label: version.changeType,
               color: 'bg-gray-100 text-gray-700',
             };
+            const isExpanded = expandedId === version.id;
+            const versionDiff = diffData[version.id];
 
             return (
               <div key={version.id} className="relative pl-10">
                 {/* Timeline dot */}
                 <div className={`absolute left-2 w-5 h-5 rounded-full border-2 ${
-                  version.isCurrent 
-                    ? 'bg-blue-500 border-blue-500' 
+                  version.isCurrent
+                    ? 'bg-blue-500 border-blue-500'
                     : 'bg-white border-gray-300'
                 }`}>
                   {version.isCurrent && (
@@ -192,7 +228,7 @@ export default function VersionHistoryTab({ quoteId, onVersionSelect }: VersionH
                   {/* Rollback reference */}
                   {version.rolledBackFromVersion && (
                     <p className="text-sm text-yellow-600 mb-2">
-                      ↩ Restored from version {version.rolledBackFromVersion}
+                      Restored from version {version.rolledBackFromVersion}
                     </p>
                   )}
 
@@ -211,12 +247,20 @@ export default function VersionHistoryTab({ quoteId, onVersionSelect }: VersionH
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <button
-                      onClick={() => handleViewVersion(version.version)}
-                      className="text-sm text-blue-600 hover:text-blue-800"
+                      onClick={() => handleToggleExpand(version.id, version.version)}
+                      className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
                     >
-                      View Details
+                      <svg
+                        className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                      {isExpanded ? 'Hide Changes' : 'Show Changes'}
                     </button>
                     {!version.isCurrent && (
                       <>
@@ -230,20 +274,40 @@ export default function VersionHistoryTab({ quoteId, onVersionSelect }: VersionH
                       </>
                     )}
                   </div>
+
+                  {/* Expanded diff view */}
+                  {isExpanded && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      {versionDiff === 'loading' && (
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Loading version details...
+                        </div>
+                      )}
+                      {versionDiff === 'initial' && (
+                        <p className="text-sm text-gray-500 italic">
+                          Initial version - no previous version to compare
+                        </p>
+                      )}
+                      {versionDiff === 'error' && (
+                        <p className="text-sm text-red-500 italic">
+                          Failed to load version details. Snapshot data may not be available.
+                        </p>
+                      )}
+                      {versionDiff && typeof versionDiff === 'object' && versionDiff !== null && 'fieldChanges' in versionDiff && (
+                        <VersionDiffView summary={versionDiff} />
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-
-      {/* Version Detail Modal */}
-      {selectedVersion && (
-        <VersionDetailModal
-          version={selectedVersion}
-          onClose={() => setSelectedVersion(null)}
-        />
-      )}
 
       {/* Rollback Confirmation Modal */}
       {showRollbackConfirm !== null && (
@@ -253,8 +317,9 @@ export default function VersionHistoryTab({ quoteId, onVersionSelect }: VersionH
               Restore Version {showRollbackConfirm}?
             </h3>
             <p className="text-gray-600 mb-4">
-              This will restore the quote to version {showRollbackConfirm}. 
+              This will restore the quote to version {showRollbackConfirm}.
               A new version will be created to preserve the current state.
+              This is a non-destructive operation.
             </p>
 
             <div className="mb-4">
@@ -292,133 +357,6 @@ export default function VersionHistoryTab({ quoteId, onVersionSelect }: VersionH
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// Version Detail Modal Component
-interface VersionDetailModalProps {
-  version: {
-    version: number;
-    changeType: string;
-    changeSummary: string | null;
-    changes: Record<string, { old: unknown; new: unknown }> | null;
-    changedBy: { name: string };
-    changedAt: string;
-    snapshot: {
-      pricing: {
-        subtotal: number;
-        taxAmount: number;
-        total: number;
-      };
-      rooms: Array<{
-        name: string;
-        pieces: Array<{ name: string; widthMm: number; lengthMm: number }>;
-      }>;
-    };
-  };
-  onClose: () => void;
-}
-
-function VersionDetailModal({ version, onClose }: VersionDetailModalProps) {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
-        <div className="p-6 border-b">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Version {version.version} Details
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
-          <p className="text-sm text-gray-500 mt-1">
-            {format(new Date(version.changedAt), 'MMMM d, yyyy at h:mm a')} by {version.changedBy.name}
-          </p>
-        </div>
-
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
-          {/* Summary */}
-          {version.changeSummary && (
-            <div className="mb-6">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Change Summary</h4>
-              <p className="text-gray-600">{version.changeSummary}</p>
-            </div>
-          )}
-
-          {/* Changes */}
-          {version.changes && Object.keys(version.changes).length > 0 && (
-            <div className="mb-6">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">What Changed</h4>
-              <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-                {Object.entries(version.changes).map(([field, { old: oldVal, new: newVal }]) => (
-                  <div key={field} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{field}:</span>
-                    <span>
-                      <span className="text-red-600 line-through mr-2">{String(oldVal)}</span>
-                      <span className="text-green-600">{String(newVal)}</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Pricing Snapshot */}
-          <div className="mb-6">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Pricing at This Version</h4>
-            <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Subtotal:</span>
-                <span className="font-medium">${version.snapshot.pricing.subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Tax:</span>
-                <span className="font-medium">${version.snapshot.pricing.taxAmount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between border-t pt-1 mt-1">
-                <span className="text-gray-900 font-medium">Total:</span>
-                <span className="font-bold text-lg">${version.snapshot.pricing.total.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Pieces Snapshot */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-2">
-              Pieces at This Version ({version.snapshot.rooms.reduce((sum, r) => sum + r.pieces.length, 0)} total)
-            </h4>
-            <div className="space-y-3">
-              {version.snapshot.rooms.map((room, i) => (
-                <div key={i} className="bg-gray-50 rounded-lg p-3">
-                  <p className="font-medium text-gray-800 mb-2">{room.name}</p>
-                  <div className="space-y-1">
-                    {room.pieces.map((piece, j) => (
-                      <div key={j} className="text-sm text-gray-600 flex justify-between">
-                        <span>{piece.name}</span>
-                        <span>{piece.widthMm} × {piece.lengthMm}mm</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 border-t bg-gray-50">
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-          >
-            Close
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

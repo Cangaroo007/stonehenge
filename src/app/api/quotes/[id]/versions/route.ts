@@ -67,6 +67,7 @@ export async function GET(
         totalAmount: v.totalAmount,
         pieceCount: v.pieceCount,
         isCurrent: v.version === quote.currentVersion,
+        snapshotData: v.snapshotData ?? null,
       })),
     });
   } catch (error) {
