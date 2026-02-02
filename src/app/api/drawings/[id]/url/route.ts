@@ -27,11 +27,12 @@ export async function GET(
     // Get drawing from database
     const drawing = await prisma.drawing.findUnique({
       where: { id: drawingId },
-      select: { 
+      select: {
         storageKey: true,
         filename: true,
         mimeType: true,
         quoteId: true,
+        thumbnailKey: true,
       },
     });
 
@@ -52,10 +53,11 @@ export async function GET(
     
     console.log('[Drawing URL API] ✅ Presigned URL generated successfully');
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       url: presignedUrl,
       filename: drawing.filename,
       mimeType: drawing.mimeType,
+      hasThumbnail: !!drawing.thumbnailKey,
     });
   } catch (error) {
     console.error('[Drawing URL API] ❌ Error:', error);

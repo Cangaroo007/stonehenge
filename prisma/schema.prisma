@@ -892,6 +892,9 @@ model Drawing {
   // AI Analysis data (pieces detected, dimensions, etc.)
   analysisData Json?
 
+  // Server-generated thumbnail (R2 storage key for PNG thumbnail)
+  thumbnailKey String?
+
   // Is this the primary/main drawing for the quote?
   isPrimary    Boolean  @default(false)
 
