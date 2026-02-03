@@ -18,6 +18,7 @@ interface ImportPieceData {
 interface ImportRequest {
   pieces: ImportPieceData[];
   sourceAnalysisId?: string;
+  replaceExisting?: boolean;
 }
 
 // POST - Import multiple pieces from drawing analysis
@@ -43,7 +44,7 @@ export async function POST(
     }
 
     const data: ImportRequest = await request.json();
-    const { pieces, sourceAnalysisId } = data;
+    const { pieces, sourceAnalysisId, replaceExisting } = data;
 
     if (!pieces || !Array.isArray(pieces) || pieces.length === 0) {
       return NextResponse.json(
@@ -60,6 +61,23 @@ export async function POST(
           { error: `Piece ${i + 1} is missing required fields (name, length, width)` },
           { status: 400 }
         );
+      }
+    }
+
+    // If replaceExisting, delete all existing rooms and pieces for this quote
+    if (replaceExisting) {
+      const existingRooms = await prisma.quoteRoom.findMany({
+        where: { quoteId },
+        select: { id: true },
+      });
+      const roomIds = existingRooms.map(r => r.id);
+      if (roomIds.length > 0) {
+        await prisma.quotePiece.deleteMany({
+          where: { roomId: { in: roomIds } },
+        });
+        await prisma.quoteRoom.deleteMany({
+          where: { quoteId },
+        });
       }
     }
 

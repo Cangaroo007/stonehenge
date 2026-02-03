@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import QuoteHeader from './components/QuoteHeader';
 import PieceList from './components/PieceList';
 import RoomGrouping from './components/RoomGrouping';
@@ -117,6 +118,7 @@ export default function QuoteBuilderPage() {
   const [drawingsRefreshKey, setDrawingsRefreshKey] = useState(0);
   const [optimizationRefreshKey, setOptimizationRefreshKey] = useState(0);
   const [activeTab, setActiveTab] = useState<'pieces' | 'history'>('pieces');
+  const { hasUnsavedChanges, markAsChanged, markAsSaved } = useUnsavedChanges();
 
   // Trigger recalculation after piece changes
   const triggerRecalculate = useCallback(() => {
@@ -259,6 +261,7 @@ export default function QuoteBuilderPage() {
       setIsAddingPiece(false);
       // Trigger pricing recalculation
       triggerRecalculate();
+      markAsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save piece');
     } finally {
@@ -285,6 +288,7 @@ export default function QuoteBuilderPage() {
       }
       // Trigger pricing recalculation
       triggerRecalculate();
+      markAsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete piece');
     } finally {
@@ -313,6 +317,7 @@ export default function QuoteBuilderPage() {
       setIsAddingPiece(false);
       // Trigger pricing recalculation
       triggerRecalculate();
+      markAsChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to duplicate piece');
     } finally {
@@ -365,6 +370,7 @@ export default function QuoteBuilderPage() {
       }
 
       await fetchQuote();
+      markAsSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save quote');
     } finally {
@@ -399,10 +405,11 @@ export default function QuoteBuilderPage() {
     setShowDrawingImport(false);
     await fetchQuote();
     triggerRecalculate();
+    markAsChanged();
     setImportSuccessMessage(`Imported ${count} piece${count !== 1 ? 's' : ''} from drawing`);
     // Auto-clear success message after 5 seconds
     setTimeout(() => setImportSuccessMessage(null), 5000);
-  }, [fetchQuote, triggerRecalculate]);
+  }, [fetchQuote, triggerRecalculate, markAsChanged]);
 
   // Handle drawings saved (refresh DrawingReferencePanel)
   const handleDrawingsSaved = useCallback(() => {
@@ -482,6 +489,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
         quote={quote}
         onBack={() => router.push(`/quotes/${quoteId}`)}
         saving={saving}
+        hasUnsavedChanges={hasUnsavedChanges}
       />
 
       {/* Quote Actions */}

@@ -18,9 +18,10 @@ interface QuoteHeaderProps {
   quote: Quote;
   onBack: () => void;
   saving: boolean;
+  hasUnsavedChanges?: boolean;
 }
 
-export default function QuoteHeader({ quote, onBack, saving }: QuoteHeaderProps) {
+export default function QuoteHeader({ quote, onBack, saving, hasUnsavedChanges }: QuoteHeaderProps) {
   return (
     <div className="card p-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -55,6 +56,12 @@ export default function QuoteHeader({ quote, onBack, saving }: QuoteHeaderProps)
                   />
                 </svg>
                 Saving...
+              </span>
+            )}
+            {hasUnsavedChanges && !saving && (
+              <span className="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                Unsaved changes
               </span>
             )}
           </div>
