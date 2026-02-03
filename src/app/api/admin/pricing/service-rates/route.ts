@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     await requireAuth(request, ['ADMIN', 'SALES_MANAGER']);
     
     const rates = await prisma.serviceRate.findMany({
+      include: { pricingSettings: true },
       orderBy: { serviceType: 'asc' }
     });
     
@@ -29,23 +30,22 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Validate required fields
-    if (!body.serviceType || !body.name || !body.rate20mm || !body.rate40mm || !body.unit) {
+    if (!body.serviceType || !body.name || !body.rate20mm || !body.rate40mm || !body.pricingSettingsId) {
       return NextResponse.json(
-        { error: 'Missing required fields: serviceType, name, rate20mm, rate40mm, unit' },
+        { error: 'Missing required fields: serviceType, name, rate20mm, rate40mm, pricingSettingsId' },
         { status: 400 }
       );
     }
-    
+
     const rate = await prisma.serviceRate.create({
       data: {
+        pricingSettingsId: body.pricingSettingsId,
         serviceType: body.serviceType,
         name: body.name,
         description: body.description || null,
         rate20mm: body.rate20mm,
         rate40mm: body.rate40mm,
-        unit: body.unit,
         minimumCharge: body.minimumCharge || null,
-        minimumQty: body.minimumQty || null,
         isActive: body.isActive !== undefined ? body.isActive : true
       }
     });

@@ -315,61 +315,12 @@ async function seedPriceBooks() {
   console.log('✓ Seeded 3 price books with rule associations')
 }
 
-async function seedServiceRates() {
-  console.log('Seeding service rates...')
-
-  const serviceRates = [
-    {
-      serviceType: 'CUTTING' as const,
-      name: 'Cutting',
-      unit: 'SQUARE_METER' as const,
-      rate20mm: new Prisma.Decimal(17.50),
-      rate40mm: new Prisma.Decimal(45.00),
-      minimumCharge: new Prisma.Decimal(50.00),
-      isActive: true,
-    },
-    {
-      serviceType: 'POLISHING' as const,
-      name: 'Polishing',
-      unit: 'LINEAR_METER' as const,
-      rate20mm: new Prisma.Decimal(45.00),
-      rate40mm: new Prisma.Decimal(115.00),
-      minimumCharge: new Prisma.Decimal(50.00),
-      isActive: true,
-    },
-    {
-      serviceType: 'INSTALLATION' as const,
-      name: 'Installation',
-      unit: 'SQUARE_METER' as const,
-      rate20mm: new Prisma.Decimal(140.00),
-      rate40mm: new Prisma.Decimal(170.00),
-      minimumCharge: new Prisma.Decimal(200.00),
-      isActive: true,
-    },
-    {
-      serviceType: 'WATERFALL_END' as const,
-      name: 'Waterfall End',
-      unit: 'FIXED' as const,
-      rate20mm: new Prisma.Decimal(300.00),
-      rate40mm: new Prisma.Decimal(650.00),
-      isActive: true,
-    },
-  ]
-
-  for (const rate of serviceRates) {
-    await prisma.serviceRate.upsert({
-      where: { serviceType: rate.serviceType },
-      update: rate,
-      create: rate,
-    })
-  }
-  console.log(`Seeded ${serviceRates.length} service rates`)
-}
+// NOTE: ServiceRates are now seeded via seed-pricing-settings.ts
+// They require a PricingSettings record (org-level configuration)
 
 // Run all seeders
 async function main() {
   await seedPricingEntities()
-  await seedServiceRates()
   await seedPricingRules()
   await seedPriceBooks()
 }

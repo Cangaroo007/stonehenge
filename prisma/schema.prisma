@@ -272,14 +272,18 @@ model Customer {
 // ============================================
 
 model Material {
-  id          Int       @id @default(autoincrement())
-  name        String
-  collection  String?
-  description String?
-  pricePerSqm Decimal   @map("price_per_sqm") @db.Decimal(10, 2)
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id                  Int       @id @default(autoincrement())
+  name                String
+  collection          String?
+  description         String?
+  pricePerSqm         Decimal   @map("price_per_sqm") @db.Decimal(10, 2)
+  pricePerSlab        Decimal?  @map("price_per_slab") @db.Decimal(10, 2)
+  pricePerSquareMetre Decimal?  @map("price_per_square_metre") @db.Decimal(10, 2)
+  slabLengthMm        Int?      @map("slab_length_mm")
+  slabWidthMm         Int?      @map("slab_width_mm")
+  isActive            Boolean   @default(true) @map("is_active")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   pieces               QuotePiece[]
   pricingRuleMaterials PricingRuleMaterial[]
@@ -546,6 +550,49 @@ model QuoteDrawingAnalysis {
 }
 
 // ============================================
+// PRICING CONFIGURATION (Org-level settings)
+// ============================================
+
+enum MaterialPricingBasis {
+  PER_SLAB
+  PER_SQUARE_METRE
+}
+
+enum ServiceUnit {
+  LINEAR_METRE
+  SQUARE_METRE
+  FIXED
+  PER_SLAB
+  PER_KILOMETRE
+}
+
+enum UnitSystem {
+  METRIC
+  IMPERIAL
+}
+
+model PricingSettings {
+  id                    String   @id @default(cuid())
+  organisationId        String   @unique @map("organisation_id")
+
+  materialPricingBasis  MaterialPricingBasis @default(PER_SLAB) @map("material_pricing_basis")
+  cuttingUnit           ServiceUnit @default(LINEAR_METRE) @map("cutting_unit")
+  polishingUnit         ServiceUnit @default(LINEAR_METRE) @map("polishing_unit")
+  installationUnit      ServiceUnit @default(SQUARE_METRE) @map("installation_unit")
+  unitSystem            UnitSystem @default(METRIC) @map("unit_system")
+  currency              String @default("AUD")
+  gstRate               Decimal @default(0.10) @map("gst_rate") @db.Decimal(5, 4)
+
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  serviceRates          ServiceRate[]
+  cutoutRates           CutoutRate[]
+
+  @@map("pricing_settings")
+}
+
+// ============================================
 // PRICING ENTITIES
 // ============================================
 
@@ -555,37 +602,65 @@ enum ServiceType {
   POLISHING      // Finished edges only (base rate, profiles add extra)
   INSTALLATION   // Square meter calculation
   WATERFALL_END  // Fixed per item
-}
-
-enum RateUnit {
-  LINEAR_METER   // Lm
-  SQUARE_METER   // m²
-  FIXED          // Per item
-  PER_KM         // Distance-based
+  TEMPLATING     // Templating service
+  DELIVERY       // Delivery service
 }
 
 model ServiceRate {
-  id            Int         @id @default(autoincrement())
-  serviceType   ServiceType @unique
-  name          String      // Display name
-  description   String?
-  
-  // Thickness-specific rates
-  rate20mm      Decimal     @db.Decimal(10, 2)
-  rate40mm      Decimal     @db.Decimal(10, 2)
-  
-  // Unit of measurement
-  unit          RateUnit
-  
-  // Minimum charge support
-  minimumCharge Decimal?    @db.Decimal(10, 2)
-  minimumQty    Decimal?    @db.Decimal(10, 2)  // e.g., 1.0 meter
-  
-  isActive      Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id                String   @id @default(cuid())
+  pricingSettingsId String   @map("pricing_settings_id")
+  pricingSettings   PricingSettings @relation(fields: [pricingSettingsId], references: [id], onDelete: Cascade)
 
+  serviceType       ServiceType
+  name              String      // Display name
+  description       String?
+
+  // Thickness-specific rates
+  rate20mm          Decimal     @db.Decimal(10, 2)
+  rate40mm          Decimal     @db.Decimal(10, 2)
+
+  // Minimum charge support
+  minimumCharge     Decimal?    @db.Decimal(10, 2)
+
+  isActive          Boolean     @default(true)
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  @@unique([pricingSettingsId, serviceType])
   @@map("service_rates")
+}
+
+// ============================================
+// CUTOUT RATES (Org-level cutout pricing)
+// ============================================
+
+enum CutoutRateCategory {
+  HOTPLATE
+  GPO
+  TAP_HOLE
+  DROP_IN_SINK
+  UNDERMOUNT_SINK
+  FLUSH_COOKTOP
+  BASIN
+  DRAINER_GROOVES
+  OTHER
+}
+
+model CutoutRate {
+  id                String   @id @default(cuid())
+  pricingSettingsId String   @map("pricing_settings_id")
+  pricingSettings   PricingSettings @relation(fields: [pricingSettingsId], references: [id], onDelete: Cascade)
+
+  cutoutType        CutoutRateCategory @map("cutout_type")
+  name              String
+  description       String?
+  rate              Decimal  @db.Decimal(10, 2)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([pricingSettingsId, cutoutType])
+  @@map("cutout_rates")
 }
 
 model EdgeType {
