@@ -245,12 +245,13 @@ export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps)
           });
       });
 
-      // Import pieces to quote
+      // Import pieces to quote, replacing existing to avoid duplication
       const response = await fetch(`/api/quotes/${quoteId}/import-pieces`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pieces: piecesToImport,
+          replaceExisting: true,
         }),
       });
 

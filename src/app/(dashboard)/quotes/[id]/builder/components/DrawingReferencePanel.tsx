@@ -51,6 +51,34 @@ export function DrawingReferencePanel({ quoteId, refreshKey = 0 }: DrawingRefere
   const primaryDrawing = drawings.find(d => d.isPrimary) || drawings[0];
   const hasDrawings = drawings.length > 0;
 
+  // Open drawing file in a new browser tab
+  const openDrawingInNewTab = async (drawingId: string) => {
+    try {
+      const response = await fetch(`/api/drawings/${drawingId}/url`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.url) {
+          window.open(data.url, '_blank', 'noopener,noreferrer');
+          return;
+        }
+      }
+    } catch {
+      // Fall back to thumbnail URL
+    }
+    // Fallback: try thumbnail
+    try {
+      const response = await fetch(`/api/drawings/${drawingId}/thumbnail`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.url) {
+          window.open(data.url, '_blank', 'noopener,noreferrer');
+        }
+      }
+    } catch {
+      console.error('Failed to open drawing in new tab');
+    }
+  };
+
   if (loading) {
     return (
       <div className="card p-4">
@@ -126,12 +154,37 @@ export function DrawingReferencePanel({ quoteId, refreshKey = 0 }: DrawingRefere
               <DrawingThumbnail
                 drawingId={primaryDrawing.id}
                 filename={primaryDrawing.filename}
-                onClick={() => {
-                  setSelectedDrawing(primaryDrawing);
-                  setViewerOpen(true);
-                }}
+                onClick={() => openDrawingInNewTab(primaryDrawing.id)}
                 className="h-40 w-full bg-gray-100"
               />
+            )}
+
+            {/* Open in new tab / View in modal buttons */}
+            {primaryDrawing && (
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => openDrawingInNewTab(primaryDrawing.id)}
+                  className="flex-1 flex items-center justify-center gap-1 text-xs text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 rounded px-2 py-1.5 transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Open in New Tab
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedDrawing(primaryDrawing);
+                    setViewerOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-1 text-xs text-gray-600 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded px-2 py-1.5 transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  Preview
+                </button>
+              </div>
             )}
 
             {/* Multiple drawings selector */}
@@ -140,10 +193,7 @@ export function DrawingReferencePanel({ quoteId, refreshKey = 0 }: DrawingRefere
                 {drawings.map((drawing) => (
                   <button
                     key={drawing.id}
-                    onClick={() => {
-                      setSelectedDrawing(drawing);
-                      setViewerOpen(true);
-                    }}
+                    onClick={() => openDrawingInNewTab(drawing.id)}
                     className={`flex-shrink-0 relative rounded border-2 overflow-hidden ${
                       drawing.isPrimary ? 'border-primary-500' : 'border-gray-200'
                     }`}

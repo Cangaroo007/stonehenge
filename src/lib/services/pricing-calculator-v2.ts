@@ -436,7 +436,7 @@ function calculateCutoutCostV2(
  * Calculate service costs (cutting, polishing, installation, waterfall)
  */
 function calculateServiceCost(
-  pieces: Array<{ lengthMm: number; widthMm: number; thicknessMm: number }>,
+  pieces: Array<{ lengthMm: number; widthMm: number; thicknessMm: number; edgeTop: string | null; edgeBottom: string | null; edgeLeft: string | null; edgeRight: string | null }>,
   totalEdgeLinearMeters: number,
   serviceRates: Array<{
     serviceType: string;
@@ -473,25 +473,51 @@ function calculateServiceCost(
     subtotal += cost;
   }
 
-  // Polishing: per linear meter (total edges)
+  // Polishing: per linear meter, calculated per-piece based on actual thickness
   const polishingRate = serviceRates.find(sr => sr.serviceType === 'POLISHING');
   if (polishingRate && totalEdgeLinearMeters > 0) {
-    const avgThickness = pieces.reduce((sum, p) => sum + p.thicknessMm, 0) / pieces.length;
-    const rate = avgThickness <= 20 ? polishingRate.rate20mm.toNumber() : polishingRate.rate40mm.toNumber();
-    
-    let cost = totalEdgeLinearMeters * rate;
-    const minCharge = polishingRate.minimumCharge?.toNumber() || 0;
-    if (minCharge > 0 && cost < minCharge) cost = minCharge;
+    // Calculate polishing cost per-piece to use correct thickness-based rate
+    let polishingCost = 0;
+    let totalPolishedMeters = 0;
 
-    items.push({
-      serviceType: 'POLISHING',
-      name: polishingRate.name,
-      quantity: roundToTwo(totalEdgeLinearMeters),
-      unit: polishingRate.unit,
-      rate: rate,
-      subtotal: roundToTwo(cost),
-    });
-    subtotal += cost;
+    for (const piece of pieces) {
+      // Sum finished edge lengths for this piece
+      const edgeLengths = [
+        piece.edgeTop ? piece.widthMm : 0,
+        piece.edgeBottom ? piece.widthMm : 0,
+        piece.edgeLeft ? piece.lengthMm : 0,
+        piece.edgeRight ? piece.lengthMm : 0,
+      ];
+      const pieceEdgeMeters = edgeLengths.reduce((sum, len) => sum + len, 0) / 1000;
+      if (pieceEdgeMeters <= 0) continue;
+
+      const rate = piece.thicknessMm <= 20
+        ? polishingRate.rate20mm.toNumber()
+        : polishingRate.rate40mm.toNumber();
+
+      polishingCost += pieceEdgeMeters * rate;
+      totalPolishedMeters += pieceEdgeMeters;
+    }
+
+    const minCharge = polishingRate.minimumCharge?.toNumber() || 0;
+    if (minCharge > 0 && polishingCost < minCharge) polishingCost = minCharge;
+
+    // Use a weighted average rate for display
+    const displayRate = totalPolishedMeters > 0
+      ? roundToTwo(polishingCost / totalPolishedMeters)
+      : polishingRate.rate20mm.toNumber();
+
+    if (totalPolishedMeters > 0) {
+      items.push({
+        serviceType: 'POLISHING',
+        name: polishingRate.name,
+        quantity: roundToTwo(totalPolishedMeters),
+        unit: polishingRate.unit,
+        rate: displayRate,
+        subtotal: roundToTwo(polishingCost),
+      });
+      subtotal += polishingCost;
+    }
   }
 
   return { items, subtotal };
