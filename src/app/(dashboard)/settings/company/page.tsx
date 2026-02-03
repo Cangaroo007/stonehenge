@@ -591,8 +591,8 @@ export default function CompanySettingsPage() {
                   value={settings.defaultUnitSystem}
                   onChange={(e) => setSettings({ ...settings, defaultUnitSystem: e.target.value })}
                 >
-                  <option value="METRIC">Metric (m, m², km)</option>
-                  <option value="IMPERIAL">Imperial (ft, ft², mi)</option>
+                  <option value="METRIC">Metric (metres, m²)</option>
+                  <option value="IMPERIAL">Imperial (feet, ft²)</option>
                 </select>
               </div>
             </div>

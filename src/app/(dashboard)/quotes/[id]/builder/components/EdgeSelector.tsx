@@ -287,7 +287,7 @@ export default function EdgeSelector({
         {/* Info Text */}
         <div className="mt-4 text-xs text-gray-500 border-t pt-3">
           <p>
-            <strong>Note:</strong> Edge pricing is calculated per linear meter (one side only).
+            <strong>Note:</strong> Edge pricing is calculated per lineal metre (one side only).
             Select the edges that require polishing.
           </p>
         </div>

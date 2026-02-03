@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import { UnitProvider } from '@/lib/contexts/UnitContext';
 
 export default async function DashboardLayout({
   children,
@@ -19,7 +20,9 @@ export default async function DashboardLayout({
       <Sidebar />
       <div className="lg:pl-64">
         <Header user={user} />
-        <main className="p-6">{children}</main>
+        <main className="p-6">
+          <UnitProvider>{children}</UnitProvider>
+        </main>
       </div>
     </div>
   );

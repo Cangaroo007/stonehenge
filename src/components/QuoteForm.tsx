@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import imageCompression from 'browser-image-compression';
 import { formatCurrency, calculateArea } from '@/lib/utils';
+import { useUnits } from '@/lib/contexts/UnitContext';
+import { getDimensionUnitLabel, formatAreaFromSqm } from '@/lib/utils/units';
 import EdgeSelector from '@/app/(dashboard)/quotes/[id]/builder/components/EdgeSelector';
 import DistanceCalculator from '@/components/DistanceCalculator';
 
@@ -226,6 +228,8 @@ export default function QuoteForm({
   initialData,
 }: QuoteFormProps) {
   const router = useRouter();
+  const { unitSystem } = useUnits();
+  const unitLabel = getDimensionUnitLabel(unitSystem);
   const [saving, setSaving] = useState(false);
   const piecesSectionRef = useRef<HTMLDivElement>(null);
 
@@ -1550,7 +1554,7 @@ export default function QuoteForm({
                                     </div>
                                     <div>
                                       <label className="block text-xs text-gray-500 mb-1">
-                                        Length (mm)
+                                        Length ({unitLabel})
                                       </label>
                                       <input
                                         type="number"
@@ -1563,7 +1567,7 @@ export default function QuoteForm({
                                     </div>
                                     <div>
                                       <label className="block text-xs text-gray-500 mb-1">
-                                        Width (mm)
+                                        Width ({unitLabel})
                                       </label>
                                       <input
                                         type="number"
@@ -1576,7 +1580,7 @@ export default function QuoteForm({
                                     </div>
                                     <div>
                                       <label className="block text-xs text-gray-500 mb-1">
-                                        Thick (mm)
+                                        Thick ({unitLabel})
                                       </label>
                                       <input
                                         type="number"
@@ -1767,7 +1771,7 @@ export default function QuoteForm({
                           />
                         </div>
                         <div>
-                          <label className="label">Length (mm)</label>
+                          <label className="label">Length ({unitLabel})</label>
                           <input
                             type="number"
                             className="input"
@@ -1778,7 +1782,7 @@ export default function QuoteForm({
                           />
                         </div>
                         <div>
-                          <label className="label">Width (mm)</label>
+                          <label className="label">Width ({unitLabel})</label>
                           <input
                             type="number"
                             className="input"
@@ -1946,8 +1950,8 @@ export default function QuoteForm({
                       {/* Piece Summary */}
                       <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
                         <div className="text-sm text-gray-500">
-                          {calculateArea(piece.lengthMm, piece.widthMm).toFixed(2)} m² ×{' '}
-                          {piece.thicknessMm}mm
+                          {formatAreaFromSqm(calculateArea(piece.lengthMm, piece.widthMm), unitSystem)} ×{' '}
+                          {piece.thicknessMm}{unitLabel}
                         </div>
                         <div className="flex items-center gap-4">
                           <span className="text-sm text-gray-600">

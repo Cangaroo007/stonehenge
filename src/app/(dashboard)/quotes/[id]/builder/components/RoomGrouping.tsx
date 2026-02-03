@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useUnits } from '@/lib/contexts/UnitContext';
+import { getDimensionUnitLabel, mmToDisplayUnit } from '@/lib/utils/units';
 
 interface QuotePiece {
   id: number;
@@ -60,6 +62,9 @@ export default function RoomGrouping({
   onDeletePiece,
   onDuplicatePiece,
 }: RoomGroupingProps) {
+  const { unitSystem } = useUnits();
+  const unitLabel = getDimensionUnitLabel(unitSystem);
+
   // Track expanded state for each room
   const [expandedRooms, setExpandedRooms] = useState<Record<string, boolean>>({});
 
@@ -198,8 +203,8 @@ export default function RoomGrouping({
                       </span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
-                      <span>{piece.lengthMm} × {piece.widthMm}mm</span>
-                      <span>{piece.thicknessMm}mm</span>
+                      <span>{Math.round(mmToDisplayUnit(piece.lengthMm, unitSystem))} × {Math.round(mmToDisplayUnit(piece.widthMm, unitSystem))}{unitLabel}</span>
+                      <span>{Math.round(mmToDisplayUnit(piece.thicknessMm, unitSystem))}{unitLabel}</span>
                       {piece.materialName && (
                         <span className="truncate">{piece.materialName}</span>
                       )}

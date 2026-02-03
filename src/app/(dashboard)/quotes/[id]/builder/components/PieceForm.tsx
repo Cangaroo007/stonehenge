@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useUnits } from '@/lib/contexts/UnitContext';
+import { getDimensionUnitLabel, formatAreaFromSqm } from '@/lib/utils/units';
 import EdgeSelector from './EdgeSelector';
 import CutoutSelector, { PieceCutout, CutoutType } from './CutoutSelector';
 
@@ -98,6 +100,9 @@ export default function PieceForm({
   onCancel,
   saving,
 }: PieceFormProps) {
+  const { unitSystem } = useUnits();
+  const unitLabel = getDimensionUnitLabel(unitSystem);
+
   const [name, setName] = useState(piece?.name || '');
   const [description, setDescription] = useState(piece?.description || '');
   const [lengthMm, setLengthMm] = useState(piece?.lengthMm?.toString() || '');
@@ -231,7 +236,7 @@ export default function PieceForm({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label htmlFor="lengthMm" className="block text-sm font-medium text-gray-700 mb-1">
-            Length (mm) <span className="text-red-500">*</span>
+            Length ({unitLabel}) <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
@@ -248,7 +253,7 @@ export default function PieceForm({
         </div>
         <div>
           <label htmlFor="widthMm" className="block text-sm font-medium text-gray-700 mb-1">
-            Width (mm) <span className="text-red-500">*</span>
+            Width ({unitLabel}) <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
@@ -268,7 +273,7 @@ export default function PieceForm({
       {/* Area Display */}
       <div className="bg-gray-50 rounded-lg p-3 text-sm">
         <span className="text-gray-600">Calculated Area: </span>
-        <span className="font-medium">{area} m²</span>
+        <span className="font-medium">{formatAreaFromSqm(parseFloat(area) || 0, unitSystem)}</span>
       </div>
 
       {/* Edge Selector */}

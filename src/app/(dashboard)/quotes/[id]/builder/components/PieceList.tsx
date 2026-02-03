@@ -1,5 +1,8 @@
 'use client';
 
+import { useUnits } from '@/lib/contexts/UnitContext';
+import { getDimensionUnitLabel, mmToDisplayUnit } from '@/lib/utils/units';
+
 interface QuotePiece {
   id: number;
   name: string;
@@ -63,6 +66,9 @@ export default function PieceList({
   onDuplicatePiece,
   onReorder,
 }: PieceListProps) {
+  const { unitSystem } = useUnits();
+  const unitLabel = getDimensionUnitLabel(unitSystem);
+
   const handleMoveUp = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (index === 0) return;
@@ -184,10 +190,10 @@ export default function PieceList({
                 )}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                {piece.lengthMm} × {piece.widthMm}mm
+                {Math.round(mmToDisplayUnit(piece.lengthMm, unitSystem))} × {Math.round(mmToDisplayUnit(piece.widthMm, unitSystem))}{unitLabel}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                {piece.thicknessMm}mm
+                {Math.round(mmToDisplayUnit(piece.thicknessMm, unitSystem))}{unitLabel}
               </td>
               <td className="px-4 py-3 whitespace-nowrap">
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
