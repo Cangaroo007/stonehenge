@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { v4 as uuidv4 } from 'uuid';
 import {
   ClassificationResult,
   ClarificationQuestion,
@@ -155,6 +156,113 @@ function calculateOverallConfidence(pieces: ExtractedPiece[]): ConfidenceLevel {
 }
 
 /**
+ * Stage 3: Generate clarification questions for uncertain extractions
+ */
+export function generateClarificationQuestions(
+  pieces: ExtractedPiece[]
+): ClarificationQuestion[] {
+  const questions: ClarificationQuestion[] = [];
+  
+  for (const piece of pieces) {
+    const pieceLabel = piece.description || piece.room || piece.id;
+    
+    // Check for LOW confidence dimensions
+    if (piece.dimensions.length.confidence === 'LOW') {
+      questions.push({
+        id: uuidv4(),
+        pieceId: piece.id,
+        category: 'DIMENSION',
+        priority: 'CRITICAL',
+        question: `What is the length of "${pieceLabel}"?`,
+        options: piece.dimensions.length.note 
+          ? undefined 
+          : ['Check measurement', 'Confirm as shown'],
+      });
+    }
+    
+    if (piece.dimensions.width.confidence === 'LOW') {
+      questions.push({
+        id: uuidv4(),
+        pieceId: piece.id,
+        category: 'DIMENSION',
+        priority: 'CRITICAL',
+        question: `What is the width of "${pieceLabel}"?`,
+      });
+    }
+    
+    // Check for missing thickness
+    if (!piece.dimensions.thickness) {
+      questions.push({
+        id: uuidv4(),
+        pieceId: piece.id,
+        category: 'DIMENSION',
+        priority: 'IMPORTANT',
+        question: `What thickness is "${pieceLabel}"?`,
+        options: ['20mm', '30mm', '40mm'],
+        defaultValue: '20mm',
+      });
+    }
+    
+    // Check for LOW confidence cutouts
+    for (const cutout of piece.cutouts) {
+      if (cutout.confidence === 'LOW') {
+        questions.push({
+          id: uuidv4(),
+          pieceId: piece.id,
+          category: 'CUTOUT',
+          priority: 'IMPORTANT',
+          question: `Confirm cutout type in "${pieceLabel}": Is this a ${cutout.type.replace(/_/g, ' ').toLowerCase()}?`,
+          options: ['Yes', 'No - Different type', 'No cutout here'],
+        });
+      }
+      
+      // Cutouts without dimensions (for undermount sinks, etc.)
+      if (cutout.type === 'UNDERMOUNT_SINK' && !cutout.dimensions) {
+        questions.push({
+          id: uuidv4(),
+          pieceId: piece.id,
+          category: 'CUTOUT',
+          priority: 'IMPORTANT',
+          question: `What are the dimensions of the undermount sink cutout in "${pieceLabel}"?`,
+        });
+      }
+    }
+    
+    // Check for UNKNOWN edge finishes
+    for (const edge of piece.edges) {
+      if (edge.finish === 'UNKNOWN') {
+        questions.push({
+          id: uuidv4(),
+          pieceId: piece.id,
+          category: 'EDGE',
+          priority: 'IMPORTANT',
+          question: `What is the edge finish for the ${edge.side.toLowerCase()} edge of "${pieceLabel}"?`,
+          options: ['20mm Polished', '40mm Polished', 'Raw/Unfinished', 'Bullnose', 'Pencil Round'],
+        });
+      }
+    }
+    
+    // Check for missing room
+    if (!piece.room) {
+      questions.push({
+        id: uuidv4(),
+        pieceId: piece.id,
+        category: 'MATERIAL',
+        priority: 'NICE_TO_KNOW',
+        question: `Which room is "${pieceLabel}" for?`,
+        options: ['Kitchen', 'Bathroom', 'Laundry', 'Outdoor', 'Other'],
+      });
+    }
+  }
+  
+  // Sort by priority: CRITICAL first, then IMPORTANT, then NICE_TO_KNOW
+  const priorityOrder = { CRITICAL: 0, IMPORTANT: 1, NICE_TO_KNOW: 2 };
+  questions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+  
+  return questions;
+}
+
+/**
  * Full analysis pipeline (Stages 1-3)
  */
 export async function analyzeDrawing(
@@ -167,8 +275,8 @@ export async function analyzeDrawing(
   // Stage 2: Extract pieces based on category
   const pieces = await extractPieces(imageBase64, mimeType, classification.category);
 
-  // Stage 3: Generate clarifications (implemented in 2.3)
-  const clarificationQuestions: ClarificationQuestion[] = [];
+  // Stage 3: Generate clarification questions
+  const clarificationQuestions = generateClarificationQuestions(pieces);
 
   // Calculate overall confidence
   const overallConfidence = calculateOverallConfidence(pieces);
