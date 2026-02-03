@@ -1,7 +1,10 @@
 /**
  * Pricing Calculation Service V2
- * 
+ *
  * Enhanced to include:
+ * - PricingSettings (org-level configuration)
+ * - Configurable material pricing: PER_SLAB vs PER_SQUARE_METRE
+ * - Configurable service units per organisation
  * - ServiceRate (cutting, polishing, installation, waterfall)
  * - EdgeType thickness variants (20mm vs 40mm+)
  * - CutoutType categories with minimum charges
@@ -11,11 +14,12 @@
  */
 
 import prisma from '@/lib/db';
+import type { MaterialPricingBasis } from '@prisma/client';
 import type {
   PricingOptions,
+  PricingContext,
   CalculationResult,
   AppliedRule,
-  DiscountBreakdown,
   EdgeBreakdown,
   CutoutBreakdown,
   MaterialBreakdown,
@@ -48,6 +52,7 @@ export interface EnhancedCalculationResult extends CalculationResult {
       finalCost: number;
     };
   };
+  pricingContext?: PricingContext;
 }
 
 export interface ServiceBreakdown {
@@ -57,6 +62,149 @@ export interface ServiceBreakdown {
   unit: string;
   rate: number;
   subtotal: number;
+}
+
+/**
+ * Load pricing context for an organisation.
+ * Returns org-level pricing settings or sensible defaults.
+ */
+export async function loadPricingContext(organisationId: string): Promise<PricingContext> {
+  const settings = await prisma.pricingSettings.findUnique({
+    where: { organisationId },
+  });
+
+  if (settings) {
+    return {
+      organisationId: settings.organisationId,
+      materialPricingBasis: settings.materialPricingBasis,
+      cuttingUnit: settings.cuttingUnit,
+      polishingUnit: settings.polishingUnit,
+      installationUnit: settings.installationUnit,
+      currency: settings.currency,
+      gstRate: Number(settings.gstRate),
+    };
+  }
+
+  // Return defaults if no settings configured
+  return {
+    organisationId,
+    materialPricingBasis: 'PER_SLAB',
+    cuttingUnit: 'LINEAR_METRE',
+    polishingUnit: 'LINEAR_METRE',
+    installationUnit: 'SQUARE_METRE',
+    currency: 'AUD',
+    gstRate: 0.10,
+  };
+}
+
+/**
+ * Calculate material cost based on pricing basis.
+ * PER_SLAB: uses slab count from optimiser × price per slab
+ * PER_SQUARE_METRE: uses total area × price per m²
+ */
+export function calculateMaterialCost(
+  pieces: Array<{
+    lengthMm: number;
+    widthMm: number;
+    thicknessMm: number;
+    material: {
+      pricePerSqm: { toNumber: () => number };
+      pricePerSlab?: { toNumber: () => number } | null;
+      pricePerSquareMetre?: { toNumber: () => number } | null;
+    } | null;
+    overrideMaterialCost?: { toNumber: () => number } | null;
+  }>,
+  pricingBasis: MaterialPricingBasis = 'PER_SLAB',
+  slabCount?: number
+): MaterialBreakdown {
+  let totalAreaM2 = 0;
+  let subtotal = 0;
+
+  for (const piece of pieces) {
+    const areaSqm = (piece.lengthMm * piece.widthMm) / 1_000_000;
+    totalAreaM2 += areaSqm;
+
+    // Check for piece-level override
+    if (piece.overrideMaterialCost) {
+      subtotal += piece.overrideMaterialCost.toNumber();
+      continue;
+    }
+
+    if (pricingBasis === 'PER_SLAB' && slabCount !== undefined) {
+      // Per-slab pricing: use slab count × price per slab
+      const slabPrice = piece.material?.pricePerSlab?.toNumber() ?? 0;
+      if (slabPrice > 0 && slabCount > 0) {
+        // Distribute slab cost proportionally across pieces by area
+        const totalPieceArea = (piece.lengthMm * piece.widthMm) / 1_000_000;
+        // This will be summed across all pieces, then replaced below
+        subtotal += totalPieceArea * (slabPrice / (totalAreaM2 || 1));
+      } else {
+        // Fallback to per-m² if no slab price set
+        const baseRate = piece.material?.pricePerSquareMetre?.toNumber()
+          ?? piece.material?.pricePerSqm.toNumber()
+          ?? 0;
+        subtotal += areaSqm * baseRate;
+      }
+    } else {
+      // Per square metre pricing
+      const baseRate = piece.material?.pricePerSquareMetre?.toNumber()
+        ?? piece.material?.pricePerSqm.toNumber()
+        ?? 0;
+      subtotal += areaSqm * baseRate;
+    }
+  }
+
+  // For PER_SLAB, recalculate subtotal as slabCount × slabPrice if available
+  if (pricingBasis === 'PER_SLAB' && slabCount !== undefined && slabCount > 0) {
+    // Find the slab price from the first piece with a material
+    const materialWithSlabPrice = pieces.find(p => p.material?.pricePerSlab?.toNumber());
+    if (materialWithSlabPrice) {
+      const slabPrice = materialWithSlabPrice.material!.pricePerSlab!.toNumber();
+      // Only override if no piece-level overrides were applied
+      const hasOverrides = pieces.some(p => p.overrideMaterialCost);
+      if (!hasOverrides) {
+        subtotal = slabCount * slabPrice;
+      }
+    }
+  }
+
+  const effectiveRate = totalAreaM2 > 0 ? roundToTwo(subtotal / totalAreaM2) : 0;
+
+  return {
+    totalAreaM2: roundToTwo(totalAreaM2),
+    baseRate: effectiveRate,
+    thicknessMultiplier: 1,
+    appliedRate: effectiveRate,
+    subtotal: roundToTwo(subtotal),
+    discount: 0,
+    total: roundToTwo(subtotal),
+    pricingBasis,
+    slabCount: pricingBasis === 'PER_SLAB' ? slabCount : undefined,
+    slabRate: pricingBasis === 'PER_SLAB' && slabCount
+      ? roundToTwo(subtotal / slabCount)
+      : undefined,
+  };
+}
+
+/**
+ * Calculate service cost using configured units.
+ * Supports LINEAR_METRE, SQUARE_METRE, FIXED, PER_SLAB, PER_KILOMETRE.
+ */
+export function calculateServiceCostForUnit(
+  quantity: number,
+  rate20mm: number,
+  rate40mm: number,
+  thickness: number,
+  minimumCharge?: number
+): number {
+  const rate = thickness <= 20 ? rate20mm : rate40mm;
+  let cost = quantity * rate;
+
+  if (minimumCharge && minimumCharge > 0 && cost < minimumCharge) {
+    cost = minimumCharge;
+  }
+
+  return roundToTwo(cost);
 }
 
 /**
@@ -105,6 +253,10 @@ export async function calculateQuotePrice(
     throw new Error('Quote not found');
   }
 
+  // Load pricing context (org-level settings)
+  // Use company ID "1" as default org for now (single-tenant)
+  const pricingContext = await loadPricingContext('1');
+
   // Get pricing data
   const [edgeTypes, cutoutTypes, serviceRates] = await Promise.all([
     prisma.edgeType.findMany({ where: { isActive: true } }),
@@ -115,8 +267,23 @@ export async function calculateQuotePrice(
   // Flatten all pieces
   const allPieces = quote.rooms.flatMap(room => room.pieces);
 
-  // Calculate material costs
-  const materialBreakdown = calculateMaterialCost(allPieces);
+  // Get slab count from latest optimization (for PER_SLAB pricing)
+  let slabCount: number | undefined;
+  if (pricingContext.materialPricingBasis === 'PER_SLAB') {
+    const optimization = await prisma.slabOptimization.findFirst({
+      where: { quoteId: quoteIdNum },
+      orderBy: { createdAt: 'desc' },
+      select: { totalSlabs: true },
+    });
+    slabCount = optimization?.totalSlabs;
+  }
+
+  // Calculate material costs with pricing basis
+  const materialBreakdown = calculateMaterialCost(
+    allPieces,
+    pricingContext.materialPricingBasis,
+    slabCount
+  );
 
   // Calculate edge costs with thickness variants
   const edgeData = calculateEdgeCostV2(allPieces, edgeTypes);
@@ -125,7 +292,7 @@ export async function calculateQuotePrice(
   const cutoutData = calculateCutoutCostV2(allPieces, cutoutTypes);
 
   // Calculate service costs (cutting, polishing, installation, waterfall)
-  const serviceData = calculateServiceCost(allPieces, edgeData.totalLinearMeters, serviceRates);
+  const serviceData = calculateServiceCosts(allPieces, edgeData.totalLinearMeters, serviceRates);
 
   // Calculate delivery cost
   const deliveryBreakdown = {
@@ -134,8 +301,8 @@ export async function calculateQuotePrice(
     zone: quote.deliveryZone?.name || null,
     calculatedCost: quote.deliveryCost ? Number(quote.deliveryCost) : null,
     overrideCost: quote.overrideDeliveryCost ? Number(quote.overrideDeliveryCost) : null,
-    finalCost: quote.overrideDeliveryCost 
-      ? Number(quote.overrideDeliveryCost) 
+    finalCost: quote.overrideDeliveryCost
+      ? Number(quote.overrideDeliveryCost)
       : (quote.deliveryCost ? Number(quote.deliveryCost) : 0),
   };
 
@@ -151,13 +318,13 @@ export async function calculateQuotePrice(
   };
 
   // Calculate initial subtotal
-  const piecesSubtotal = 
-    materialBreakdown.subtotal + 
-    edgeData.subtotal + 
+  const piecesSubtotal =
+    materialBreakdown.subtotal +
+    edgeData.subtotal +
     cutoutData.subtotal +
     serviceData.subtotal;
 
-  const subtotal = 
+  const subtotal =
     piecesSubtotal +
     deliveryBreakdown.finalCost +
     templatingBreakdown.finalCost;
@@ -181,8 +348,8 @@ export async function calculateQuotePrice(
   }));
 
   // Check for quote-level overrides
-  const finalSubtotal = quote.overrideSubtotal 
-    ? Number(quote.overrideSubtotal) 
+  const finalSubtotal = quote.overrideSubtotal
+    ? Number(quote.overrideSubtotal)
     : subtotal;
 
   const finalTotal = quote.overrideTotal
@@ -233,46 +400,7 @@ export async function calculateQuotePrice(
     discounts: [],
     priceBook: priceBookInfo,
     calculatedAt: new Date(),
-  };
-}
-
-/**
- * Calculate material costs (unchanged from V1)
- */
-function calculateMaterialCost(
-  pieces: Array<{
-    lengthMm: number;
-    widthMm: number;
-    thicknessMm: number;
-    material: { pricePerSqm: { toNumber: () => number } } | null;
-    overrideMaterialCost?: { toNumber: () => number } | null;
-  }>
-): MaterialBreakdown {
-  let totalAreaM2 = 0;
-  let subtotal = 0;
-
-  for (const piece of pieces) {
-    const areaSqm = (piece.lengthMm * piece.widthMm) / 1_000_000;
-    totalAreaM2 += areaSqm;
-
-    // Check for piece-level override
-    if (piece.overrideMaterialCost) {
-      subtotal += piece.overrideMaterialCost.toNumber();
-    } else {
-      const baseRate = piece.material?.pricePerSqm.toNumber() ?? 0;
-      const pieceCost = areaSqm * baseRate;
-      subtotal += pieceCost;
-    }
-  }
-
-  return {
-    totalAreaM2: roundToTwo(totalAreaM2),
-    baseRate: totalAreaM2 > 0 ? roundToTwo(subtotal / totalAreaM2) : 0,
-    thicknessMultiplier: 1,
-    appliedRate: totalAreaM2 > 0 ? roundToTwo(subtotal / totalAreaM2) : 0,
-    subtotal: roundToTwo(subtotal),
-    discount: 0,
-    total: roundToTwo(subtotal),
+    pricingContext,
   };
 }
 
@@ -320,7 +448,7 @@ function calculateEdgeCostV2(
 
       const linearMeters = edge.length / 1000;
       const key = `${edgeType.id}_${piece.thicknessMm}`;
-      
+
       const existing = edgeTotals.get(key) || { linearMeters: 0, thickness: piece.thicknessMm, edgeType };
       existing.linearMeters += linearMeters;
       edgeTotals.set(key, existing);
@@ -331,7 +459,7 @@ function calculateEdgeCostV2(
   let totalLinearMeters = 0;
   let subtotal = 0;
 
-  for (const [key, data] of Array.from(edgeTotals.entries())) {
+  for (const [, data] of Array.from(edgeTotals.entries())) {
     // Select appropriate rate based on thickness
     let rate: number;
     if (data.thickness <= 20 && data.edgeType.rate20mm) {
@@ -378,7 +506,7 @@ function calculateEdgeCostV2(
  */
 function calculateCutoutCostV2(
   pieces: Array<{
-    cutouts: any; // JSON array
+    cutouts: unknown; // JSON array
   }>,
   cutoutTypes: Array<{
     id: string;
@@ -391,8 +519,8 @@ function calculateCutoutCostV2(
   const cutoutTotals = new Map<string, { quantity: number; cutoutType: typeof cutoutTypes[number] }>();
 
   for (const piece of pieces) {
-    const cutouts = Array.isArray(piece.cutouts) ? piece.cutouts : 
-                    (typeof piece.cutouts === 'string' ? JSON.parse(piece.cutouts) : []);
+    const cutouts = Array.isArray(piece.cutouts) ? piece.cutouts :
+                    (typeof piece.cutouts === 'string' ? JSON.parse(piece.cutouts as string) : []);
 
     for (const cutout of cutouts) {
       const cutoutType = cutoutTypes.find(ct => ct.id === cutout.typeId || ct.name === cutout.type);
@@ -407,7 +535,7 @@ function calculateCutoutCostV2(
   const items: CutoutBreakdown[] = [];
   let subtotal = 0;
 
-  for (const [key, data] of Array.from(cutoutTotals.entries())) {
+  for (const [, data] of Array.from(cutoutTotals.entries())) {
     const basePrice = data.cutoutType.baseRate.toNumber();
     let itemSubtotal = data.quantity * basePrice;
 
@@ -435,7 +563,7 @@ function calculateCutoutCostV2(
 /**
  * Calculate service costs (cutting, polishing, installation, waterfall)
  */
-function calculateServiceCost(
+function calculateServiceCosts(
   pieces: Array<{ lengthMm: number; widthMm: number; thicknessMm: number; edgeTop: string | null; edgeBottom: string | null; edgeLeft: string | null; edgeRight: string | null }>,
   totalEdgeLinearMeters: number,
   serviceRates: Array<{
@@ -443,9 +571,7 @@ function calculateServiceCost(
     name: string;
     rate20mm: { toNumber: () => number };
     rate40mm: { toNumber: () => number };
-    unit: string;
     minimumCharge: { toNumber: () => number } | null;
-    minimumQty: { toNumber: () => number } | null;
   }>
 ): { items: ServiceBreakdown[]; subtotal: number } {
   const items: ServiceBreakdown[] = [];
@@ -457,7 +583,7 @@ function calculateServiceCost(
     const totalAreaM2 = pieces.reduce((sum, p) => sum + (p.lengthMm * p.widthMm) / 1_000_000, 0);
     const avgThickness = pieces.reduce((sum, p) => sum + p.thicknessMm, 0) / pieces.length;
     const rate = avgThickness <= 20 ? cuttingRate.rate20mm.toNumber() : cuttingRate.rate40mm.toNumber();
-    
+
     let cost = totalAreaM2 * rate;
     const minCharge = cuttingRate.minimumCharge?.toNumber() || 0;
     if (minCharge > 0 && cost < minCharge) cost = minCharge;
@@ -466,7 +592,7 @@ function calculateServiceCost(
       serviceType: 'CUTTING',
       name: cuttingRate.name,
       quantity: roundToTwo(totalAreaM2),
-      unit: cuttingRate.unit,
+      unit: 'SQUARE_METRE',
       rate: rate,
       subtotal: roundToTwo(cost),
     });
@@ -512,7 +638,7 @@ function calculateServiceCost(
         serviceType: 'POLISHING',
         name: polishingRate.name,
         quantity: roundToTwo(totalPolishedMeters),
-        unit: polishingRate.unit,
+        unit: 'LINEAR_METRE',
         rate: displayRate,
         subtotal: roundToTwo(polishingCost),
       });

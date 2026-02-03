@@ -3,10 +3,22 @@
  * Types for the quote pricing calculation service
  */
 
+import type { MaterialPricingBasis, ServiceUnit } from '@prisma/client';
+
 export interface PricingOptions {
   customerId?: string;
   priceBookId?: string;
   forceRecalculate?: boolean;
+}
+
+export interface PricingContext {
+  organisationId: string;
+  materialPricingBasis: MaterialPricingBasis;
+  cuttingUnit: ServiceUnit;
+  polishingUnit: ServiceUnit;
+  installationUnit: ServiceUnit;
+  currency: string;
+  gstRate: number;
 }
 
 export interface DiscountBreakdown {
@@ -51,6 +63,9 @@ export interface MaterialBreakdown {
   subtotal: number;
   discount: number;
   total: number;
+  pricingBasis: 'PER_SLAB' | 'PER_SQUARE_METRE';
+  slabCount?: number;
+  slabRate?: number;
 }
 
 export interface CalculationResult {
