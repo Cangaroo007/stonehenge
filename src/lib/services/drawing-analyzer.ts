@@ -2,14 +2,28 @@ import Anthropic from '@anthropic-ai/sdk';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ClassificationResult,
+  ClarificationQuestion,
+  ConfidenceLevel,
+  DocumentCategory,
   DrawingAnalysisResult,
   ExtractedPiece,
-  ClarificationQuestion,
 } from '@/lib/types/drawing-analysis';
 import {
   CLASSIFICATION_SYSTEM_PROMPT,
   CLASSIFICATION_USER_PROMPT,
 } from '@/lib/prompts/classification';
+import {
+  JOB_SHEET_EXTRACTION_SYSTEM_PROMPT,
+  JOB_SHEET_EXTRACTION_USER_PROMPT,
+} from '@/lib/prompts/extraction-job-sheet';
+import {
+  HAND_DRAWN_EXTRACTION_SYSTEM_PROMPT,
+  HAND_DRAWN_EXTRACTION_USER_PROMPT,
+} from '@/lib/prompts/extraction-hand-drawn';
+import {
+  CAD_EXTRACTION_SYSTEM_PROMPT,
+  CAD_EXTRACTION_USER_PROMPT,
+} from '@/lib/prompts/extraction-cad';
 
 const anthropic = new Anthropic();
 const MODEL = 'claude-sonnet-4-5-20250929';
@@ -59,6 +73,86 @@ export async function classifyDocument(
       reason: 'Failed to parse AI response',
     };
   }
+}
+
+function getExtractionPrompts(category: DocumentCategory): { system: string; user: string } {
+  switch (category) {
+    case 'JOB_SHEET':
+      return {
+        system: JOB_SHEET_EXTRACTION_SYSTEM_PROMPT,
+        user: JOB_SHEET_EXTRACTION_USER_PROMPT,
+      };
+    case 'HAND_DRAWN':
+      return {
+        system: HAND_DRAWN_EXTRACTION_SYSTEM_PROMPT,
+        user: HAND_DRAWN_EXTRACTION_USER_PROMPT,
+      };
+    case 'CAD_DRAWING':
+      return {
+        system: CAD_EXTRACTION_SYSTEM_PROMPT,
+        user: CAD_EXTRACTION_USER_PROMPT,
+      };
+    default:
+      // Use job sheet as default - most common
+      return {
+        system: JOB_SHEET_EXTRACTION_SYSTEM_PROMPT,
+        user: JOB_SHEET_EXTRACTION_USER_PROMPT,
+      };
+  }
+}
+
+/**
+ * Stage 2: Extract pieces based on document type
+ */
+export async function extractPieces(
+  imageBase64: string,
+  mimeType: string,
+  category: DocumentCategory
+): Promise<ExtractedPiece[]> {
+  const prompts = getExtractionPrompts(category);
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 4000,
+    system: prompts.system,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+            data: imageBase64,
+          },
+        },
+        { type: 'text', text: prompts.user },
+      ],
+    }],
+  });
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : '';
+  const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+  try {
+    const result = JSON.parse(jsonStr);
+    return result.pieces || [];
+  } catch (error) {
+    console.error('Failed to parse extraction response:', text);
+    return [];
+  }
+}
+
+function calculateOverallConfidence(pieces: ExtractedPiece[]): ConfidenceLevel {
+  if (pieces.length === 0) return 'LOW';
+
+  const confidences = pieces.map(p => p.extractionConfidence);
+  const lowCount = confidences.filter(c => c === 'LOW').length;
+  const highCount = confidences.filter(c => c === 'HIGH').length;
+
+  if (lowCount > pieces.length / 2) return 'LOW';
+  if (highCount > pieces.length / 2) return 'HIGH';
+  return 'MEDIUM';
 }
 
 /**
@@ -169,23 +263,7 @@ export function generateClarificationQuestions(
 }
 
 /**
- * Calculate overall confidence from pieces
- */
-function calculateOverallConfidence(pieces: ExtractedPiece[]): 'HIGH' | 'MEDIUM' | 'LOW' {
-  if (pieces.length === 0) return 'LOW';
-  
-  const confidences = pieces.map(p => p.extractionConfidence);
-  const lowCount = confidences.filter(c => c === 'LOW').length;
-  const highCount = confidences.filter(c => c === 'HIGH').length;
-  
-  if (lowCount > 0) return 'LOW';
-  if (highCount === pieces.length) return 'HIGH';
-  return 'MEDIUM';
-}
-
-/**
  * Full analysis pipeline (Stages 1-3)
- * Stage 2 and 3 implemented in prompts 2.2 and 2.3
  */
 export async function analyzeDrawing(
   imageBase64: string,
@@ -194,16 +272,15 @@ export async function analyzeDrawing(
   // Stage 1: Classify
   const classification = await classifyDocument(imageBase64, mimeType);
 
-  // Stage 2: Extract pieces (will be implemented in prompt 2.2)
-  // For now, use empty array
-  const pieces: ExtractedPiece[] = [];
-  
+  // Stage 2: Extract pieces based on category
+  const pieces = await extractPieces(imageBase64, mimeType, classification.category);
+
   // Stage 3: Generate clarification questions
   const clarificationQuestions = generateClarificationQuestions(pieces);
-  
+
   // Calculate overall confidence
   const overallConfidence = calculateOverallConfidence(pieces);
-  
+
   return {
     documentCategory: classification.category,
     categoryConfidence: classification.confidence,
