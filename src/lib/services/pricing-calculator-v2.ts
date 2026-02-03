@@ -14,6 +14,8 @@
  */
 
 import prisma from '@/lib/db';
+import { calculateCutPlan } from './multi-slab-calculator';
+import { JOIN_RATE_PER_METRE } from '@/lib/constants/slab-sizes';
 import type { MaterialPricingBasis } from '@prisma/client';
 import type {
   PricingOptions,
@@ -293,6 +295,28 @@ export async function calculateQuotePrice(
 
   // Calculate service costs (cutting, polishing, installation, waterfall)
   const serviceData = calculateServiceCosts(allPieces, edgeData.totalLinearMeters, serviceRates);
+
+  // Calculate join costs for oversized pieces
+  for (const piece of allPieces) {
+    const material = piece.material as unknown as { category?: string } | null;
+    const materialCategory = material?.category || 'caesarstone';
+    const cutPlan = calculateCutPlan(
+      { lengthMm: piece.lengthMm, widthMm: piece.widthMm },
+      materialCategory
+    );
+
+    if (!cutPlan.fitsOnSingleSlab) {
+      serviceData.items.push({
+        serviceType: 'JOIN',
+        name: `Join - ${cutPlan.strategy}`,
+        quantity: roundToTwo(cutPlan.joinLengthMm / 1000),
+        unit: 'LINEAR_METRE',
+        rate: JOIN_RATE_PER_METRE,
+        subtotal: cutPlan.joinCost,
+      });
+      serviceData.subtotal += cutPlan.joinCost;
+    }
+  }
 
   // Calculate delivery cost
   const deliveryBreakdown = {

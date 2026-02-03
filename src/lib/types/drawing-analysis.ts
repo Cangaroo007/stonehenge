@@ -96,3 +96,11 @@ export interface ClassificationResult {
   confidence: number;
   reason: string;
 }
+
+// Multi-slab types (re-export from calculator)
+export type {
+  CutPlan,
+  Segment,
+  JoinLocation,
+  JoinStrategy,
+} from '@/lib/services/multi-slab-calculator';
