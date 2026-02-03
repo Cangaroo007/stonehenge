@@ -13,12 +13,29 @@ const THUMBNAIL_WIDTH = 400;
 const THUMBNAIL_QUALITY = 80;
 
 /**
+ * Configure pdfjs-dist to work in server environments by pre-loading
+ * the worker module so the fake-worker fallback succeeds.
+ */
+async function ensurePdfjsWorker() {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  // Point workerSrc to the actual worker file so the fake-worker
+  // dynamic import() can resolve it in Node.js / bundled environments.
+  const workerPath = require.resolve(
+    'pdfjs-dist/legacy/build/pdf.worker.mjs'
+  );
+  pdfjs.GlobalWorkerOptions.workerSrc = workerPath;
+}
+
+/**
  * Generate a PNG thumbnail from a PDF buffer.
  * Renders the first page and optimizes with sharp.
  */
 export async function generatePdfThumbnailBuffer(
   pdfBuffer: Buffer
 ): Promise<Buffer> {
+  // Ensure pdfjs worker is configured before pdf-to-img uses it
+  await ensurePdfjsWorker();
+
   // Dynamic import because pdf-to-img is ESM-only
   const { pdf } = await import('pdf-to-img');
 
