@@ -155,6 +155,7 @@ model User {
   signatures   QuoteSignature[] @relation("QuoteSignatures")
   quoteOverrides Quote[] @relation("QuoteOverrides")
   quoteVersions QuoteVersion[]  // Add reverse relation for QuoteVersion
+  fieldJobs     FieldJob[] @relation("FieldJobsCreated")
 
   @@map("users")
 }
@@ -1061,6 +1062,70 @@ enum StripUsageType {
   APRON                // Front apron piece
   CUSTOM               // User-defined
 }
+
+// ============================================
+// FIELD JOBS (Mobile PWA)
+// ============================================
+
+enum FieldJobStatus {
+  IN_PROGRESS
+  READY_FOR_QUOTE
+  CONVERTED
+  CANCELLED
+}
+
+model FieldJob {
+  id            String         @id @default(cuid())
+  customerName  String         @map("customer_name")
+  siteAddress   String?        @map("site_address")
+  contactPhone  String?        @map("contact_phone")
+  status        FieldJobStatus @default(IN_PROGRESS)
+
+  createdBy     Int            @map("created_by")
+  createdByUser User           @relation("FieldJobsCreated", fields: [createdBy], references: [id])
+
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  photos        FieldPhoto[]
+  measurements  FieldMeasurement[]
+
+  @@index([createdBy])
+  @@index([status])
+  @@map("field_jobs")
+}
+
+model FieldPhoto {
+  id          String   @id @default(cuid())
+  fieldJobId  String   @map("field_job_id")
+  fieldJob    FieldJob @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+  storageKey  String   @map("storage_key")
+  filename    String
+  mimeType    String   @map("mime_type")
+  fileSize    Int      @map("file_size")
+  notes       String?
+  uploadedAt  DateTime @default(now()) @map("uploaded_at")
+
+  @@index([fieldJobId])
+  @@map("field_photos")
+}
+
+model FieldMeasurement {
+  id          String   @id @default(cuid())
+  fieldJobId  String   @map("field_job_id")
+  fieldJob    FieldJob @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+  label       String
+  valueMm     Int      @map("value_mm")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([fieldJobId])
+  @@map("field_measurements")
+}
+
+// ============================================
+// STRIP CUTTING CONFIGURATION
+// ============================================
 
 model StripConfiguration {
   id                    Int       @id @default(autoincrement())
