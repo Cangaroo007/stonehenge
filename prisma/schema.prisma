@@ -430,6 +430,7 @@ model Quote {
   signature       QuoteSignature?
   drawings        Drawing[]
   versions        QuoteVersion[]  // Add reverse relation for QuoteVersion
+  fieldJob        FieldJob?
 
   priceBookId     String?     @map("price_book_id")
   priceBook       PriceBook?  @relation(fields: [priceBookId], references: [id])
@@ -1101,4 +1102,66 @@ model StripConfiguration {
   @@index([companyId, usageType])
   @@index([companyId, isActive])
   @@map("strip_configurations")
+}
+
+// ===========================================
+// FIELD CAPTURE MODELS
+// ===========================================
+
+enum FieldJobStatus {
+  IN_PROGRESS
+  READY_FOR_QUOTE
+  CONVERTED
+  CANCELLED
+}
+
+model FieldJob {
+  id            String           @id @default(cuid())
+  customerName  String
+  siteAddress   String?
+  contactPhone  String?
+  status        FieldJobStatus   @default(IN_PROGRESS)
+  photos        FieldPhoto[]
+  measurements  FieldMeasurement[]
+  notes         String?          @db.Text
+  quoteId       Int?             @unique
+  quote         Quote?           @relation(fields: [quoteId], references: [id])
+  createdBy     String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  syncedAt      DateTime?
+
+  @@index([createdBy])
+  @@index([status])
+}
+
+model FieldPhoto {
+  id          String    @id @default(cuid())
+  fieldJobId  String
+  fieldJob    FieldJob  @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+  fileKey     String
+  filename    String
+  caption     String?
+  takenAt     DateTime  @default(now())
+  gpsLat      Float?
+  gpsLng      Float?
+  createdAt   DateTime  @default(now())
+
+  @@index([fieldJobId])
+}
+
+model FieldMeasurement {
+  id            String    @id @default(cuid())
+  fieldJobId    String
+  fieldJob      FieldJob  @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+  room          String?
+  piece         String?
+  length        Decimal   @db.Decimal(10, 2)
+  width         Decimal   @db.Decimal(10, 2)
+  thickness     Int       @default(20)
+  finishedEdges String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  @@index([fieldJobId])
 }
