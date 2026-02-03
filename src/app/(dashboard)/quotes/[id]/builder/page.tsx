@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { useUnits } from '@/lib/contexts/UnitContext';
+import { formatAreaFromSqm } from '@/lib/utils/units';
 import QuoteHeader from './components/QuoteHeader';
 import PieceList from './components/PieceList';
 import RoomGrouping from './components/RoomGrouping';
@@ -95,6 +97,7 @@ interface ThicknessOption {
 export default function QuoteBuilderPage() {
   const params = useParams();
   const router = useRouter();
+  const { unitSystem } = useUnits();
   const quoteId = params.id as string;
 
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -671,7 +674,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
               <div className="flex justify-between">
                 <span className="text-gray-600">Total Area:</span>
                 <span className="font-medium">
-                  {pieces.reduce((sum, p) => sum + (p.lengthMm * p.widthMm) / 1_000_000, 0).toFixed(2)} m²
+                  {formatAreaFromSqm(pieces.reduce((sum, p) => sum + (p.lengthMm * p.widthMm) / 1_000_000, 0), unitSystem)}
                 </span>
               </div>
               <div className="flex justify-between">

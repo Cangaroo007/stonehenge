@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/db';
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
+import { DimensionsDisplay, AreaDisplay } from '@/components/ui/DimensionDisplay';
 import DeleteQuoteButton from '@/components/DeleteQuoteButton';
 import QuoteViewTracker from './components/QuoteViewTracker';
 import QuoteSignatureSection from './components/QuoteSignatureSection';
@@ -275,10 +276,10 @@ export default async function QuoteDetailPage({
                         {piece.description || 'Unnamed piece'}
                       </td>
                       <td className="table-cell">
-                        {piece.lengthMm} × {piece.widthMm} × {piece.thicknessMm}mm
+                        <DimensionsDisplay lengthMm={piece.lengthMm} widthMm={piece.widthMm} thicknessMm={piece.thicknessMm} />
                         <br />
                         <span className="text-xs text-gray-500">
-                          ({Number(piece.areaSqm).toFixed(2)} m²)
+                          (<AreaDisplay sqm={Number(piece.areaSqm)} />)
                         </span>
                       </td>
                       <td className="table-cell">{piece.materialName || '-'}</td>

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { UserRole } from '@prisma/client';
 import Link from 'next/link';
+import { UnitProvider } from '@/lib/contexts/UnitContext';
 
 export default async function PortalLayout({
   children,
@@ -52,7 +53,7 @@ export default async function PortalLayout({
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
+        <UnitProvider>{children}</UnitProvider>
       </main>
 
       {/* Footer */}

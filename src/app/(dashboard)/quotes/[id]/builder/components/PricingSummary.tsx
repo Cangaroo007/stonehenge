@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
+import { useUnits } from '@/lib/contexts/UnitContext';
+import { formatAreaFromSqm } from '@/lib/utils/units';
 import { debounce } from '@/lib/utils/debounce';
 import type { CalculationResult } from '@/lib/types/pricing';
 
@@ -27,6 +29,7 @@ export default function PricingSummary({
   priceBookName,
   onCalculationComplete,
 }: PricingSummaryProps) {
+  const { unitSystem } = useUnits();
   const [calculation, setCalculation] = useState<CalculationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -233,12 +236,12 @@ export default function PricingSummary({
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Total Area:</span>
-                  <span>{(Number(calculation.breakdown.materials.totalAreaM2) || 0).toFixed(2)} m²</span>
+                  <span>{formatAreaFromSqm(Number(calculation.breakdown.materials.totalAreaM2) || 0, unitSystem)}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Rate:</span>
                   <span>
-                    {formatCurrency(calculation.breakdown.materials.baseRate)}/m²
+                    {formatCurrency(calculation.breakdown.materials.baseRate)}/{unitSystem === 'IMPERIAL' ? 'ft²' : 'm²'}
                     {calculation.breakdown.materials.thicknessMultiplier !== 1 && (
                       <span className="ml-1">
                         × {(Number(calculation.breakdown.materials.thicknessMultiplier) || 1).toFixed(1)}

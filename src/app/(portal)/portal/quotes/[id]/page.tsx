@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { formatCurrency, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
+import { DimensionsDisplay, AreaDisplay } from '@/components/ui/DimensionDisplay';
 import { UserRole } from '@prisma/client';
 import { hasPermissionAsync, Permission } from '@/lib/permissions';
 import QuoteViewTracker from '@/app/(dashboard)/quotes/[id]/components/QuoteViewTracker';
@@ -168,10 +169,10 @@ export default async function CustomerQuoteDetailPage({
                         {piece.description || 'Unnamed piece'}
                       </td>
                       <td className="table-cell">
-                        {piece.lengthMm} × {piece.widthMm} × {piece.thicknessMm}mm
+                        <DimensionsDisplay lengthMm={piece.lengthMm} widthMm={piece.widthMm} thicknessMm={piece.thicknessMm} />
                         <br />
                         <span className="text-xs text-gray-500">
-                          ({Number(piece.areaSqm).toFixed(2)} m²)
+                          (<AreaDisplay sqm={Number(piece.areaSqm)} />)
                         </span>
                       </td>
                       <td className="table-cell">{piece.materialName || '-'}</td>
