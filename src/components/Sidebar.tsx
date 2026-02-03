@@ -10,8 +10,7 @@ const navigation = [
   { name: 'Customers', href: '/customers', icon: UsersIcon },
   { name: 'Materials', href: '/materials', icon: SwatchIcon },
   { name: 'Optimizer', href: '/optimize', icon: SquaresIcon },
-  { name: 'Pricing', href: '/pricing', icon: CurrencyIcon },
-  { name: 'Pricing Admin', href: '/admin/pricing', icon: AdjustmentsIcon },
+  { name: 'Pricing', href: '/admin/pricing', icon: AdjustmentsIcon },
   { name: 'Users', href: '/admin/users', icon: UserGroupIcon },
   { name: 'Settings', href: '/settings', icon: CogIcon },
 ];
@@ -89,14 +88,6 @@ function SwatchIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 0 0 3.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008Z" />
-    </svg>
-  );
-}
-
-function CurrencyIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
     </svg>
   );
 }
