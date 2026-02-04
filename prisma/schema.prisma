@@ -155,6 +155,8 @@ model User {
   signatures   QuoteSignature[] @relation("QuoteSignatures")
   quoteOverrides Quote[] @relation("QuoteOverrides")
   quoteVersions QuoteVersion[]  // Add reverse relation for QuoteVersion
+  fieldJobsAssigned FieldJob[] @relation("FieldJobAssignee")
+  fieldJobsCreated  FieldJob[] @relation("FieldJobCreator")
 
   @@map("users")
 }
@@ -263,6 +265,7 @@ model Customer {
   pricingRules PricingRule[]
   users        User[]        // Customer portal users
   drawings     Drawing[]
+  fieldJobs    FieldJob[]
 
   @@map("customers")
 }
@@ -430,6 +433,7 @@ model Quote {
   signature       QuoteSignature?
   drawings        Drawing[]
   versions        QuoteVersion[]  // Add reverse relation for QuoteVersion
+  fieldJob        FieldJob?
 
   priceBookId     String?     @map("price_book_id")
   priceBook       PriceBook?  @relation(fields: [priceBookId], references: [id])
@@ -1126,4 +1130,110 @@ model MachineProfile {
   updatedAt         DateTime @updatedAt @map("updated_at")
   
   @@map("machine_profiles")
+}
+
+// ============================================
+// FIELD JOBS (Mobile field capture)
+// ============================================
+
+enum FieldJobStatus {
+  DRAFT
+  IN_PROGRESS
+  READY_FOR_QUOTE
+  CONVERTED
+}
+
+model FieldJob {
+  id             Int            @id @default(autoincrement())
+
+  // Customer
+  customerId     Int?           @map("customer_id")
+  customer       Customer?      @relation(fields: [customerId], references: [id])
+
+  // Project details
+  projectName    String?        @map("project_name")
+  projectAddress String?        @map("project_address")
+  siteContact    String?        @map("site_contact")
+  sitePhone      String?        @map("site_phone")
+
+  // Status
+  status         FieldJobStatus @default(DRAFT)
+
+  // Notes
+  notes          String?        @db.Text
+
+  // Link to created quote
+  quoteId        Int?           @unique @map("quote_id")
+  quote          Quote?         @relation(fields: [quoteId], references: [id])
+
+  // Assigned user
+  assignedTo     Int?           @map("assigned_to")
+  assignedUser   User?          @relation("FieldJobAssignee", fields: [assignedTo], references: [id])
+
+  // Metadata
+  createdBy      Int?           @map("created_by")
+  createdByUser  User?          @relation("FieldJobCreator", fields: [createdBy], references: [id])
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  measurements   FieldMeasurement[]
+  photos         FieldPhoto[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("field_jobs")
+}
+
+model FieldMeasurement {
+  id           Int      @id @default(autoincrement())
+  fieldJobId   Int      @map("field_job_id")
+  fieldJob     FieldJob @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+
+  // Room / location
+  room         String   @default("General")
+
+  // Piece info
+  label        String   @default("Piece")
+  description  String?
+
+  // Dimensions (mm)
+  lengthMm     Int      @map("length_mm")
+  widthMm      Int      @map("width_mm")
+  thicknessMm  Int      @default(20) @map("thickness_mm")
+
+  // Edge notes (free text from field)
+  edgeNotes    String?  @map("edge_notes")
+
+  // Cutout notes (free text from field)
+  cutoutNotes  String?  @map("cutout_notes")
+
+  // Material preference (free text)
+  materialNote String?  @map("material_note")
+
+  // Sort
+  sortOrder    Int      @default(0) @map("sort_order")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([fieldJobId])
+  @@map("field_measurements")
+}
+
+model FieldPhoto {
+  id           Int      @id @default(autoincrement())
+  fieldJobId   Int      @map("field_job_id")
+  fieldJob     FieldJob @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+
+  filename     String
+  storageKey   String   @map("storage_key")
+  mimeType     String   @default("image/jpeg") @map("mime_type")
+  fileSize     Int?     @map("file_size")
+  caption      String?
+
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+  @@index([fieldJobId])
+  @@map("field_photos")
 }
