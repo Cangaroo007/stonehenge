@@ -271,6 +271,35 @@ export default function QuoteBuilderPage() {
     setIsAddingPiece(false);
   };
 
+  // Handle piece update (for inline editing)
+  const handlePieceUpdate = useCallback(async (pieceId: number, updates: Partial<QuotePiece>) => {
+    try {
+      const response = await fetch(`/api/quotes/${quoteId}/pieces/${pieceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update piece');
+      }
+
+      // Update local state optimistically
+      setPieces(prev => prev.map(p => 
+        p.id === pieceId ? { ...p, ...updates } : p
+      ));
+      
+      // Trigger pricing recalculation
+      triggerRecalculate();
+      markAsChanged();
+    } catch (err) {
+      console.error('Failed to update piece:', err);
+      // Refresh to get correct state
+      await fetchQuote();
+    }
+  }, [quoteId, triggerRecalculate, markAsChanged, fetchQuote]);
+
   // Handle save piece
   const handleSavePiece = async (pieceData: Partial<QuotePiece>, roomName: string) => {
     setSaving(true);
@@ -643,6 +672,8 @@ const roomNames: string[] = Array.from(new Set(rooms.map(r => r.name)));
                 onDeletePiece={handleDeletePiece}
                 onDuplicatePiece={handleDuplicatePiece}
                 onReorder={handleReorder}
+                onPieceUpdate={handlePieceUpdate}
+                getKerfForPiece={getKerfForPiece}
                 machines={machines}
                 defaultMachineId={defaultMachineId}
                 calculation={calculation}
