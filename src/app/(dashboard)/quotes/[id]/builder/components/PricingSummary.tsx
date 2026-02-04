@@ -21,6 +21,8 @@ interface PricingSummaryProps {
   customerType?: string | null;
   priceBookName?: string | null;
   onCalculationComplete?: (result: CalculationResult | null) => void;
+  discountDisplayMode?: DiscountDisplayMode;
+  onDiscountDisplayModeChange?: (mode: DiscountDisplayMode) => void;
 }
 
 export default function PricingSummary({
@@ -31,6 +33,8 @@ export default function PricingSummary({
   customerType,
   priceBookName,
   onCalculationComplete,
+  discountDisplayMode: externalDisplayMode,
+  onDiscountDisplayModeChange,
 }: PricingSummaryProps) {
   const { unitSystem } = useUnits();
   const [calculation, setCalculation] = useState<CalculationResult | null>(null);
@@ -38,8 +42,13 @@ export default function PricingSummary({
   const [error, setError] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Discount Display Mode toggle
-  const [discountDisplayMode, setDiscountDisplayMode] = useState<DiscountDisplayMode>('ITEMIZED');
+  // Discount Display Mode toggle - use external if provided, else local
+  const [localDiscountDisplayMode, setLocalDiscountDisplayMode] = useState<DiscountDisplayMode>('ITEMIZED');
+  const discountDisplayMode = externalDisplayMode ?? localDiscountDisplayMode;
+  const setDiscountDisplayMode = (mode: DiscountDisplayMode) => {
+    setLocalDiscountDisplayMode(mode);
+    if (onDiscountDisplayModeChange) onDiscountDisplayModeChange(mode);
+  };
 
   // Additional Discount state
   const [additionalDiscountType, setAdditionalDiscountType] = useState<AdditionalDiscountType>('percentage');

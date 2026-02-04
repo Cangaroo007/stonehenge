@@ -1,13 +1,26 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useUnits } from '@/lib/contexts/UnitContext';
 import { getDimensionUnitLabel, mmToDisplayUnit } from '@/lib/utils/units';
+import { formatCurrency } from '@/lib/utils';
+import type { CalculationResult } from '@/lib/types/pricing';
 
 interface MachineOption {
   id: string;
   name: string;
   kerfWidthMm: number;
   isDefault: boolean;
+}
+
+interface EdgeType {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  baseRate: number;
+  isActive: boolean;
+  sortOrder: number;
 }
 
 interface QuotePiece {
@@ -40,6 +53,9 @@ interface PieceListProps {
   onReorder: (pieces: { id: number; sortOrder: number }[]) => void;
   machines?: MachineOption[];
   defaultMachineId?: string | null;
+  calculation?: CalculationResult | null;
+  discountDisplayMode?: 'ITEMIZED' | 'TOTAL_ONLY';
+  edgeTypes?: EdgeType[];
 }
 
 // Get edge summary string for a piece
@@ -76,6 +92,60 @@ const count40mmEdges = (piece: QuotePiece): number => {
   return count;
 };
 
+// Check if any edge is a 40mm Mitre type
+const hasMitreEdge = (piece: QuotePiece, edgeTypes: EdgeType[]): boolean => {
+  const edgeIds = [piece.edgeTop, piece.edgeBottom, piece.edgeLeft, piece.edgeRight].filter(Boolean);
+  return edgeIds.some(id => {
+    const et = edgeTypes.find(e => e.id === id);
+    return et && et.name.toLowerCase().includes('mitre');
+  });
+};
+
+// Compute per-piece pricing breakdown
+interface PiecePricing {
+  basePrice: number;
+  tierDiscount: number;
+  machineMargin: number;
+  finalCost: number;
+}
+
+function computePiecePricing(
+  piece: QuotePiece,
+  pieceCount: number,
+  calculation: CalculationResult | null,
+  machineKerf: number,
+): PiecePricing {
+  // Base price: proportional share from calculation materials subtotal
+  const pieceArea = (piece.lengthMm * piece.widthMm) / 1_000_000;
+  let basePrice = piece.totalCost || 0;
+
+  if (calculation?.breakdown?.materials) {
+    const totalArea = Number(calculation.breakdown.materials.totalAreaM2) || 1;
+    const materialSubtotal = calculation.breakdown.materials.subtotal || 0;
+    // Proportional share of material cost based on area
+    basePrice = (pieceArea / totalArea) * materialSubtotal;
+  }
+
+  // Tier discount: proportional share of total discount based on piece count
+  let tierDiscount = 0;
+  if (calculation?.discounts && calculation.discounts.length > 0) {
+    const totalSavings = calculation.discounts.reduce((sum, d) => sum + d.savings, 0);
+    tierDiscount = pieceCount > 0 ? totalSavings / pieceCount : 0;
+  }
+
+  // Machine margin: additional material consumed by kerf (approximate)
+  // Each cut consumes kerfWidth mm of additional material along the longest dimension
+  const kerfAreaM2 = ((piece.lengthMm + piece.widthMm) * machineKerf) / 1_000_000;
+  const materialRate = calculation?.breakdown?.materials
+    ? (calculation.breakdown.materials.subtotal / (Number(calculation.breakdown.materials.totalAreaM2) || 1))
+    : 0;
+  const machineMargin = kerfAreaM2 * materialRate;
+
+  const finalCost = basePrice - tierDiscount + machineMargin;
+
+  return { basePrice, tierDiscount, machineMargin, finalCost };
+}
+
 export default function PieceList({
   pieces,
   selectedPieceId,
@@ -85,6 +155,9 @@ export default function PieceList({
   onReorder,
   machines = [],
   defaultMachineId,
+  calculation = null,
+  discountDisplayMode = 'ITEMIZED',
+  edgeTypes = [],
 }: PieceListProps) {
   const { unitSystem } = useUnits();
   const unitLabel = getDimensionUnitLabel(unitSystem);
@@ -98,6 +171,50 @@ export default function PieceList({
     const defaultMachine = machines.find(m => m.id === defaultMachineId);
     if (defaultMachine) return { name: defaultMachine.name, kerf: defaultMachine.kerfWidthMm };
     return { name: 'GMM Bridge Saw', kerf: 8 };
+  };
+
+  // Pre-compute pricing for all pieces
+  const piecePricingMap = useMemo(() => {
+    const map = new Map<number, PiecePricing>();
+    for (const piece of pieces) {
+      const machineInfo = getMachineInfo(piece);
+      map.set(piece.id, computePiecePricing(piece, pieces.length, calculation, machineInfo.kerf));
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pieces, calculation, machines, defaultMachineId]);
+
+  // Resolve edge type name from ID
+  const getEdgeTypeName = (edgeTypeId: string | null): string | null => {
+    if (!edgeTypeId) return null;
+    const et = edgeTypes.find(e => e.id === edgeTypeId);
+    return et?.name ?? null;
+  };
+
+  // Get mitre strip info for a piece
+  const getMitreStripInfo = (piece: QuotePiece): { count: number; formula: string } | null => {
+    if (piece.thicknessMm < 40) return null;
+    const machineInfo = getMachineInfo(piece);
+    const edgeIds = [
+      { id: piece.edgeTop, side: 'T' },
+      { id: piece.edgeBottom, side: 'B' },
+      { id: piece.edgeLeft, side: 'L' },
+      { id: piece.edgeRight, side: 'R' },
+    ];
+    let mitreCount = 0;
+    for (const edge of edgeIds) {
+      if (!edge.id) continue;
+      const name = getEdgeTypeName(edge.id);
+      if (name && name.toLowerCase().includes('mitre')) {
+        mitreCount++;
+      }
+    }
+    if (mitreCount === 0) return null;
+    const stripWidth = piece.thicknessMm + machineInfo.kerf + 5;
+    return {
+      count: mitreCount,
+      formula: `${piece.thicknessMm}+${machineInfo.kerf}+5=${stripWidth}mm`,
+    };
   };
 
   const handleMoveUp = (index: number, e: React.MouseEvent) => {
@@ -185,6 +302,9 @@ export default function PieceList({
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Edges
             </th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Pricing
+            </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
               Actions
             </th>
@@ -193,6 +313,8 @@ export default function PieceList({
         <tbody className="bg-white divide-y divide-gray-200">
           {pieces.map((piece, index) => {
             const machineInfo = getMachineInfo(piece);
+            const pricing = piecePricingMap.get(piece.id);
+            const mitreInfo = getMitreStripInfo(piece);
             return (
               <tr
                 key={piece.id}
@@ -251,9 +373,44 @@ export default function PieceList({
                           </span>
                         </div>
                       )}
+                      {mitreInfo && (
+                        <div className="flex items-center gap-1 text-xs text-purple-600">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="font-medium">
+                            {mitreInfo.count} Mitre Strip{mitreInfo.count !== 1 ? 's' : ''} ({mitreInfo.formula})
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <span className="text-gray-400 text-xs">None</span>
+                  )}
+                </td>
+                {/* Itemized Pricing Column */}
+                <td className="px-4 py-3 text-sm text-right">
+                  {pricing ? (
+                    <div className="space-y-0.5">
+                      <div className="text-xs text-gray-500">
+                        Base: {formatCurrency(pricing.basePrice)}
+                      </div>
+                      {discountDisplayMode === 'ITEMIZED' && (
+                        <div className={`text-xs ${pricing.tierDiscount > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                          Disc: {pricing.tierDiscount > 0 ? '-' : ''}{formatCurrency(pricing.tierDiscount)}
+                        </div>
+                      )}
+                      {pricing.machineMargin > 0.01 && (
+                        <div className="text-xs text-amber-600">
+                          Mach: +{formatCurrency(pricing.machineMargin)}
+                        </div>
+                      )}
+                      <div className="text-sm font-semibold text-gray-900">
+                        {formatCurrency(pricing.finalCost)}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400">-</span>
                   )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm">

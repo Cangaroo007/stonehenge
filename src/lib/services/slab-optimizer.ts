@@ -22,8 +22,7 @@ interface Slab {
 
 // Lamination strip constants
 const LAMINATION_STRIP_WIDTH_DEFAULT = 40; // mm - standard strip width
-const LAMINATION_STRIP_WIDTH_MITRE = 108; // mm - for 40mm Mitre edges
-const LAMINATION_STRIP_WIDTH_NARROW = 60; // mm - for narrow mitre edges
+const LAMINATION_STRIP_BUFFER = 5; // mm - buffer added to mitre strips
 const LAMINATION_THRESHOLD = 40; // mm - pieces >= 40mm need lamination
 
 // Internal type for pieces during optimization (includes lamination data)
@@ -35,25 +34,28 @@ type OptimizationPiece = OptimizationInput['pieces'][0] & {
 
 /**
  * Determine the strip width for an edge based on the edge type name.
- * - '40mm Mitre' edges use 108mm strips
- * - Other mitre edges use 60mm strips
- * - Standard polish edges use 40mm (default)
+ * Mitre strip formula: FinishedThickness + Kerf + 5mm buffer
+ * Standard polish edges use 40mm (default).
  */
-function getStripWidthForEdge(edgeTypeName?: string): number {
+function getStripWidthForEdge(edgeTypeName?: string, thickness?: number, kerfWidth?: number): number {
   if (!edgeTypeName) return LAMINATION_STRIP_WIDTH_DEFAULT;
   const lower = edgeTypeName.toLowerCase();
-  if (lower.includes('40mm') && lower.includes('mitre')) return LAMINATION_STRIP_WIDTH_MITRE;
-  if (lower.includes('mitre')) return LAMINATION_STRIP_WIDTH_NARROW;
+  if (lower.includes('mitre')) {
+    // Dynamic formula: FinishedThickness + Kerf + 5mm buffer
+    const finishedThickness = thickness ?? 40;
+    const kerf = kerfWidth ?? 8;
+    return finishedThickness + kerf + LAMINATION_STRIP_BUFFER;
+  }
   return LAMINATION_STRIP_WIDTH_DEFAULT;
 }
 
 /**
- * Generates lamination strips for a 40mm+ piece
+ * Generates lamination strips for a 40mm+ piece.
  * Strips are needed under each finished edge to create the thickness appearance.
- * If the edge is a '40mm Mitre', the strip width is 108mm.
- * Other mitre edges use 60mm strips.
+ * Mitre strip width: FinishedThickness + Kerf + 5mm buffer.
+ * Standard polish strip width: 40mm default.
  */
-function generateLaminationStrips(piece: OptimizationPiece): OptimizationPiece[] {
+function generateLaminationStrips(piece: OptimizationPiece, kerfWidth?: number): OptimizationPiece[] {
   // Only generate strips for 40mm+ pieces
   if (!piece.thickness || piece.thickness < LAMINATION_THRESHOLD) {
     return [];
@@ -70,7 +72,7 @@ function generateLaminationStrips(piece: OptimizationPiece): OptimizationPiece[]
 
   // Top edge strip (runs along the width)
   if (edges.top) {
-    const stripW = getStripWidthForEdge(edgeNames?.top);
+    const stripW = getStripWidthForEdge(edgeNames?.top, piece.thickness, kerfWidth);
     strips.push({
       id: `${piece.id}-lam-top`,
       width: piece.width,
@@ -85,7 +87,7 @@ function generateLaminationStrips(piece: OptimizationPiece): OptimizationPiece[]
 
   // Bottom edge strip (runs along the width)
   if (edges.bottom) {
-    const stripW = getStripWidthForEdge(edgeNames?.bottom);
+    const stripW = getStripWidthForEdge(edgeNames?.bottom, piece.thickness, kerfWidth);
     strips.push({
       id: `${piece.id}-lam-bottom`,
       width: piece.width,
@@ -100,7 +102,7 @@ function generateLaminationStrips(piece: OptimizationPiece): OptimizationPiece[]
 
   // Left edge strip (runs along the height)
   if (edges.left) {
-    const stripW = getStripWidthForEdge(edgeNames?.left);
+    const stripW = getStripWidthForEdge(edgeNames?.left, piece.thickness, kerfWidth);
     strips.push({
       id: `${piece.id}-lam-left`,
       width: stripW,
@@ -115,7 +117,7 @@ function generateLaminationStrips(piece: OptimizationPiece): OptimizationPiece[]
 
   // Right edge strip (runs along the height)
   if (edges.right) {
-    const stripW = getStripWidthForEdge(edgeNames?.right);
+    const stripW = getStripWidthForEdge(edgeNames?.right, piece.thickness, kerfWidth);
     strips.push({
       id: `${piece.id}-lam-right`,
       width: stripW,
@@ -211,7 +213,7 @@ export function optimizeSlabs(input: OptimizationInput): OptimizationResult {
     allPieces.push(piece as OptimizationPiece);
     
     // Generate and add lamination strips if needed
-    const strips = generateLaminationStrips(piece as OptimizationPiece);
+    const strips = generateLaminationStrips(piece as OptimizationPiece, kerfWidth);
     allPieces.push(...strips);
   }
   

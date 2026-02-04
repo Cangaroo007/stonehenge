@@ -341,6 +341,56 @@ export default function PieceForm({
         </div>
       )}
 
+      {/* Mitre Lamination Strip Auto-Calculation */}
+      {thicknessMm >= 40 && (() => {
+        const kerfMm = selectedMachine?.kerfWidthMm ?? 8;
+        const edgeEntries = [
+          { side: 'Top', id: edgeSelections.edgeTop, lengthMm: parseInt(lengthMm) || 0 },
+          { side: 'Bottom', id: edgeSelections.edgeBottom, lengthMm: parseInt(lengthMm) || 0 },
+          { side: 'Left', id: edgeSelections.edgeLeft, lengthMm: parseInt(widthMm) || 0 },
+          { side: 'Right', id: edgeSelections.edgeRight, lengthMm: parseInt(widthMm) || 0 },
+        ];
+        const mitreStrips = edgeEntries
+          .filter(e => {
+            if (!e.id) return false;
+            const et = edgeTypes.find(t => t.id === e.id);
+            return et && et.name.toLowerCase().includes('mitre');
+          })
+          .map(e => {
+            const stripWidth = thicknessMm + kerfMm + 5;
+            return { side: e.side, lengthMm: e.lengthMm, stripWidth };
+          });
+
+        if (mitreStrips.length === 0) return null;
+
+        return (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <h4 className="text-sm font-semibold text-purple-800 mb-2 flex items-center gap-1">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Lamination Strips (Auto-Calculated)
+            </h4>
+            <div className="space-y-1 text-sm">
+              {mitreStrips.map(strip => (
+                <div key={strip.side} className="flex justify-between text-purple-700">
+                  <span>{strip.side} Mitre Strip:</span>
+                  <span className="font-medium">
+                    {strip.lengthMm} x {strip.stripWidth}mm
+                    <span className="text-purple-500 text-xs ml-1">
+                      ({thicknessMm}+{kerfMm}+5)
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-purple-500 mt-2">
+              Strips auto-added to Optimizer required piece list
+            </p>
+          </div>
+        );
+      })()}
+
       {/* Cutout Selector */}
       {cutoutTypes.length > 0 && (
         <CutoutSelector
