@@ -1106,3 +1106,66 @@ model StripConfiguration {
   @@index([companyId, isActive])
   @@map("strip_configurations")
 }
+
+// ============================================
+// FIELD JOBS (Mobile PWA)
+// ============================================
+
+model FieldJob {
+  id            String   @id @default(cuid())
+  customerName  String   @map("customer_name")
+  siteAddress   String?  @map("site_address")
+  status        String   @default("new") // new, in_progress, ready_for_quote, completed
+  notes         String?  @db.Text
+
+  // Link to quote (optional)
+  quoteId       Int?     @map("quote_id")
+
+  // Creator
+  createdBy     Int      @map("created_by")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  photos        FieldPhoto[]
+  measurements  FieldMeasurement[]
+
+  @@index([createdBy])
+  @@index([status])
+  @@map("field_jobs")
+}
+
+model FieldPhoto {
+  id          String   @id @default(cuid())
+  fieldJobId  String   @map("field_job_id")
+  fieldJob    FieldJob @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+
+  filename    String
+  storageKey  String   @map("storage_key")
+  mimeType    String   @map("mime_type")
+  fileSize    Int      @map("file_size")
+  caption     String?
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  uploadedAt  DateTime @default(now()) @map("uploaded_at")
+
+  @@index([fieldJobId])
+  @@map("field_photos")
+}
+
+model FieldMeasurement {
+  id          String   @id @default(cuid())
+  fieldJobId  String   @map("field_job_id")
+  fieldJob    FieldJob @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+
+  label       String   // "Kitchen Island", "Bathroom Vanity"
+  lengthMm    Int      @map("length_mm")
+  widthMm     Int      @map("width_mm")
+  notes       String?
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([fieldJobId])
+  @@map("field_measurements")
+}
