@@ -1058,6 +1058,25 @@ model QuoteVersion {
 }
 
 // ============================================
+// FIELD JOBS
+// ============================================
+
+model FieldJob {
+  id          Int       @id @default(autoincrement())
+  quoteId     Int?      @map("quote_id")
+  jobNumber   String    @unique @map("job_number")
+  status      String    @default("pending") // pending, in_progress, completed
+  notes       String?   @db.Text
+  address     String?
+  scheduledAt DateTime? @map("scheduled_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("field_jobs")
+}
+
+// ============================================
 // STRIP CUTTING CONFIGURATION
 // ============================================
 
