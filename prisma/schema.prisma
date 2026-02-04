@@ -1051,6 +1051,59 @@ model QuoteVersion {
 }
 
 // ============================================
+// FIELD JOBS & PHOTOS (Mobile PWA)
+// ============================================
+
+enum FieldJobStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model FieldJob {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  status      FieldJobStatus @default(DRAFT)
+
+  // Location
+  address     String?
+  gpsLat      Float?         @map("gps_lat")
+  gpsLng      Float?         @map("gps_lng")
+
+  // Relations
+  createdBy   Int            @map("created_by")
+  companyId   Int            @map("company_id")
+  photos      FieldPhoto[]
+
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@index([createdBy])
+  @@index([companyId])
+  @@map("field_jobs")
+}
+
+model FieldPhoto {
+  id          String    @id @default(cuid())
+  fieldJobId  String    @map("field_job_id")
+  fieldJob    FieldJob  @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+  fileKey     String    @map("file_key")    // R2 object key
+  filename    String                         // Original filename
+  mimeType    String?   @map("mime_type")
+  fileSize    Int?      @map("file_size")    // Size in bytes
+  gpsLat      Float?    @map("gps_lat")
+  gpsLng      Float?    @map("gps_lng")
+  notes       String?
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([fieldJobId])
+  @@map("field_photos")
+}
+
+// ============================================
 // STRIP CUTTING CONFIGURATION
 // ============================================
 

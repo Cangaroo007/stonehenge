@@ -258,3 +258,19 @@ export function getStoredContentType(key: string): string | null {
   const stored = memoryStorage.get(key);
   return stored?.contentType || null;
 }
+
+/**
+ * Get the public URL for an R2 object.
+ * Requires NEXT_PUBLIC_R2_PUBLIC_URL to be set.
+ * Falls back to a presigned download URL path if not configured.
+ * @param key - The R2 object key
+ * @returns The public URL string
+ */
+export function getR2PublicUrl(key: string): string {
+  const publicBase = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+  if (publicBase) {
+    return `${publicBase.replace(/\/$/, '')}/${key}`;
+  }
+  // Fallback: use the download URL API endpoint
+  return `/api/field/photos/file?key=${encodeURIComponent(key)}`;
+}
