@@ -10,6 +10,9 @@ import type { CalculationResult } from '@/lib/types/pricing';
 // GST rate (configurable, default 10% for Australia)
 const GST_RATE = 0.10;
 
+type DiscountDisplayMode = 'ITEMIZED' | 'TOTAL_ONLY';
+type AdditionalDiscountType = 'percentage' | 'fixed';
+
 interface PricingSummaryProps {
   quoteId: string;
   refreshTrigger: number;
@@ -34,6 +37,13 @@ export default function PricingSummary({
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(true);
+
+  // Discount Display Mode toggle
+  const [discountDisplayMode, setDiscountDisplayMode] = useState<DiscountDisplayMode>('ITEMIZED');
+
+  // Additional Discount state
+  const [additionalDiscountType, setAdditionalDiscountType] = useState<AdditionalDiscountType>('percentage');
+  const [additionalDiscountValue, setAdditionalDiscountValue] = useState<string>('');
 
   // Debounced calculation function
   const performCalculation = useCallback(async () => {
@@ -80,13 +90,50 @@ export default function PricingSummary({
     debouncedCalculate();
   }, [refreshTrigger, debouncedCalculate]);
 
-  // Calculate GST
-  const subtotal = calculation?.total ?? 0;
-  const gst = subtotal * GST_RATE;
-  const grandTotal = subtotal + gst;
+  // Compute tier discounts per category
+  const tierDiscounts = useMemo(() => {
+    if (!calculation?.discounts) return { slabs: 0, cutting: 0, polishing: 0, total: 0 };
 
-  // Calculate total savings
-  const totalSavings = calculation?.discounts.reduce((sum, d) => sum + d.savings, 0) ?? 0;
+    let slabs = 0;
+    let cutting = 0;
+    let polishing = 0;
+    let total = 0;
+
+    for (const d of calculation.discounts) {
+      if (d.appliedTo === 'materials') slabs += d.savings;
+      else if (d.appliedTo === 'edges') polishing += d.savings;
+      else if (d.appliedTo === 'cutouts') cutting += d.savings;
+      else if (d.appliedTo === 'total') total += d.savings;
+    }
+
+    return { slabs, cutting, polishing, total };
+  }, [calculation]);
+
+  // Calculate subtotal from calculation
+  const calculatedSubtotal = calculation?.total ?? 0;
+
+  // Calculate additional discount amount
+  const additionalDiscountAmount = useMemo(() => {
+    const val = parseFloat(additionalDiscountValue);
+    if (!val || val <= 0) return 0;
+    if (additionalDiscountType === 'percentage') {
+      return (calculatedSubtotal * val) / 100;
+    }
+    return val;
+  }, [additionalDiscountValue, additionalDiscountType, calculatedSubtotal]);
+
+  // Adjusted subtotal after additional discount
+  const adjustedSubtotal = calculatedSubtotal - additionalDiscountAmount;
+
+  // Calculate GST on adjusted subtotal
+  const gst = adjustedSubtotal * GST_RATE;
+  const grandTotal = adjustedSubtotal + gst;
+
+  // Calculate total tier savings
+  const totalTierSavings = calculation?.discounts.reduce((sum, d) => sum + d.savings, 0) ?? 0;
+
+  // Total all-in discount (tier + additional)
+  const totalAllSavings = totalTierSavings + additionalDiscountAmount;
 
   // Retry handler
   const handleRetry = () => {
@@ -109,30 +156,57 @@ export default function PricingSummary({
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          Quote Summary
+          Pricing
         </button>
-        <button
-          onClick={handleRetry}
-          disabled={isCalculating}
-          className="text-sm text-primary-600 hover:text-primary-700 disabled:opacity-50 flex items-center gap-1"
-        >
-          {isCalculating ? (
-            <>
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Calculating...
-            </>
-          ) : (
-            <>
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Recalculate
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Discount Display Mode Toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+            <button
+              onClick={() => setDiscountDisplayMode('ITEMIZED')}
+              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                discountDisplayMode === 'ITEMIZED'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Show discounts per line item"
+            >
+              Itemized
+            </button>
+            <button
+              onClick={() => setDiscountDisplayMode('TOTAL_ONLY')}
+              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                discountDisplayMode === 'TOTAL_ONLY'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              title="Show discount only in footer"
+            >
+              Total Only
+            </button>
+          </div>
+          <button
+            onClick={handleRetry}
+            disabled={isCalculating}
+            className="text-sm text-primary-600 hover:text-primary-700 disabled:opacity-50 flex items-center gap-1"
+          >
+            {isCalculating ? (
+              <>
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Calculating...
+              </>
+            ) : (
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Recalculate
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -229,34 +303,34 @@ export default function PricingSummary({
             </div>
           )}
 
-          {/* Materials Section */}
+          {/* ====== SLABS (Materials) Section ====== */}
           {calculation?.breakdown.materials && (
             <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">MATERIALS</h4>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">SLABS</h4>
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Total Area:</span>
                   <span>{formatAreaFromSqm(Number(calculation.breakdown.materials.totalAreaM2) || 0, unitSystem)}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <span>Rate:</span>
+                  <span>Base Rate:</span>
                   <span>
-                    {formatCurrency(calculation.breakdown.materials.baseRate)}/{unitSystem === 'IMPERIAL' ? 'ft²' : 'm²'}
+                    {formatCurrency(calculation.breakdown.materials.baseRate)}/{unitSystem === 'IMPERIAL' ? 'ft\u00B2' : 'm\u00B2'}
                     {calculation.breakdown.materials.thicknessMultiplier !== 1 && (
                       <span className="ml-1">
-                        × {(Number(calculation.breakdown.materials.thicknessMultiplier) || 1).toFixed(1)}
+                        \u00D7 {(Number(calculation.breakdown.materials.thicknessMultiplier) || 1).toFixed(1)}
                       </span>
                     )}
                   </span>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <span>Subtotal:</span>
+                  <span>Base Price:</span>
                   <span>{formatCurrency(calculation.breakdown.materials.subtotal)}</span>
                 </div>
-                {calculation.breakdown.materials.discount > 0 && (
+                {discountDisplayMode === 'ITEMIZED' && tierDiscounts.slabs > 0 && (
                   <div className="flex justify-between text-green-600">
-                    <span>Discount:</span>
-                    <span>-{formatCurrency(calculation.breakdown.materials.discount)}</span>
+                    <span>Tier Discount:</span>
+                    <span>-{formatCurrency(tierDiscounts.slabs)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-medium">
@@ -267,53 +341,63 @@ export default function PricingSummary({
             </div>
           )}
 
-          {/* Edges Section */}
-          {calculation?.breakdown.edges && calculation.breakdown.edges.byType.length > 0 && (
+          {/* ====== CUTTING (Cutouts) Section ====== */}
+          {calculation?.breakdown.cutouts && calculation.breakdown.cutouts.items.length > 0 && (
             <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">EDGES</h4>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">CUTTING</h4>
               <div className="space-y-1 text-sm">
-                {calculation.breakdown.edges.byType.map((edge) => (
-                  <div key={edge.edgeTypeId} className="flex justify-between text-gray-600">
-                    <span>{edge.edgeTypeName}:</span>
+                {calculation.breakdown.cutouts.items.map((cutout) => (
+                  <div key={cutout.cutoutTypeId} className="flex justify-between text-gray-600">
+                    <span>{cutout.cutoutTypeName} \u00D7 {cutout.quantity}:</span>
                     <span>
-                      {(Number(edge.linearMeters) || 0).toFixed(1)} lm × {formatCurrency(edge.appliedRate)} = {formatCurrency(edge.subtotal)}
+                      {formatCurrency(cutout.basePrice)} ea = {formatCurrency(cutout.subtotal)}
                     </span>
                   </div>
                 ))}
-                {calculation.breakdown.edges.discount > 0 && (
+                <div className="flex justify-between text-gray-600 pt-1">
+                  <span>Base Price:</span>
+                  <span>{formatCurrency(calculation.breakdown.cutouts.subtotal)}</span>
+                </div>
+                {discountDisplayMode === 'ITEMIZED' && tierDiscounts.cutting > 0 && (
                   <div className="flex justify-between text-green-600">
-                    <span>Discount:</span>
-                    <span>-{formatCurrency(calculation.breakdown.edges.discount)}</span>
+                    <span>Tier Discount:</span>
+                    <span>-{formatCurrency(tierDiscounts.cutting)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-medium pt-1">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(calculation.breakdown.edges.total)}</span>
+                  <span>Total:</span>
+                  <span>{formatCurrency(calculation.breakdown.cutouts.total)}</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Cutouts Section */}
-          {calculation?.breakdown.cutouts && calculation.breakdown.cutouts.items.length > 0 && (
+          {/* ====== POLISHING (Edges) Section ====== */}
+          {calculation?.breakdown.edges && calculation.breakdown.edges.byType.length > 0 && (
             <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">CUTOUTS</h4>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">POLISHING</h4>
               <div className="space-y-1 text-sm">
-                {calculation.breakdown.cutouts.items.map((cutout) => (
-                  <div key={cutout.cutoutTypeId} className="flex justify-between text-gray-600">
-                    <span>{cutout.cutoutTypeName} × {cutout.quantity}:</span>
-                    <span>{formatCurrency(cutout.subtotal)}</span>
+                {calculation.breakdown.edges.byType.map((edge) => (
+                  <div key={edge.edgeTypeId} className="flex justify-between text-gray-600">
+                    <span>{edge.edgeTypeName}:</span>
+                    <span>
+                      {(Number(edge.linearMeters) || 0).toFixed(1)} lm \u00D7 {formatCurrency(edge.appliedRate)} = {formatCurrency(edge.subtotal)}
+                    </span>
                   </div>
                 ))}
-                {calculation.breakdown.cutouts.discount > 0 && (
+                <div className="flex justify-between text-gray-600 pt-1">
+                  <span>Base Price:</span>
+                  <span>{formatCurrency(calculation.breakdown.edges.subtotal)}</span>
+                </div>
+                {discountDisplayMode === 'ITEMIZED' && tierDiscounts.polishing > 0 && (
                   <div className="flex justify-between text-green-600">
-                    <span>Discount:</span>
-                    <span>-{formatCurrency(calculation.breakdown.cutouts.discount)}</span>
+                    <span>Tier Discount:</span>
+                    <span>-{formatCurrency(tierDiscounts.polishing)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-medium pt-1">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(calculation.breakdown.cutouts.total)}</span>
+                  <span>Total:</span>
+                  <span>{formatCurrency(calculation.breakdown.edges.total)}</span>
                 </div>
               </div>
             </div>
@@ -383,38 +467,86 @@ export default function PricingSummary({
             </div>
           )}
 
-          {/* Applied Discounts */}
+          {/* Applied Tier Discounts (in TOTAL_ONLY mode, or always as summary) */}
           {calculation?.discounts && calculation.discounts.length > 0 && (
             <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">APPLIED DISCOUNTS</h4>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">TIER DISCOUNTS</h4>
               <div className="space-y-1 text-sm">
                 {calculation.discounts.map((discount) => (
-                  <div key={discount.ruleId} className="flex items-start gap-2 text-green-700">
-                    <svg className="h-4 w-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span>
+                  <div key={discount.ruleId} className="flex items-center justify-between text-green-700">
+                    <span className="flex items-center gap-1">
+                      <svg className="h-3.5 w-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
                       {discount.ruleName}
                       {discount.type === 'percentage' && ` (${discount.value}%)`}
+                      <span className="text-green-500 text-xs">
+                        [{discount.appliedTo}]
+                      </span>
                     </span>
+                    <span>-{formatCurrency(discount.savings)}</span>
                   </div>
                 ))}
-                {totalSavings > 0 && (
-                  <div className="flex justify-between font-medium text-green-700 pt-1">
-                    <span>Total Savings:</span>
-                    <span>{formatCurrency(totalSavings)}</span>
+                {discountDisplayMode === 'TOTAL_ONLY' && totalTierSavings > 0 && (
+                  <div className="flex justify-between font-medium text-green-700 pt-1 border-t border-green-100">
+                    <span>Total Tier Savings:</span>
+                    <span>-{formatCurrency(totalTierSavings)}</span>
                   </div>
                 )}
               </div>
             </div>
           )}
 
+          {/* Additional Discount (manual $ or %) */}
+          <div className="pb-3 border-b border-gray-200">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">ADDITIONAL DISCOUNT</h4>
+            <div className="flex items-center gap-2">
+              <select
+                value={additionalDiscountType}
+                onChange={(e) => setAdditionalDiscountType(e.target.value as AdditionalDiscountType)}
+                className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              >
+                <option value="percentage">%</option>
+                <option value="fixed">$</option>
+              </select>
+              <input
+                type="number"
+                value={additionalDiscountValue}
+                onChange={(e) => setAdditionalDiscountValue(e.target.value)}
+                placeholder={additionalDiscountType === 'percentage' ? 'e.g. 5' : 'e.g. 100'}
+                min="0"
+                step="0.01"
+                className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            {additionalDiscountAmount > 0 && (
+              <div className="flex justify-between text-green-600 text-sm mt-2">
+                <span>
+                  Discount{additionalDiscountType === 'percentage' ? ` (${additionalDiscountValue}%)` : ''}:
+                </span>
+                <span>-{formatCurrency(additionalDiscountAmount)}</span>
+              </div>
+            )}
+          </div>
+
           {/* Totals */}
           <div className="space-y-2 pt-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Subtotal:</span>
-              <span className="font-medium">{formatCurrency(subtotal)}</span>
+              <span className="font-medium">{formatCurrency(calculatedSubtotal)}</span>
             </div>
+            {totalAllSavings > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>Total Savings:</span>
+                <span>-{formatCurrency(totalAllSavings)}</span>
+              </div>
+            )}
+            {additionalDiscountAmount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Adjusted Subtotal:</span>
+                <span className="font-medium">{formatCurrency(adjustedSubtotal)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">GST ({(Number(GST_RATE) * 100 || 0).toFixed(0)}%):</span>
               <span className="font-medium">{formatCurrency(gst)}</span>

@@ -3,6 +3,13 @@
 import { useUnits } from '@/lib/contexts/UnitContext';
 import { getDimensionUnitLabel, mmToDisplayUnit } from '@/lib/utils/units';
 
+interface MachineOption {
+  id: string;
+  name: string;
+  kerfWidthMm: number;
+  isDefault: boolean;
+}
+
 interface QuotePiece {
   id: number;
   name: string;
@@ -15,6 +22,7 @@ interface QuotePiece {
   edgeBottom: string | null;
   edgeLeft: string | null;
   edgeRight: string | null;
+  machineProfileId: string | null;
   sortOrder: number;
   totalCost: number;
   room: {
@@ -30,17 +38,9 @@ interface PieceListProps {
   onDeletePiece: (pieceId: number) => void;
   onDuplicatePiece: (pieceId: number) => void;
   onReorder: (pieces: { id: number; sortOrder: number }[]) => void;
-  kerfWidth?: number;
+  machines?: MachineOption[];
+  defaultMachineId?: string | null;
 }
-
-// Format edge type ID to readable name
-const formatEdgeName = (edgeId: string | null): string => {
-  if (!edgeId) return '';
-  // Convert kebab-case or snake_case to Title Case
-  return edgeId
-    .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-};
 
 // Get edge summary string for a piece
 const getEdgeSummary = (piece: QuotePiece): string => {
@@ -67,7 +67,7 @@ const has40mmEdges = (piece: QuotePiece): boolean => {
 // Count how many edges have 40mm profiles
 const count40mmEdges = (piece: QuotePiece): number => {
   if (piece.thicknessMm < 40) return 0;
-  
+
   let count = 0;
   if (piece.edgeTop) count++;
   if (piece.edgeBottom) count++;
@@ -83,20 +83,30 @@ export default function PieceList({
   onDeletePiece,
   onDuplicatePiece,
   onReorder,
-  kerfWidth = 8,
+  machines = [],
+  defaultMachineId,
 }: PieceListProps) {
   const { unitSystem } = useUnits();
   const unitLabel = getDimensionUnitLabel(unitSystem);
+
+  // Resolve machine name and kerf for a piece
+  const getMachineInfo = (piece: QuotePiece): { name: string; kerf: number } => {
+    if (piece.machineProfileId) {
+      const machine = machines.find(m => m.id === piece.machineProfileId);
+      if (machine) return { name: machine.name, kerf: machine.kerfWidthMm };
+    }
+    const defaultMachine = machines.find(m => m.id === defaultMachineId);
+    if (defaultMachine) return { name: defaultMachine.name, kerf: defaultMachine.kerfWidthMm };
+    return { name: 'GMM Bridge Saw', kerf: 8 };
+  };
 
   const handleMoveUp = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (index === 0) return;
 
-    const newPieces = [...pieces];
-    const currentPiece = newPieces[index];
-    const prevPiece = newPieces[index - 1];
+    const currentPiece = pieces[index];
+    const prevPiece = pieces[index - 1];
 
-    // Swap sort orders
     const reorderedPieces = [
       { id: currentPiece.id, sortOrder: prevPiece.sortOrder },
       { id: prevPiece.id, sortOrder: currentPiece.sortOrder },
@@ -109,11 +119,9 @@ export default function PieceList({
     e.stopPropagation();
     if (index === pieces.length - 1) return;
 
-    const newPieces = [...pieces];
-    const currentPiece = newPieces[index];
-    const nextPiece = newPieces[index + 1];
+    const currentPiece = pieces[index];
+    const nextPiece = pieces[index + 1];
 
-    // Swap sort orders
     const reorderedPieces = [
       { id: currentPiece.id, sortOrder: nextPiece.sortOrder },
       { id: nextPiece.id, sortOrder: currentPiece.sortOrder },
@@ -169,7 +177,7 @@ export default function PieceList({
               Dimensions
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Thickness
+              Machine
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Room
@@ -183,121 +191,130 @@ export default function PieceList({
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {pieces.map((piece, index) => (
-            <tr
-              key={piece.id}
-              onClick={() => onSelectPiece(piece.id)}
-              className={`cursor-pointer transition-colors ${
-                selectedPieceId === piece.id
-                  ? 'bg-primary-50 ring-2 ring-inset ring-primary-500'
-                  : 'hover:bg-gray-50'
-              }`}
-            >
-              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium ${
+          {pieces.map((piece, index) => {
+            const machineInfo = getMachineInfo(piece);
+            return (
+              <tr
+                key={piece.id}
+                onClick={() => onSelectPiece(piece.id)}
+                className={`cursor-pointer transition-colors ${
                   selectedPieceId === piece.id
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {index + 1}
-                </span>
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap">
-                <div className="text-sm font-medium text-gray-900">{piece.name}</div>
-                {piece.materialName && (
-                  <div className="text-xs text-gray-500">{piece.materialName}</div>
-                )}
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                {Math.round(mmToDisplayUnit(piece.lengthMm, unitSystem))} × {Math.round(mmToDisplayUnit(piece.widthMm, unitSystem))}{unitLabel}
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                {Math.round(mmToDisplayUnit(piece.thicknessMm, unitSystem))}{unitLabel}
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap">
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                  {piece.room.name}
-                </span>
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap text-sm">
-                {hasEdges(piece) ? (
-                  <div className="space-y-1">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
-                      {getEdgeSummary(piece)}
-                    </span>
-                    {has40mmEdges(piece) && (
-                      <div className="flex items-center gap-1 text-xs text-amber-600">
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        <span className="font-medium">
-                          {count40mmEdges(piece)} Lamination Strip{count40mmEdges(piece) !== 1 ? 's' : ''} (Kerf: {kerfWidth}mm)
-                        </span>
-                      </div>
-                    )}
+                    ? 'bg-primary-50 ring-2 ring-inset ring-primary-500'
+                    : 'hover:bg-gray-50'
+                }`}
+              >
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium ${
+                    selectedPieceId === piece.id
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {index + 1}
+                  </span>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">{piece.name}</div>
+                  {piece.materialName && (
+                    <div className="text-xs text-gray-500">{piece.materialName}</div>
+                  )}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                  <div>
+                    {Math.round(mmToDisplayUnit(piece.lengthMm, unitSystem))} {'\u00D7'} {Math.round(mmToDisplayUnit(piece.widthMm, unitSystem))}{unitLabel}
                   </div>
-                ) : (
-                  <span className="text-gray-400 text-xs">None</span>
-                )}
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap text-sm">
-                <div className="flex items-center gap-1">
-                  {/* Move Up */}
-                  <button
-                    onClick={(e) => handleMoveUp(index, e)}
-                    disabled={index === 0}
-                    className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="Move up"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                    </svg>
-                  </button>
-                  {/* Move Down */}
-                  <button
-                    onClick={(e) => handleMoveDown(index, e)}
-                    disabled={index === pieces.length - 1}
-                    className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="Move down"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {/* Duplicate */}
-                  <button
-                    onClick={(e) => handleDuplicate(piece.id, e)}
-                    className="p-1 text-gray-400 hover:text-gray-600"
-                    title="Duplicate piece"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </button>
-                  {/* Delete */}
-                  <button
-                    onClick={(e) => handleDelete(piece.id, e)}
-                    className="p-1 text-red-400 hover:text-red-600"
-                    title="Delete piece"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+                  <div className="text-xs text-gray-400">
+                    {Math.round(mmToDisplayUnit(piece.thicknessMm, unitSystem))}{unitLabel} thick
+                  </div>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                  <div className="text-gray-700 text-xs font-medium">{machineInfo.name}</div>
+                  <div className="text-gray-400 text-xs">{machineInfo.kerf}mm kerf</div>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                    {piece.room.name}
+                  </span>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                  {hasEdges(piece) ? (
+                    <div className="space-y-1">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                        {getEdgeSummary(piece)}
+                      </span>
+                      {has40mmEdges(piece) && (
+                        <div className="flex items-center gap-1 text-xs text-amber-600">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          <span className="font-medium">
+                            {count40mmEdges(piece)} Strip{count40mmEdges(piece) !== 1 ? 's' : ''} ({machineInfo.kerf}mm kerf)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-gray-400 text-xs">None</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                  <div className="flex items-center gap-1">
+                    {/* Move Up */}
+                    <button
+                      onClick={(e) => handleMoveUp(index, e)}
+                      disabled={index === 0}
+                      className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move up"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    {/* Move Down */}
+                    <button
+                      onClick={(e) => handleMoveDown(index, e)}
+                      disabled={index === pieces.length - 1}
+                      className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move down"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {/* Duplicate */}
+                    <button
+                      onClick={(e) => handleDuplicate(piece.id, e)}
+                      className="p-1 text-gray-400 hover:text-gray-600"
+                      title="Duplicate piece"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </button>
+                    {/* Delete */}
+                    <button
+                      onClick={(e) => handleDelete(piece.id, e)}
+                      className="p-1 text-red-400 hover:text-red-600"
+                      title="Delete piece"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

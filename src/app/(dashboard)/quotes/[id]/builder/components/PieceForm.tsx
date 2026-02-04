@@ -6,6 +6,13 @@ import { getDimensionUnitLabel, formatAreaFromSqm } from '@/lib/utils/units';
 import EdgeSelector from './EdgeSelector';
 import CutoutSelector, { PieceCutout, CutoutType } from './CutoutSelector';
 
+interface MachineOption {
+  id: string;
+  name: string;
+  kerfWidthMm: number;
+  isDefault: boolean;
+}
+
 interface QuotePiece {
   id: number;
   name: string;
@@ -20,6 +27,7 @@ interface QuotePiece {
   edgeLeft: string | null;
   edgeRight: string | null;
   cutouts: PieceCutout[];
+  machineProfileId: string | null;
   room: {
     id: number;
     name: string;
@@ -67,6 +75,8 @@ interface PieceFormProps {
   cutoutTypes: CutoutType[];
   thicknessOptions: ThicknessOption[];
   roomNames: string[];
+  machines?: MachineOption[];
+  defaultMachineId?: string | null;
   onSave: (data: Partial<QuotePiece>, roomName: string) => void;
   onCancel: () => void;
   saving: boolean;
@@ -96,6 +106,8 @@ export default function PieceForm({
   cutoutTypes,
   thicknessOptions,
   roomNames,
+  machines = [],
+  defaultMachineId,
   onSave,
   onCancel,
   saving,
@@ -110,6 +122,9 @@ export default function PieceForm({
   const [thicknessMm, setThicknessMm] = useState(piece?.thicknessMm || 20);
   const [materialId, setMaterialId] = useState<number | null>(piece?.materialId || null);
   const [roomName, setRoomName] = useState(piece?.room?.name || 'Kitchen');
+  const [machineProfileId, setMachineProfileId] = useState<string | null>(
+    piece?.machineProfileId || defaultMachineId || null
+  );
   const [edgeSelections, setEdgeSelections] = useState<EdgeSelections>({
     edgeTop: piece?.edgeTop || null,
     edgeBottom: piece?.edgeBottom || null,
@@ -131,6 +146,7 @@ export default function PieceForm({
       setThicknessMm(piece.thicknessMm);
       setMaterialId(piece.materialId);
       setRoomName(piece.room.name);
+      setMachineProfileId(piece.machineProfileId || defaultMachineId || null);
       setEdgeSelections({
         edgeTop: piece.edgeTop || null,
         edgeBottom: piece.edgeBottom || null,
@@ -146,6 +162,7 @@ export default function PieceForm({
       setThicknessMm(20);
       setMaterialId(null);
       setRoomName('Kitchen');
+      setMachineProfileId(defaultMachineId || null);
       setEdgeSelections({
         edgeTop: null,
         edgeBottom: null,
@@ -155,10 +172,13 @@ export default function PieceForm({
       setCutouts([]);
     }
     setErrors({});
-  }, [piece]);
+  }, [piece, defaultMachineId]);
 
   // Combine existing room names with standard options
   const allRoomOptions = Array.from(new Set([...STANDARD_ROOMS, ...roomNames]));
+
+  // Get selected machine info
+  const selectedMachine = machines.find(m => m.id === machineProfileId);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -202,6 +222,7 @@ export default function PieceForm({
         edgeLeft: edgeSelections.edgeLeft,
         edgeRight: edgeSelections.edgeRight,
         cutouts,
+        machineProfileId,
       },
       roomName
     );
@@ -275,6 +296,32 @@ export default function PieceForm({
         <span className="text-gray-600">Calculated Area: </span>
         <span className="font-medium">{formatAreaFromSqm(parseFloat(area) || 0, unitSystem)}</span>
       </div>
+
+      {/* Machine Profile Selection */}
+      {machines.length > 0 && (
+        <div>
+          <label htmlFor="machineProfileId" className="block text-sm font-medium text-gray-700 mb-1">
+            Fabrication Machine
+          </label>
+          <select
+            id="machineProfileId"
+            value={machineProfileId || ''}
+            onChange={(e) => setMachineProfileId(e.target.value || null)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          >
+            {machines.map((machine) => (
+              <option key={machine.id} value={machine.id}>
+                {machine.name} ({machine.kerfWidthMm}mm kerf)
+              </option>
+            ))}
+          </select>
+          {selectedMachine && (
+            <p className="mt-1 text-xs text-gray-500">
+              Kerf: {selectedMachine.kerfWidthMm}mm — used for slab nesting calculations
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Edge Selector */}
       {lengthMm && widthMm && parseInt(lengthMm) > 0 && parseInt(widthMm) > 0 && (

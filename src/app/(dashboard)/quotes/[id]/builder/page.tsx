@@ -20,6 +20,13 @@ import { CutoutType, PieceCutout } from './components/CutoutSelector';
 import VersionHistoryTab from '@/components/quotes/VersionHistoryTab';
 import type { CalculationResult } from '@/lib/types/pricing';
 
+interface MachineOption {
+  id: string;
+  name: string;
+  kerfWidthMm: number;
+  isDefault: boolean;
+}
+
 interface QuotePiece {
   id: number;
   name: string;
@@ -36,6 +43,7 @@ interface QuotePiece {
   cutouts: PieceCutout[];
   sortOrder: number;
   totalCost: number;
+  machineProfileId: string | null;
   room: {
     id: number;
     name: string;
@@ -124,9 +132,8 @@ export default function QuoteBuilderPage() {
   const { hasUnsavedChanges, markAsChanged, markAsSaved } = useUnsavedChanges();
 
   // Machine Profile state
-  const [machines, setMachines] = useState<{ id: string; name: string; kerfWidthMm: number; isDefault: boolean }[]>([]);
-  const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
-  const [kerfWidth, setKerfWidth] = useState<number>(8); // Default kerf width
+  const [machines, setMachines] = useState<MachineOption[]>([]);
+  const [defaultMachineId, setDefaultMachineId] = useState<string | null>(null);
 
   // Trigger recalculation after piece changes
   const triggerRecalculate = useCallback(() => {
@@ -222,15 +229,13 @@ export default function QuoteBuilderPage() {
       const data = await response.json();
       const activeMachines = data.filter((m: any) => m.isActive !== false);
       setMachines(activeMachines);
-      
-      // Set default machine
+
+      // Identify default machine (used for new pieces)
       const defaultMachine = activeMachines.find((m: any) => m.isDefault);
       if (defaultMachine) {
-        setSelectedMachineId(defaultMachine.id);
-        setKerfWidth(defaultMachine.kerfWidthMm);
+        setDefaultMachineId(defaultMachine.id);
       } else if (activeMachines.length > 0) {
-        setSelectedMachineId(activeMachines[0].id);
-        setKerfWidth(activeMachines[0].kerfWidthMm);
+        setDefaultMachineId(activeMachines[0].id);
       }
     } catch (err) {
       console.error('Error fetching machines:', err);
@@ -447,14 +452,16 @@ export default function QuoteBuilderPage() {
     setDrawingsRefreshKey(n => n + 1);
   }, []);
 
-  // Handle machine selection change
-  const handleMachineChange = (machineId: string) => {
-    setSelectedMachineId(machineId);
-    const selectedMachine = machines.find(m => m.id === machineId);
-    if (selectedMachine) {
-      setKerfWidth(selectedMachine.kerfWidthMm);
+  // Get kerf width for a given piece (based on its assigned machine)
+  const getKerfForPiece = useCallback((piece: QuotePiece): number => {
+    if (piece.machineProfileId) {
+      const machine = machines.find(m => m.id === piece.machineProfileId);
+      if (machine) return machine.kerfWidthMm;
     }
-  };
+    // Fallback to default machine kerf
+    const defaultMachine = machines.find(m => m.id === defaultMachineId);
+    return defaultMachine?.kerfWidthMm ?? 8;
+  }, [machines, defaultMachineId]);
 
   // Get selected piece
   const selectedPiece = selectedPieceId
@@ -462,7 +469,7 @@ export default function QuoteBuilderPage() {
     : null;
 
   // Get unique room names
-const roomNames = Array.from(new Set(rooms.map(r => r.name)));
+const roomNames: string[] = Array.from(new Set(rooms.map(r => r.name)));
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -541,7 +548,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
         onStatusChange={handleStatusChange}
         onOptimizationSaved={() => setOptimizationRefreshKey(n => n + 1)}
         saving={saving}
-        kerfWidth={kerfWidth}
+        kerfWidth={machines.find(m => m.id === defaultMachineId)?.kerfWidthMm ?? 8}
       />
 
       {/* Tab Navigation */}
@@ -635,7 +642,8 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                 onDeletePiece={handleDeletePiece}
                 onDuplicatePiece={handleDuplicatePiece}
                 onReorder={handleReorder}
-                kerfWidth={kerfWidth}
+                machines={machines}
+                defaultMachineId={defaultMachineId}
               />
             ) : (
               <RoomGrouping
@@ -651,31 +659,6 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
 
         {/* Piece Form / Summary - 1 column on large screens */}
         <div className="lg:col-span-1 space-y-6">
-          {/* Machine Selection Card */}
-          {machines.length > 0 && (
-            <div className="card p-4">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">Fabrication Machine</h4>
-              <select
-                value={selectedMachineId || ''}
-                onChange={(e) => handleMachineChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-              >
-                {machines.map((machine) => (
-                  <option key={machine.id} value={machine.id}>
-                    {machine.name} ({machine.kerfWidthMm}mm kerf)
-                  </option>
-                ))}
-              </select>
-              <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                <span>Machine Kerf:</span>
-                <span className="font-semibold text-gray-700">{kerfWidth}mm</span>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Used by Slab Optimizer for accurate cutting calculations
-              </p>
-            </div>
-          )}
-
           {/* Drawing Reference Panel */}
           <DrawingReferencePanel quoteId={quoteId} refreshKey={drawingsRefreshKey} />
 
@@ -701,6 +684,8 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                 cutoutTypes={cutoutTypes}
                 thicknessOptions={thicknessOptions}
                 roomNames={roomNames}
+                machines={machines}
+                defaultMachineId={defaultMachineId}
                 onSave={handleSavePiece}
                 onCancel={handleCancelForm}
                 saving={saving}
