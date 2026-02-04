@@ -65,7 +65,8 @@ model Company {
   templatingRates   TemplatingRate[]
   priceBooks        PriceBook[]
   stripConfigurations StripConfiguration[]
-  
+  fieldJobs           FieldJob[]
+
   @@map("companies")
 }
 
@@ -155,6 +156,7 @@ model User {
   signatures   QuoteSignature[] @relation("QuoteSignatures")
   quoteOverrides Quote[] @relation("QuoteOverrides")
   quoteVersions QuoteVersion[]  // Add reverse relation for QuoteVersion
+  fieldJobs     FieldJob[]
 
   @@map("users")
 }
@@ -1101,4 +1103,61 @@ model StripConfiguration {
   @@index([companyId, usageType])
   @@index([companyId, isActive])
   @@map("strip_configurations")
+}
+
+// ============================================
+// FIELD JOBS & PHOTOS (Field Capture PWA)
+// ============================================
+
+enum FieldJobStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model FieldJob {
+  id          String          @id @default(cuid())
+  title       String
+  description String?
+  status      FieldJobStatus  @default(PENDING)
+  address     String?
+
+  // Relations
+  companyId   Int             @map("company_id")
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById Int             @map("created_by_id")
+  createdBy   User            @relation(fields: [createdById], references: [id])
+  photos      FieldPhoto[]
+
+  // Timestamps
+  scheduledAt DateTime?       @map("scheduled_at")
+  completedAt DateTime?       @map("completed_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([createdById])
+  @@index([status])
+  @@map("field_jobs")
+}
+
+model FieldPhoto {
+  id         String   @id @default(cuid())
+  filename   String
+  storageKey String   @map("storage_key")
+  mimeType   String   @map("mime_type")
+  fileSize   Int      @map("file_size")
+  notes      String?
+
+  // Relations
+  fieldJobId String   @map("field_job_id")
+  fieldJob   FieldJob @relation(fields: [fieldJobId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  takenAt    DateTime @default(now()) @map("taken_at")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  @@index([fieldJobId])
+  @@map("field_photos")
 }
