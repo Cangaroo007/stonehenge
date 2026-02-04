@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import PriceMappingVerification from './PriceMappingVerification';
-import type { InterpretationResult, PriceMapping } from '@/lib/services/ai-price-interpreter';
+import type { InterpretationResult, PriceMapping } from '@/lib/types/price-interpreter';
 
 // Define discount categories based on the requirements
 const DISCOUNT_CATEGORIES = [
