@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,6 +25,12 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
 
+    // Prepare the discount matrix data if provided
+    let discountMatrixData: Prisma.InputJsonValue | undefined;
+    if (data.discountMatrix) {
+      discountMatrixData = data.discountMatrix as unknown as Prisma.InputJsonValue;
+    }
+
     const clientTier = await prisma.clientTier.create({
       data: {
         name: data.name,
@@ -32,6 +39,7 @@ export async function POST(request: NextRequest) {
         isDefault: data.isDefault || false,
         sortOrder: data.sortOrder || 0,
         isActive: data.isActive ?? true,
+        ...(discountMatrixData !== undefined && { discountMatrix: discountMatrixData }),
       },
     });
 

@@ -11,9 +11,10 @@ import ClientTierForm from './components/ClientTierForm';
 import PricingRuleForm from './components/PricingRuleForm';
 import PriceBookForm from './components/PriceBookForm';
 import StripConfigurationForm from './components/StripConfigurationForm';
+import TierManagement from '@/components/pricing/TierManagement';
 import { cn } from '@/lib/utils';
 
-type TabKey = 'edge-types' | 'cutout-types' | 'thickness-options' | 'client-types' | 'client-tiers' | 'pricing-rules' | 'price-books' | 'strip-configurations';
+type TabKey = 'edge-types' | 'cutout-types' | 'thickness-options' | 'client-types' | 'client-tiers' | 'pricing-rules' | 'price-books' | 'strip-configurations' | 'tiers';
 
 interface Tab {
   key: TabKey;
@@ -28,6 +29,7 @@ const tabs: Tab[] = [
   { key: 'strip-configurations', label: 'Strip Configurations', apiPath: '/api/admin/pricing/strip-configurations' },
   { key: 'client-types', label: 'Client Types', apiPath: '/api/admin/pricing/client-types' },
   { key: 'client-tiers', label: 'Client Tiers', apiPath: '/api/admin/pricing/client-tiers' },
+  { key: 'tiers', label: 'Tiers', apiPath: '/api/admin/pricing/tiers' },
   { key: 'pricing-rules', label: 'Pricing Rules', apiPath: '/api/admin/pricing/pricing-rules' },
   { key: 'price-books', label: 'Price Books', apiPath: '/api/admin/pricing/price-books' },
 ];
@@ -78,6 +80,12 @@ const columnConfigs: Record<TabKey, Column[]> = {
     { key: 'description', label: 'Description' },
     { key: 'priority', label: 'Priority' },
     { key: 'isDefault', label: 'Default', render: (v) => (v ? 'Yes' : 'No') },
+    { key: 'isActive', label: 'Status', render: (v) => <StatusBadge active={v as boolean} /> },
+  ],
+  'tiers': [
+    { key: 'name', label: 'Name' },
+    { key: 'description', label: 'Description' },
+    { key: 'priority', label: 'Priority' },
     { key: 'isActive', label: 'Status', render: (v) => <StatusBadge active={v as boolean} /> },
   ],
   'pricing-rules': [
@@ -319,16 +327,20 @@ export default function PricingAdminPage() {
 
       {/* Content */}
       <div className="card">
-        <EntityTable
-          columns={columnConfigs[activeTab]}
-          data={data}
-          loading={loading}
-          error={error}
-          onAdd={handleAdd}
-          onEdit={handleEdit}
-          onDelete={(id) => setDeleteConfirmId(id)}
-          entityName={currentTab.label}
-        />
+        {activeTab === 'tiers' ? (
+          <TierManagement />
+        ) : (
+          <EntityTable
+            columns={columnConfigs[activeTab]}
+            data={data}
+            loading={loading}
+            error={error}
+            onAdd={handleAdd}
+            onEdit={handleEdit}
+            onDelete={(id) => setDeleteConfirmId(id)}
+            entityName={currentTab.label}
+          />
+        )}
       </div>
 
       {/* Add/Edit Modal */}

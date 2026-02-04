@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 export async function GET(
   request: NextRequest,
@@ -30,6 +31,12 @@ export async function PUT(
     const { id } = await params;
     const data = await request.json();
 
+    // Prepare the discount matrix data if provided
+    let discountMatrixData: Prisma.InputJsonValue | undefined;
+    if (data.discountMatrix) {
+      discountMatrixData = data.discountMatrix as unknown as Prisma.InputJsonValue;
+    }
+
     const clientTier = await prisma.clientTier.update({
       where: { id },
       data: {
@@ -39,6 +46,7 @@ export async function PUT(
         isDefault: data.isDefault || false,
         sortOrder: data.sortOrder || 0,
         isActive: data.isActive ?? true,
+        ...(discountMatrixData !== undefined && { discountMatrix: discountMatrixData }),
       },
     });
 
