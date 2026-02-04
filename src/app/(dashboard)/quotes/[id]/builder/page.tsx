@@ -123,6 +123,11 @@ export default function QuoteBuilderPage() {
   const [activeTab, setActiveTab] = useState<'pieces' | 'history'>('pieces');
   const { hasUnsavedChanges, markAsChanged, markAsSaved } = useUnsavedChanges();
 
+  // Machine Profile state
+  const [machines, setMachines] = useState<{ id: string; name: string; kerfWidthMm: number; isDefault: boolean }[]>([]);
+  const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
+  const [kerfWidth, setKerfWidth] = useState<number>(8); // Default kerf width
+
   // Trigger recalculation after piece changes
   const triggerRecalculate = useCallback(() => {
     setRefreshTrigger(n => n + 1);
@@ -209,15 +214,38 @@ export default function QuoteBuilderPage() {
     }
   }, []);
 
+  // Fetch machine profiles
+  const fetchMachines = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/pricing/machines');
+      if (!response.ok) throw new Error('Failed to fetch machines');
+      const data = await response.json();
+      const activeMachines = data.filter((m: any) => m.isActive !== false);
+      setMachines(activeMachines);
+      
+      // Set default machine
+      const defaultMachine = activeMachines.find((m: any) => m.isDefault);
+      if (defaultMachine) {
+        setSelectedMachineId(defaultMachine.id);
+        setKerfWidth(defaultMachine.kerfWidthMm);
+      } else if (activeMachines.length > 0) {
+        setSelectedMachineId(activeMachines[0].id);
+        setKerfWidth(activeMachines[0].kerfWidthMm);
+      }
+    } catch (err) {
+      console.error('Error fetching machines:', err);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchQuote(), fetchMaterials(), fetchEdgeTypes(), fetchCutoutTypes(), fetchThicknessOptions()]);
+      await Promise.all([fetchQuote(), fetchMaterials(), fetchEdgeTypes(), fetchCutoutTypes(), fetchThicknessOptions(), fetchMachines()]);
       setLoading(false);
     };
     loadData();
-  }, [fetchQuote, fetchMaterials, fetchEdgeTypes, fetchCutoutTypes, fetchThicknessOptions]);
+  }, [fetchQuote, fetchMaterials, fetchEdgeTypes, fetchCutoutTypes, fetchThicknessOptions, fetchMachines]);
 
   // Handle piece selection
   const handleSelectPiece = (pieceId: number) => {
@@ -419,6 +447,15 @@ export default function QuoteBuilderPage() {
     setDrawingsRefreshKey(n => n + 1);
   }, []);
 
+  // Handle machine selection change
+  const handleMachineChange = (machineId: string) => {
+    setSelectedMachineId(machineId);
+    const selectedMachine = machines.find(m => m.id === machineId);
+    if (selectedMachine) {
+      setKerfWidth(selectedMachine.kerfWidthMm);
+    }
+  };
+
   // Get selected piece
   const selectedPiece = selectedPieceId
     ? pieces.find(p => p.id === selectedPieceId)
@@ -504,6 +541,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
         onStatusChange={handleStatusChange}
         onOptimizationSaved={() => setOptimizationRefreshKey(n => n + 1)}
         saving={saving}
+        kerfWidth={kerfWidth}
       />
 
       {/* Tab Navigation */}
@@ -597,6 +635,7 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
                 onDeletePiece={handleDeletePiece}
                 onDuplicatePiece={handleDuplicatePiece}
                 onReorder={handleReorder}
+                kerfWidth={kerfWidth}
               />
             ) : (
               <RoomGrouping
@@ -612,6 +651,31 @@ const roomNames = Array.from(new Set(rooms.map(r => r.name)));
 
         {/* Piece Form / Summary - 1 column on large screens */}
         <div className="lg:col-span-1 space-y-6">
+          {/* Machine Selection Card */}
+          {machines.length > 0 && (
+            <div className="card p-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">Fabrication Machine</h4>
+              <select
+                value={selectedMachineId || ''}
+                onChange={(e) => handleMachineChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              >
+                {machines.map((machine) => (
+                  <option key={machine.id} value={machine.id}>
+                    {machine.name} ({machine.kerfWidthMm}mm kerf)
+                  </option>
+                ))}
+              </select>
+              <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                <span>Machine Kerf:</span>
+                <span className="font-semibold text-gray-700">{kerfWidth}mm</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Used by Slab Optimizer for accurate cutting calculations
+              </p>
+            </div>
+          )}
+
           {/* Drawing Reference Panel */}
           <DrawingReferencePanel quoteId={quoteId} refreshKey={drawingsRefreshKey} />
 

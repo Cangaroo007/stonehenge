@@ -30,6 +30,7 @@ interface PieceListProps {
   onDeletePiece: (pieceId: number) => void;
   onDuplicatePiece: (pieceId: number) => void;
   onReorder: (pieces: { id: number; sortOrder: number }[]) => void;
+  kerfWidth?: number;
 }
 
 // Format edge type ID to readable name
@@ -58,6 +59,23 @@ const hasEdges = (piece: QuotePiece): boolean => {
   return !!(piece.edgeTop || piece.edgeBottom || piece.edgeLeft || piece.edgeRight);
 };
 
+// Check if piece has 40mm edges that need lamination
+const has40mmEdges = (piece: QuotePiece): boolean => {
+  return piece.thicknessMm >= 40 && hasEdges(piece);
+};
+
+// Count how many edges have 40mm profiles
+const count40mmEdges = (piece: QuotePiece): number => {
+  if (piece.thicknessMm < 40) return 0;
+  
+  let count = 0;
+  if (piece.edgeTop) count++;
+  if (piece.edgeBottom) count++;
+  if (piece.edgeLeft) count++;
+  if (piece.edgeRight) count++;
+  return count;
+};
+
 export default function PieceList({
   pieces,
   selectedPieceId,
@@ -65,6 +83,7 @@ export default function PieceList({
   onDeletePiece,
   onDuplicatePiece,
   onReorder,
+  kerfWidth = 8,
 }: PieceListProps) {
   const { unitSystem } = useUnits();
   const unitLabel = getDimensionUnitLabel(unitSystem);
@@ -202,9 +221,21 @@ export default function PieceList({
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm">
                 {hasEdges(piece) ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
-                    {getEdgeSummary(piece)}
-                  </span>
+                  <div className="space-y-1">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                      {getEdgeSummary(piece)}
+                    </span>
+                    {has40mmEdges(piece) && (
+                      <div className="flex items-center gap-1 text-xs text-amber-600">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span className="font-medium">
+                          {count40mmEdges(piece)} Lamination Strip{count40mmEdges(piece) !== 1 ? 's' : ''} (Kerf: {kerfWidth}mm)
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <span className="text-gray-400 text-xs">None</span>
                 )}

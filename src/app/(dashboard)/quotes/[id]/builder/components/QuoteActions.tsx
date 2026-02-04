@@ -12,6 +12,7 @@ interface QuoteActionsProps {
   onStatusChange?: (newStatus: string) => Promise<void>;
   onOptimizationSaved?: () => void;
   saving?: boolean;
+  kerfWidth?: number;
 }
 
 export default function QuoteActions({
@@ -22,6 +23,7 @@ export default function QuoteActions({
   onStatusChange,
   onOptimizationSaved,
   saving = false,
+  kerfWidth = 8,
 }: QuoteActionsProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -297,6 +299,7 @@ export default function QuoteActions({
             setShowOptimizer(false);
             onOptimizationSaved?.(); // Trigger refresh of OptimizationDisplay
           }}
+          defaultKerfWidth={kerfWidth}
         />
       )}
     </div>

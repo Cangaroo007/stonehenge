@@ -23,13 +23,14 @@ interface OptimizeModalProps {
   quoteId: string;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
+  defaultKerfWidth?: number;
 }
 
-export function OptimizeModal({ quoteId, onClose, onSaved }: OptimizeModalProps) {
+export function OptimizeModal({ quoteId, onClose, onSaved, defaultKerfWidth = 8 }: OptimizeModalProps) {
   // Slab settings
   const [slabWidth, setSlabWidth] = useState('3000');
   const [slabHeight, setSlabHeight] = useState('1400');
-  const [kerfWidth, setKerfWidth] = useState('3');
+  const [kerfWidth, setKerfWidth] = useState(String(defaultKerfWidth));
   const [allowRotation, setAllowRotation] = useState(true);
 
   // Pieces

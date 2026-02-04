@@ -12,9 +12,10 @@ import PricingRuleForm from './components/PricingRuleForm';
 import PriceBookForm from './components/PriceBookForm';
 import StripConfigurationForm from './components/StripConfigurationForm';
 import TierManagement from '@/components/pricing/TierManagement';
+import MachineManagement from '@/components/pricing/MachineManagement';
 import { cn } from '@/lib/utils';
 
-type TabKey = 'edge-types' | 'cutout-types' | 'thickness-options' | 'client-types' | 'client-tiers' | 'pricing-rules' | 'price-books' | 'strip-configurations' | 'tiers';
+type TabKey = 'edge-types' | 'cutout-types' | 'thickness-options' | 'client-types' | 'client-tiers' | 'pricing-rules' | 'price-books' | 'strip-configurations' | 'tiers' | 'machines';
 
 interface Tab {
   key: TabKey;
@@ -27,6 +28,7 @@ const tabs: Tab[] = [
   { key: 'cutout-types', label: 'Cutout Types', apiPath: '/api/admin/pricing/cutout-types' },
   { key: 'thickness-options', label: 'Thickness', apiPath: '/api/admin/pricing/thickness-options' },
   { key: 'strip-configurations', label: 'Strip Configurations', apiPath: '/api/admin/pricing/strip-configurations' },
+  { key: 'machines', label: 'Machines', apiPath: '/api/admin/pricing/machines' },
   { key: 'client-types', label: 'Client Types', apiPath: '/api/admin/pricing/client-types' },
   { key: 'client-tiers', label: 'Client Tiers', apiPath: '/api/admin/pricing/client-tiers' },
   { key: 'tiers', label: 'Tiers', apiPath: '/api/admin/pricing/tiers' },
@@ -86,6 +88,12 @@ const columnConfigs: Record<TabKey, Column[]> = {
     { key: 'name', label: 'Name' },
     { key: 'description', label: 'Description' },
     { key: 'priority', label: 'Priority' },
+    { key: 'isActive', label: 'Status', render: (v) => <StatusBadge active={v as boolean} /> },
+  ],
+  'machines': [
+    { key: 'name', label: 'Name' },
+    { key: 'kerfWidthMm', label: 'Kerf Width', render: (v) => `${v}mm` },
+    { key: 'isDefault', label: 'Default', render: (v) => (v ? 'Yes' : 'No') },
     { key: 'isActive', label: 'Status', render: (v) => <StatusBadge active={v as boolean} /> },
   ],
   'pricing-rules': [
@@ -329,6 +337,8 @@ export default function PricingAdminPage() {
       <div className="card">
         {activeTab === 'tiers' ? (
           <TierManagement />
+        ) : activeTab === 'machines' ? (
+          <MachineManagement />
         ) : (
           <EntityTable
             columns={columnConfigs[activeTab]}

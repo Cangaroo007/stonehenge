@@ -1109,3 +1109,21 @@ model StripConfiguration {
   @@index([companyId, isActive])
   @@map("strip_configurations")
 }
+
+// ============================================
+// MACHINE PROFILES (Fabrication constraints)
+// ============================================
+
+model MachineProfile {
+  id                String   @id @default(cuid())
+  name              String   @unique // "GMM Bridge Saw", "CNC Router", etc.
+  kerfWidthMm       Int      @default(8) @map("kerf_width_mm") // Blade width in mm
+  maxSlabLengthMm   Int?     @map("max_slab_length_mm") // Optional max slab length
+  maxSlabWidthMm    Int?     @map("max_slab_width_mm")  // Optional max slab width
+  isDefault         Boolean  @default(false) @map("is_default")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  @@map("machine_profiles")
+}
