@@ -129,6 +129,7 @@ export default function QuoteBuilderPage() {
   const [drawingsRefreshKey, setDrawingsRefreshKey] = useState(0);
   const [optimizationRefreshKey, setOptimizationRefreshKey] = useState(0);
   const [activeTab, setActiveTab] = useState<'pieces' | 'history'>('pieces');
+  const [discountDisplayMode, setDiscountDisplayMode] = useState<'ITEMIZED' | 'TOTAL_ONLY'>('ITEMIZED');
   const { hasUnsavedChanges, markAsChanged, markAsSaved } = useUnsavedChanges();
 
   // Machine Profile state
@@ -644,6 +645,9 @@ const roomNames: string[] = Array.from(new Set(rooms.map(r => r.name)));
                 onReorder={handleReorder}
                 machines={machines}
                 defaultMachineId={defaultMachineId}
+                calculation={calculation}
+                discountDisplayMode={discountDisplayMode}
+                edgeTypes={edgeTypes}
               />
             ) : (
               <RoomGrouping
@@ -710,6 +714,8 @@ const roomNames: string[] = Array.from(new Set(rooms.map(r => r.name)));
             customerType={quote.customer?.clientType?.name}
             priceBookName={quote.priceBook?.name}
             onCalculationComplete={handleCalculationUpdate}
+            discountDisplayMode={discountDisplayMode}
+            onDiscountDisplayModeChange={setDiscountDisplayMode}
           />
 
           {/* Piece Stats */}

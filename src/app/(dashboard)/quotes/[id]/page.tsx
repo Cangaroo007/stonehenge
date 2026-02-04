@@ -266,14 +266,19 @@ export default async function QuoteDetailPage({
                     <th className="table-header">Dimensions</th>
                     <th className="table-header">Material</th>
                     <th className="table-header">Features</th>
-                    <th className="table-header text-right">Cost</th>
+                    <th className="table-header text-right">Base Price</th>
+                    <th className="table-header text-right">Tier Discount</th>
+                    <th className="table-header text-right">Final Cost</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {room.pieces.map((piece) => (
+                  {room.pieces.map((piece) => {
+                    const baseCost = Number(piece.materialCost) + Number(piece.featuresCost);
+                    const discount = baseCost - Number(piece.totalCost);
+                    return (
                     <tr key={piece.id}>
                       <td className="table-cell font-medium">
-                        {piece.description || 'Unnamed piece'}
+                        {piece.description || piece.name || 'Unnamed piece'}
                       </td>
                       <td className="table-cell">
                         <DimensionsDisplay lengthMm={piece.lengthMm} widthMm={piece.widthMm} thicknessMm={piece.thicknessMm} />
@@ -296,11 +301,20 @@ export default async function QuoteDetailPage({
                           '-'
                         )}
                       </td>
+                      <td className="table-cell text-right text-sm text-gray-600">
+                        {formatCurrency(baseCost)}
+                      </td>
+                      <td className="table-cell text-right text-sm">
+                        <span className={discount > 0 ? 'text-green-600' : 'text-gray-400'}>
+                          {discount > 0 ? '-' : ''}{formatCurrency(discount)}
+                        </span>
+                      </td>
                       <td className="table-cell text-right font-medium">
                         {formatCurrency(Number(piece.totalCost))}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
