@@ -1058,6 +1058,73 @@ model QuoteVersion {
 }
 
 // ============================================
+// FIELD JOBS & MEASUREMENTS
+// ============================================
+
+model FieldJob {
+  id             String   @id @default(cuid())
+  quoteId        Int?     @map("quote_id")
+  customerId     Int?     @map("customer_id")
+
+  // Job details
+  jobNumber      String?  @map("job_number")
+  projectName    String?  @map("project_name")
+  projectAddress String?  @map("project_address")
+  contactName    String?  @map("contact_name")
+  contactPhone   String?  @map("contact_phone")
+
+  // Status
+  status         String   @default("scheduled") // scheduled, in_progress, completed, cancelled
+  scheduledDate  DateTime? @map("scheduled_date")
+  completedDate  DateTime? @map("completed_date")
+
+  // Assigned user
+  assignedToId   Int?     @map("assigned_to_id")
+
+  notes          String?  @db.Text
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  measurements   FieldMeasurement[]
+
+  @@index([status])
+  @@index([scheduledDate])
+  @@map("field_jobs")
+}
+
+model FieldMeasurement {
+  id             String   @id @default(cuid())
+  jobId          String   @map("job_id")
+  job            FieldJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // Location
+  room           String?
+  piece          String?  // e.g., "Island", "Main Run"
+
+  // Dimensions (in mm)
+  lengthMm       Decimal  @map("length_mm") @db.Decimal(10, 2)
+  widthMm        Decimal  @map("width_mm") @db.Decimal(10, 2)
+  thicknessMm    Int      @default(20) @map("thickness_mm")
+
+  // Edge finishing
+  finishedEdges  String?  @map("finished_edges") // Comma-separated: "Front, Left"
+
+  // Notes
+  notes          String?  @db.Text
+
+  // Sort order
+  sortOrder      Int      @default(0) @map("sort_order")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([jobId])
+  @@map("field_measurements")
+}
+
+// ============================================
 // STRIP CUTTING CONFIGURATION
 // ============================================
 
