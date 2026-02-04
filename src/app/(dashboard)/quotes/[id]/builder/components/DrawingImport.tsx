@@ -96,12 +96,27 @@ const STANDARD_ROOMS = [
   'Other',
 ];
 
-const DEFAULT_EDGE_SELECTIONS: EdgeSelections = {
+const NULL_EDGE_SELECTIONS: EdgeSelections = {
   edgeTop: null,
   edgeBottom: null,
   edgeLeft: null,
   edgeRight: null,
 };
+
+/**
+ * Returns default edge selections using the first "polish" category edge type
+ * (typically Pencil Round). Falls back to null if no edge types available.
+ */
+function getDefaultEdgeSelections(edgeTypes: EdgeType[]): EdgeSelections {
+  const defaultEdge = edgeTypes.find(et => et.category === 'polish' && et.isActive);
+  if (!defaultEdge) return NULL_EDGE_SELECTIONS;
+  return {
+    edgeTop: defaultEdge.id,
+    edgeBottom: null,
+    edgeLeft: defaultEdge.id,
+    edgeRight: null,
+  };
+}
 
 export default function DrawingImport({ quoteId, customerId, edgeTypes, onImportComplete, onDrawingsSaved, onClose }: DrawingImportProps) {
   const [step, setStep] = useState<Step>('upload');
@@ -388,7 +403,7 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
             notes: piece.notes || null,
             cutouts: piece.cutouts || [],
             isEditing: false,
-            edgeSelections: { ...DEFAULT_EDGE_SELECTIONS },
+            edgeSelections: getDefaultEdgeSelections(edgeTypes),
           });
         }
       }
@@ -770,15 +785,46 @@ export default function DrawingImport({ quoteId, customerId, edgeTypes, onImport
         Found {extractedPieces.length} pieces in drawing. Click a piece name to edit details and set edge polishing.
       </p>
 
-      {/* Selection controls */}
-      <div className="flex gap-2 mb-4">
-        <button onClick={selectAll} className="text-sm text-primary-600 hover:text-primary-700">
-          Select All
-        </button>
-        <span className="text-gray-300">|</span>
-        <button onClick={deselectAll} className="text-sm text-primary-600 hover:text-primary-700">
-          Deselect All
-        </button>
+      {/* Selection controls and bulk edge assignment */}
+      <div className="flex items-center gap-4 mb-4 flex-wrap">
+        <div className="flex gap-2">
+          <button onClick={selectAll} className="text-sm text-primary-600 hover:text-primary-700">
+            Select All
+          </button>
+          <span className="text-gray-300">|</span>
+          <button onClick={deselectAll} className="text-sm text-primary-600 hover:text-primary-700">
+            Deselect All
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <label className="text-sm text-gray-600">Apply to all visible edges:</label>
+          <select
+            className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-primary-500 focus:border-primary-500"
+            defaultValue=""
+            onChange={(e) => {
+              const edgeTypeId = e.target.value || null;
+              setExtractedPieces(prev =>
+                prev.map(p => ({
+                  ...p,
+                  edgeSelections: {
+                    edgeTop: edgeTypeId,
+                    edgeBottom: null,
+                    edgeLeft: edgeTypeId,
+                    edgeRight: null,
+                  },
+                }))
+              );
+              e.target.value = '';
+            }}
+          >
+            <option value="">Bulk assign edge...</option>
+            {edgeTypes.filter(et => et.isActive && et.category === 'polish').map(et => (
+              <option key={et.id} value={et.id}>{et.name}</option>
+            ))}
+            <option value="">None (clear all)</option>
+          </select>
+        </div>
       </div>
 
       {/* Pieces list */}
