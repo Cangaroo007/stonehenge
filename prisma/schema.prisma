@@ -763,6 +763,9 @@ model ClientTier {
   // Discount Matrix (JSON structure)
   discountMatrix Json?    @map("discount_matrix")
   
+  // Custom Price List (JSON structure) - Tier-specific pricing overrides
+  customPriceList Json?   @map("custom_price_list")
+  
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   customers    Customer[]

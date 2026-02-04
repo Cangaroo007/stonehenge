@@ -37,6 +37,12 @@ export async function PUT(
       discountMatrixData = data.discountMatrix as unknown as Prisma.InputJsonValue;
     }
 
+    // Prepare the custom price list data if provided
+    let customPriceListData: Prisma.InputJsonValue | undefined;
+    if (data.customPriceList) {
+      customPriceListData = data.customPriceList as unknown as Prisma.InputJsonValue;
+    }
+
     const clientTier = await prisma.clientTier.update({
       where: { id },
       data: {
@@ -47,6 +53,7 @@ export async function PUT(
         sortOrder: data.sortOrder || 0,
         isActive: data.isActive ?? true,
         ...(discountMatrixData !== undefined && { discountMatrix: discountMatrixData }),
+        ...(customPriceListData !== undefined && { customPriceList: customPriceListData }),
       },
     });
 

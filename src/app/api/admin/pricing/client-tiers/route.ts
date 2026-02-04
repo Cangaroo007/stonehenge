@@ -31,6 +31,12 @@ export async function POST(request: NextRequest) {
       discountMatrixData = data.discountMatrix as unknown as Prisma.InputJsonValue;
     }
 
+    // Prepare the custom price list data if provided
+    let customPriceListData: Prisma.InputJsonValue | undefined;
+    if (data.customPriceList) {
+      customPriceListData = data.customPriceList as unknown as Prisma.InputJsonValue;
+    }
+
     const clientTier = await prisma.clientTier.create({
       data: {
         name: data.name,
@@ -40,6 +46,7 @@ export async function POST(request: NextRequest) {
         sortOrder: data.sortOrder || 0,
         isActive: data.isActive ?? true,
         ...(discountMatrixData !== undefined && { discountMatrix: discountMatrixData }),
+        ...(customPriceListData !== undefined && { customPriceList: customPriceListData }),
       },
     });
 

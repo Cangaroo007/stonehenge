@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import PriceMappingVerification from './PriceMappingVerification';
+import type { InterpretationResult, PriceMapping } from '@/lib/services/ai-price-interpreter';
 
 // Define discount categories based on the requirements
 const DISCOUNT_CATEGORIES = [
@@ -33,6 +35,7 @@ interface Tier {
   isDefault: boolean;
   isActive: boolean;
   discountMatrix?: DiscountMatrix;
+  customPriceList?: any; // JSON field for tier-specific prices
 }
 
 export default function TierManagement() {
@@ -267,6 +270,18 @@ function TierModal({
   const [isDefault, setIsDefault] = useState(tier?.isDefault || false);
   const [isActive, setIsActive] = useState(tier?.isActive ?? true);
   
+  // Price list mode: 'global' or 'custom'
+  const [priceListMode, setPriceListMode] = useState<'global' | 'custom'>(
+    tier?.customPriceList ? 'custom' : 'global'
+  );
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [showManualEdit, setShowManualEdit] = useState(false);
+  const [showMappingVerification, setShowMappingVerification] = useState(false);
+  const [interpretation, setInterpretation] = useState<InterpretationResult | null>(null);
+  const [processingFile, setProcessingFile] = useState(false);
+  const fileInputRef = useState<HTMLInputElement | null>(null)[0];
+  
   // Initialize discount matrix
   const [globalDiscount, setGlobalDiscount] = useState(
     tier?.discountMatrix?.globalDiscount || 0
@@ -285,6 +300,108 @@ function TierModal({
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // File upload handlers
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileUpload(e.target.files[0]);
+    }
+  };
+
+  const handleFileUpload = (file: File) => {
+    // Validate file type
+    const validTypes = [
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
+    ];
+    
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx?|csv)$/i)) {
+      setErrors({ ...errors, file: 'Please upload a valid spreadsheet file (.xlsx, .xls, or .csv)' });
+      return;
+    }
+    
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      setErrors({ ...errors, file: 'File size must be less than 10MB' });
+      return;
+    }
+    
+    setUploadedFile(file);
+    // Clear file error by removing the field
+    const newErrors = { ...errors };
+    delete newErrors.file;
+    setErrors(newErrors);
+    
+    // Automatically process the file
+    processUploadedFile(file);
+  };
+
+  const processUploadedFile = async (file: File) => {
+    setProcessingFile(true);
+    try {
+      // Read file content
+      const fileContent = await readFileAsText(file);
+      
+      // Send to API for AI interpretation
+      const response = await fetch('/api/admin/pricing/interpret-price-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileContent, fileName: file.name }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to interpret price list');
+      }
+      
+      const result: InterpretationResult = await response.json();
+      setInterpretation(result);
+      setShowMappingVerification(true);
+    } catch (error) {
+      setErrors({
+        ...errors,
+        file: error instanceof Error ? error.message : 'Failed to process file',
+      });
+    } finally {
+      setProcessingFile(false);
+    }
+  };
+
+  const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
+  const handleMappingConfirm = (confirmedMappings: PriceMapping[]) => {
+    // Store the confirmed mappings to be saved with the tier
+    setInterpretation((prev) =>
+      prev ? { ...prev, mappings: confirmedMappings } : null
+    );
+    setShowMappingVerification(false);
+  };
 
   const handleCategoryChange = (
     category: CategoryId,
@@ -345,7 +462,8 @@ function TierModal({
 
     setSubmitting(true);
     try {
-      await onSave({
+      // Prepare tier data
+      const tierData: any = {
         name,
         description: description || null,
         priority,
@@ -355,7 +473,22 @@ function TierModal({
           globalDiscount,
           categoryDiscounts,
         },
-      });
+      };
+      
+      // Add custom price list if mode is custom and we have interpretation
+      if (priceListMode === 'custom' && interpretation) {
+        tierData.customPriceList = {
+          mappings: interpretation.mappings,
+          summary: interpretation.summary,
+          uploadedAt: new Date().toISOString(),
+          fileName: uploadedFile?.name,
+        };
+      } else if (priceListMode === 'global') {
+        // Clear custom price list if switching back to global
+        tierData.customPriceList = null;
+      }
+      
+      await onSave(tierData);
     } finally {
       setSubmitting(false);
     }
@@ -449,6 +582,122 @@ function TierModal({
                       </label>
                     </div>
                   </div>
+                </div>
+
+                {/* Price List Configuration */}
+                <div className="bg-zinc-50 rounded-lg p-4 space-y-4">
+                  <h3 className="text-sm font-semibold text-zinc-900">Price List Configuration</h3>
+                  
+                  {/* Mode Toggle */}
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-2">
+                      Pricing Mode
+                    </label>
+                    <div className="flex space-x-4">
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={priceListMode === 'global'}
+                          onChange={() => setPriceListMode('global')}
+                          className="h-4 w-4 border-zinc-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <span className="ml-2 text-sm text-zinc-700">Use Global Default Prices</span>
+                      </label>
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={priceListMode === 'custom'}
+                          onChange={() => setPriceListMode('custom')}
+                          className="h-4 w-4 border-zinc-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <span className="ml-2 text-sm text-zinc-700">Use Custom Tier Price List</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Custom Price List Section */}
+                  {priceListMode === 'custom' && (
+                    <div className="space-y-3 pt-2 border-t border-zinc-200">
+                      {/* Upload Dropzone */}
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-700 mb-2">
+                          Upload Spreadsheet
+                        </label>
+                        <div
+                          onDragEnter={handleDrag}
+                          onDragLeave={handleDrag}
+                          onDragOver={handleDrag}
+                          onDrop={handleDrop}
+                          onClick={() => document.getElementById('price-file-input')?.click()}
+                          className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                            dragActive
+                              ? 'border-amber-500 bg-amber-50'
+                              : 'border-zinc-300 hover:border-amber-400 bg-white'
+                          }`}
+                        >
+                          <input
+                            id="price-file-input"
+                            type="file"
+                            accept=".xlsx,.xls,.csv"
+                            onChange={handleFileChange}
+                            className="hidden"
+                          />
+                          
+                          <svg
+                            className="mx-auto h-10 w-10 text-zinc-400 mb-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                            />
+                          </svg>
+                          
+                          {uploadedFile ? (
+                            <div>
+                              <p className="text-sm font-medium text-zinc-900 mb-1">
+                                {uploadedFile.name}
+                              </p>
+                              <p className="text-xs text-zinc-500">
+                                {(uploadedFile.size / 1024).toFixed(1)} KB - Click to change
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-sm text-zinc-600 mb-1">
+                                Drop spreadsheet here or{' '}
+                                <span className="text-amber-600 font-medium">click to upload</span>
+                              </p>
+                              <p className="text-xs text-zinc-500">
+                                Supports .xlsx, .xls, .csv (max 10MB)
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {errors.file && (
+                          <p className="mt-1 text-sm text-red-600">{errors.file}</p>
+                        )}
+                      </div>
+
+                      {/* Manual Edit Button */}
+                      <div className="flex justify-between items-center">
+                        <p className="text-xs text-zinc-600">
+                          Or configure service rates manually
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowManualEdit(true)}
+                          className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        >
+                          Manual Edit
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Discount Matrix */}
@@ -624,6 +873,32 @@ function TierModal({
           </form>
         </div>
       </div>
+
+      {/* Price List Processing Overlay */}
+      {processingFile && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg p-6 shadow-xl max-w-md">
+            <div className="flex items-center space-x-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+              <div>
+                <h3 className="text-base font-semibold text-zinc-900">Processing Price List</h3>
+                <p className="text-sm text-zinc-600 mt-1">
+                  AI is analyzing your spreadsheet and mapping prices...
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mapping Verification Modal */}
+      {showMappingVerification && interpretation && (
+        <PriceMappingVerification
+          interpretation={interpretation}
+          onConfirm={handleMappingConfirm}
+          onCancel={() => setShowMappingVerification(false)}
+        />
+      )}
     </div>
   );
 }
