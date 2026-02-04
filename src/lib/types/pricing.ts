@@ -110,6 +110,73 @@ export interface CalculationResult {
   calculatedAt: Date;
 }
 
+// ============================================
+// PER-PIECE PRICING BREAKDOWN
+// ============================================
+
+export interface PiecePricingBreakdown {
+  pieceId: number;
+  pieceName: string;
+  dimensions: {
+    lengthMm: number;
+    widthMm: number;
+    thicknessMm: number;
+  };
+
+  fabrication: {
+    cutting: {
+      linearMeters: number;
+      rate: number;
+      baseAmount: number;
+      discount: number;
+      total: number;
+      discountPercentage: number;
+    };
+    polishing: {
+      linearMeters: number;
+      rate: number;
+      baseAmount: number;
+      discount: number;
+      total: number;
+      discountPercentage: number;
+    };
+    edges: Array<{
+      side: 'top' | 'bottom' | 'left' | 'right';
+      edgeTypeId: string;
+      edgeTypeName: string;
+      lengthMm: number;
+      linearMeters: number;
+      rate: number;
+      baseAmount: number;
+      discount: number;
+      total: number;
+      discountPercentage: number;
+    }>;
+    cutouts: Array<{
+      cutoutTypeId: string;
+      cutoutTypeName: string;
+      quantity: number;
+      rate: number;
+      baseAmount: number;
+      discount: number;
+      total: number;
+    }>;
+    subtotal: number;
+  };
+
+  materials?: {
+    areaM2: number;
+    baseRate: number;
+    thicknessMultiplier: number;
+    baseAmount: number;
+    discount: number;
+    total: number;
+    discountPercentage: number;
+  };
+
+  pieceTotal: number;
+}
+
 // Internal types used by the calculation service
 
 export interface QuoteWithDetails {

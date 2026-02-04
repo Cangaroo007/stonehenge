@@ -26,6 +26,7 @@ import type {
   CutoutBreakdown,
   MaterialBreakdown,
   PricingRuleWithOverrides,
+  PiecePricingBreakdown,
 } from '@/lib/types/pricing';
 
 /**
@@ -53,6 +54,7 @@ export interface EnhancedCalculationResult extends CalculationResult {
       overrideCost: number | null;
       finalCost: number;
     };
+    pieces?: PiecePricingBreakdown[];
   };
   pricingContext?: PricingContext;
 }
@@ -296,6 +298,30 @@ export async function calculateQuotePrice(
   // Calculate service costs (cutting, polishing, installation, waterfall)
   const serviceData = calculateServiceCosts(allPieces, edgeData.totalLinearMeters, serviceRates);
 
+  // Calculate per-piece breakdowns
+  const edgeTypeMap = new Map<string, typeof edgeTypes[number]>();
+  for (const et of edgeTypes) {
+    edgeTypeMap.set(et.id, et);
+  }
+  const cutoutTypeMap = new Map<string, typeof cutoutTypes[number]>();
+  for (const ct of cutoutTypes) {
+    cutoutTypeMap.set(ct.id, ct);
+  }
+  const fabricationDiscountPct = extractFabricationDiscount(quote.customer?.clientTier);
+
+  const pieceBreakdowns: PiecePricingBreakdown[] = [];
+  for (const piece of allPieces) {
+    pieceBreakdowns.push(
+      calculatePiecePricing(
+        piece,
+        serviceRates,
+        edgeTypeMap,
+        cutoutTypeMap,
+        fabricationDiscountPct
+      )
+    );
+  }
+
   // Calculate join costs for oversized pieces
   for (const piece of allPieces) {
     const material = piece.material as unknown as { category?: string } | null;
@@ -419,6 +445,7 @@ export async function calculateQuotePrice(
       },
       delivery: deliveryBreakdown,
       templating: templatingBreakdown,
+      pieces: pieceBreakdowns,
     },
     appliedRules,
     discounts: [],
@@ -710,6 +737,233 @@ async function getApplicableRules(
     if (rule.maxQuoteValue && quoteTotal > rule.maxQuoteValue.toNumber()) return false;
     return true;
   }) as PricingRuleWithOverrides[];
+}
+
+/**
+ * Calculate pricing breakdown for a single piece.
+ * Uses perimeter for cutting, finished edges for polishing,
+ * and applies client tier fabrication discounts.
+ */
+function calculatePiecePricing(
+  piece: {
+    id: number;
+    name: string;
+    description: string | null;
+    lengthMm: number;
+    widthMm: number;
+    thicknessMm: number;
+    edgeTop: string | null;
+    edgeBottom: string | null;
+    edgeLeft: string | null;
+    edgeRight: string | null;
+    cutouts: unknown;
+  },
+  serviceRates: Array<{
+    serviceType: string;
+    rate20mm: { toNumber: () => number };
+    rate40mm: { toNumber: () => number };
+    minimumCharge: { toNumber: () => number } | null;
+  }>,
+  edgeTypes: Map<string, {
+    id: string;
+    name: string;
+    baseRate: { toNumber: () => number };
+    rate20mm: { toNumber: () => number } | null;
+    rate40mm: { toNumber: () => number } | null;
+    minimumCharge: { toNumber: () => number } | null;
+    minimumLength: { toNumber: () => number } | null;
+  }>,
+  cutoutTypes: Map<string, {
+    id: string;
+    name: string;
+    category: string;
+    baseRate: { toNumber: () => number };
+    minimumCharge: { toNumber: () => number } | null;
+  }>,
+  fabricationDiscountPct: number
+): PiecePricingBreakdown {
+  const thickness = piece.thicknessMm;
+  const isThick = thickness > 20;
+
+  // Get service rates based on thickness
+  const cuttingRate = serviceRates.find(r => r.serviceType === 'CUTTING');
+  const polishingRate = serviceRates.find(r => r.serviceType === 'POLISHING');
+
+  const cuttingRatePerLm = isThick
+    ? (cuttingRate?.rate40mm.toNumber() ?? 45)
+    : (cuttingRate?.rate20mm.toNumber() ?? 17.5);
+
+  const polishingRatePerLm = isThick
+    ? (polishingRate?.rate40mm.toNumber() ?? 115)
+    : (polishingRate?.rate20mm.toNumber() ?? 45);
+
+  // Cutting: perimeter in linear meters
+  const perimeterMm = 2 * (piece.lengthMm + piece.widthMm);
+  const perimeterLm = perimeterMm / 1000;
+
+  const cuttingBase = roundToTwo(perimeterLm * cuttingRatePerLm);
+  const cuttingDiscount = roundToTwo(cuttingBase * (fabricationDiscountPct / 100));
+  const cuttingTotal = roundToTwo(cuttingBase - cuttingDiscount);
+
+  // Edge sides mapping: top/bottom use widthMm, left/right use lengthMm
+  const edgeSides: Array<{ side: 'top' | 'bottom' | 'left' | 'right'; lengthMm: number; edgeTypeId: string | null }> = [
+    { side: 'top', lengthMm: piece.widthMm, edgeTypeId: piece.edgeTop },
+    { side: 'bottom', lengthMm: piece.widthMm, edgeTypeId: piece.edgeBottom },
+    { side: 'left', lengthMm: piece.lengthMm, edgeTypeId: piece.edgeLeft },
+    { side: 'right', lengthMm: piece.lengthMm, edgeTypeId: piece.edgeRight },
+  ];
+
+  // Polishing: finished edges only (any edge with a non-null edgeTypeId)
+  let finishedEdgeLm = 0;
+  for (const { edgeTypeId, lengthMm } of edgeSides) {
+    if (edgeTypeId) {
+      finishedEdgeLm += lengthMm / 1000;
+    }
+  }
+
+  const polishingBase = roundToTwo(finishedEdgeLm * polishingRatePerLm);
+  const polishingDiscount = roundToTwo(polishingBase * (fabricationDiscountPct / 100));
+  const polishingTotal = roundToTwo(polishingBase - polishingDiscount);
+
+  // Edge profile costs (additional cost per edge type)
+  const edgeBreakdowns: PiecePricingBreakdown['fabrication']['edges'] = [];
+  for (const { side, lengthMm, edgeTypeId } of edgeSides) {
+    if (!edgeTypeId) continue;
+    const edgeType = edgeTypes.get(edgeTypeId);
+    if (!edgeType) continue;
+
+    let rate: number;
+    if (!isThick && edgeType.rate20mm) {
+      rate = edgeType.rate20mm.toNumber();
+    } else if (isThick && edgeType.rate40mm) {
+      rate = edgeType.rate40mm.toNumber();
+    } else {
+      rate = edgeType.baseRate.toNumber();
+    }
+
+    const linearMeters = lengthMm / 1000;
+    let baseAmount = roundToTwo(linearMeters * rate);
+
+    // Apply minimum length
+    const minLength = edgeType.minimumLength?.toNumber() || 0;
+    if (minLength > 0 && linearMeters < minLength) {
+      baseAmount = roundToTwo(minLength * rate);
+    }
+
+    // Apply minimum charge
+    const minCharge = edgeType.minimumCharge?.toNumber() || 0;
+    if (minCharge > 0 && baseAmount < minCharge) {
+      baseAmount = minCharge;
+    }
+
+    const discount = roundToTwo(baseAmount * (fabricationDiscountPct / 100));
+
+    edgeBreakdowns.push({
+      side,
+      edgeTypeId,
+      edgeTypeName: edgeType.name,
+      lengthMm,
+      linearMeters: roundToTwo(linearMeters),
+      rate,
+      baseAmount,
+      discount,
+      total: roundToTwo(baseAmount - discount),
+      discountPercentage: fabricationDiscountPct,
+    });
+  }
+
+  // Cutout costs
+  const cutoutBreakdowns: PiecePricingBreakdown['fabrication']['cutouts'] = [];
+  const cutoutsArray = Array.isArray(piece.cutouts)
+    ? piece.cutouts
+    : (typeof piece.cutouts === 'string' ? JSON.parse(piece.cutouts as string) : []);
+
+  for (const cutout of cutoutsArray) {
+    const cutoutType = cutoutTypes.get(cutout.typeId) ?? findCutoutByName(cutoutTypes, cutout.type);
+    if (!cutoutType) continue;
+
+    const rate = cutoutType.baseRate.toNumber();
+    const quantity = cutout.quantity || 1;
+    let baseAmount = roundToTwo(quantity * rate);
+
+    const minCharge = cutoutType.minimumCharge?.toNumber() || 0;
+    if (minCharge > 0 && baseAmount < minCharge) {
+      baseAmount = minCharge;
+    }
+
+    cutoutBreakdowns.push({
+      cutoutTypeId: cutoutType.id,
+      cutoutTypeName: cutoutType.name,
+      quantity,
+      rate,
+      baseAmount,
+      discount: 0,
+      total: baseAmount,
+    });
+  }
+
+  // Fabrication subtotal
+  const fabricationSubtotal = roundToTwo(
+    cuttingTotal +
+    polishingTotal +
+    edgeBreakdowns.reduce((sum, e) => sum + e.total, 0) +
+    cutoutBreakdowns.reduce((sum, c) => sum + c.total, 0)
+  );
+
+  return {
+    pieceId: piece.id,
+    pieceName: piece.name || piece.description || `Piece ${piece.id}`,
+    dimensions: {
+      lengthMm: piece.lengthMm,
+      widthMm: piece.widthMm,
+      thicknessMm: thickness,
+    },
+    fabrication: {
+      cutting: {
+        linearMeters: roundToTwo(perimeterLm),
+        rate: cuttingRatePerLm,
+        baseAmount: cuttingBase,
+        discount: cuttingDiscount,
+        total: cuttingTotal,
+        discountPercentage: fabricationDiscountPct,
+      },
+      polishing: {
+        linearMeters: roundToTwo(finishedEdgeLm),
+        rate: polishingRatePerLm,
+        baseAmount: polishingBase,
+        discount: polishingDiscount,
+        total: polishingTotal,
+        discountPercentage: fabricationDiscountPct,
+      },
+      edges: edgeBreakdowns,
+      cutouts: cutoutBreakdowns,
+      subtotal: fabricationSubtotal,
+    },
+    pieceTotal: fabricationSubtotal,
+  };
+}
+
+/**
+ * Helper: find a cutout type by name in the map
+ */
+function findCutoutByName(
+  cutoutTypes: Map<string, { id: string; name: string; category: string; baseRate: { toNumber: () => number }; minimumCharge: { toNumber: () => number } | null }>,
+  name: string | undefined
+): { id: string; name: string; category: string; baseRate: { toNumber: () => number }; minimumCharge: { toNumber: () => number } | null } | undefined {
+  if (!name) return undefined;
+  const entries = Array.from(cutoutTypes.values());
+  return entries.find(ct => ct.name === name);
+}
+
+/**
+ * Extract fabrication discount percentage from a client tier's discount matrix.
+ * The discountMatrix JSON is expected to contain a fabricationDiscount field (as a percentage, e.g. 10 for 10%).
+ */
+function extractFabricationDiscount(clientTier: { discountMatrix: unknown } | null | undefined): number {
+  if (!clientTier?.discountMatrix) return 0;
+  const matrix = clientTier.discountMatrix as unknown as Record<string, unknown>;
+  const discount = matrix.fabricationDiscount ?? matrix.fabrication_discount ?? matrix.discount ?? 0;
+  return typeof discount === 'number' ? discount : 0;
 }
 
 function roundToTwo(num: number): number {
