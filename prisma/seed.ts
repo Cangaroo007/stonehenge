@@ -739,6 +739,109 @@ async function main() {
   }
   console.log('✅ Created settings');
 
+  // ============================================
+  // CREATE PRICE TIERS (Tiered Pricing & Discount System)
+  // ============================================
+  console.log('Seeding price tiers...');
+
+  const organisationId = String(company.id);
+
+  // Retail Tier (Default - 0% discounts)
+  const retailTier = await prisma.priceTier.upsert({
+    where: {
+      organisationId_name: { organisationId, name: 'Retail' },
+    },
+    update: {},
+    create: {
+      name: 'Retail',
+      isDefault: true,
+      organisationId,
+    },
+  });
+
+  // Trade Tier (10% on POLISHING and CUTTING, SLAB excluded)
+  const tradeTier = await prisma.priceTier.upsert({
+    where: {
+      organisationId_name: { organisationId, name: 'Trade' },
+    },
+    update: {},
+    create: {
+      name: 'Trade',
+      isDefault: false,
+      organisationId,
+    },
+  });
+
+  // Platinum Tier (placeholder - no rules yet)
+  const platinumTier = await prisma.priceTier.upsert({
+    where: {
+      organisationId_name: { organisationId, name: 'Platinum' },
+    },
+    update: {},
+    create: {
+      name: 'Platinum',
+      isDefault: false,
+      organisationId,
+    },
+  });
+
+  console.log('✅ Created price tiers: Retail, Trade, Platinum');
+
+  // ============================================
+  // CREATE TIER DISCOUNT RULES
+  // ============================================
+  console.log('Seeding tier discount rules...');
+
+  // Retail tier: 0% discount on all categories (explicit zero-discount rules)
+  const retailCategories: Array<{ category: 'SLAB' | 'CUTTING' | 'POLISHING' | 'CUTOUT' | 'DELIVERY' | 'INSTALLATION' | 'OTHER'; discountPercent: number; isExcluded: boolean }> = [
+    { category: 'SLAB', discountPercent: 0, isExcluded: false },
+    { category: 'CUTTING', discountPercent: 0, isExcluded: false },
+    { category: 'POLISHING', discountPercent: 0, isExcluded: false },
+    { category: 'CUTOUT', discountPercent: 0, isExcluded: false },
+    { category: 'DELIVERY', discountPercent: 0, isExcluded: false },
+    { category: 'INSTALLATION', discountPercent: 0, isExcluded: false },
+    { category: 'OTHER', discountPercent: 0, isExcluded: false },
+  ];
+
+  for (const rule of retailCategories) {
+    await prisma.tierDiscountRule.upsert({
+      where: {
+        tierId_category: { tierId: retailTier.id, category: rule.category },
+      },
+      update: { discountPercent: rule.discountPercent, isExcluded: rule.isExcluded },
+      create: {
+        tierId: retailTier.id,
+        category: rule.category,
+        discountPercent: rule.discountPercent,
+        isExcluded: rule.isExcluded,
+      },
+    });
+  }
+
+  // Trade tier: 10% on POLISHING and CUTTING, SLAB excluded
+  const tradeRules: Array<{ category: 'SLAB' | 'CUTTING' | 'POLISHING' | 'CUTOUT' | 'DELIVERY' | 'INSTALLATION' | 'OTHER'; discountPercent: number; isExcluded: boolean }> = [
+    { category: 'SLAB', discountPercent: 0, isExcluded: true },
+    { category: 'CUTTING', discountPercent: 10, isExcluded: false },
+    { category: 'POLISHING', discountPercent: 10, isExcluded: false },
+  ];
+
+  for (const rule of tradeRules) {
+    await prisma.tierDiscountRule.upsert({
+      where: {
+        tierId_category: { tierId: tradeTier.id, category: rule.category },
+      },
+      update: { discountPercent: rule.discountPercent, isExcluded: rule.isExcluded },
+      create: {
+        tierId: tradeTier.id,
+        category: rule.category,
+        discountPercent: rule.discountPercent,
+        isExcluded: rule.isExcluded,
+      },
+    });
+  }
+
+  console.log('✅ Created tier discount rules');
+
   console.log('');
   console.log('🎉 Seeding complete!');
   console.log('');

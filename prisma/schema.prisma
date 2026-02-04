@@ -258,6 +258,8 @@ model Customer {
   clientTier         ClientTier? @relation(fields: [clientTierId], references: [id])
   defaultPriceBookId String?     @map("default_price_book_id")
   defaultPriceBook   PriceBook?  @relation("CustomerDefaultPriceBook", fields: [defaultPriceBookId], references: [id])
+  priceTierId        String?     @map("price_tier_id")
+  priceTier          PriceTier?  @relation(fields: [priceTierId], references: [id])
 
   quotes       Quote[]
   pricingRules PricingRule[]
@@ -431,8 +433,12 @@ model Quote {
   drawings        Drawing[]
   versions        QuoteVersion[]  // Add reverse relation for QuoteVersion
 
-  priceBookId     String?     @map("price_book_id")
-  priceBook       PriceBook?  @relation(fields: [priceBookId], references: [id])
+  priceBookId           String?             @map("price_book_id")
+  priceBook             PriceBook?          @relation(fields: [priceBookId], references: [id])
+  priceTierId           String?             @map("price_tier_id")
+  priceTier             PriceTier?          @relation(fields: [priceTierId], references: [id])
+  managerReviewRequired Boolean             @default(false) @map("manager_review_required")
+  discountDisplayMode   DiscountDisplayMode @default(TOTAL_ONLY) @map("discount_display_mode")
 
   @@map("quotes")
 }
@@ -547,6 +553,64 @@ model QuoteDrawingAnalysis {
   importedPieces String[] @map("imported_pieces") // IDs of pieces created from this analysis
 
   @@map("quote_drawing_analyses")
+}
+
+// ============================================
+// PRICING CONFIGURATION (Org-level settings)
+// ============================================
+
+// ============================================
+// TIERED PRICING & DISCOUNT SYSTEM
+// ============================================
+
+enum DiscountCategory {
+  SLAB
+  CUTTING
+  POLISHING
+  CUTOUT
+  DELIVERY
+  INSTALLATION
+  OTHER
+}
+
+enum DiscountDisplayMode {
+  TOTAL_ONLY
+  ITEMIZED
+}
+
+model PriceTier {
+  id             String   @id @default(cuid())
+  name           String
+  isDefault      Boolean  @default(false) @map("is_default")
+  organisationId String   @map("organisation_id")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  discountRules  TierDiscountRule[]
+  customers      Customer[]
+  quotes         Quote[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+  @@map("price_tiers")
+}
+
+model TierDiscountRule {
+  id              String           @id @default(cuid())
+  tierId          String           @map("tier_id")
+  tier            PriceTier        @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  category        DiscountCategory
+  discountPercent Float            @map("discount_percent")
+  isExcluded      Boolean          @default(false) @map("is_excluded")
+
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@unique([tierId, category])
+  @@index([tierId])
+  @@map("tier_discount_rules")
 }
 
 // ============================================
