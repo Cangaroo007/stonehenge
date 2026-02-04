@@ -141,6 +141,18 @@ export function mmToDisplayUnit(mm: number, system: UnitSystem): number {
 }
 
 /**
+ * Convert display unit value back to mm.
+ * Metric: input is mm, returns as-is
+ * Imperial: input is inches, converts to mm
+ */
+export function displayUnitToMm(value: number, system: UnitSystem): number {
+  if (system === 'IMPERIAL') {
+    return value * MM_PER_INCH;
+  }
+  return value;
+}
+
+/**
  * Get the short unit suffix for dimension inputs.
  */
 export function getDimensionUnitLabel(system: UnitSystem): string {

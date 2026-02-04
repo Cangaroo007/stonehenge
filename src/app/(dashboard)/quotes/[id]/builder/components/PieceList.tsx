@@ -1,7 +1,9 @@
 'use client';
 
+import React, { useState, useCallback, useMemo } from 'react';
 import { useUnits } from '@/lib/contexts/UnitContext';
-import { getDimensionUnitLabel, mmToDisplayUnit } from '@/lib/utils/units';
+import { getDimensionUnitLabel, mmToDisplayUnit, displayUnitToMm } from '@/lib/utils/units';
+import { debounce } from '@/lib/utils/debounce';
 
 interface QuotePiece {
   id: number;
@@ -30,6 +32,7 @@ interface PieceListProps {
   onDeletePiece: (pieceId: number) => void;
   onDuplicatePiece: (pieceId: number) => void;
   onReorder: (pieces: { id: number; sortOrder: number }[]) => void;
+  onPieceUpdate?: (pieceId: number, updates: Partial<QuotePiece>) => void;
   kerfWidth?: number;
 }
 
@@ -83,10 +86,29 @@ export default function PieceList({
   onDeletePiece,
   onDuplicatePiece,
   onReorder,
+  onPieceUpdate,
   kerfWidth = 8,
 }: PieceListProps) {
   const { unitSystem } = useUnits();
   const unitLabel = getDimensionUnitLabel(unitSystem);
+  
+  // Local state for inline editing
+  const [editingCell, setEditingCell] = useState<{ pieceId: number; field: string } | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+
+  // Simple debounced save - using a timeout ref
+  const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  
+  const debouncedSave = useCallback((pieceId: number, updates: Partial<QuotePiece>) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(() => {
+      if (onPieceUpdate) {
+        onPieceUpdate(pieceId, updates);
+      }
+    }, 500);
+  }, [onPieceUpdate]);
 
   const handleMoveUp = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -130,6 +152,57 @@ export default function PieceList({
   const handleDuplicate = (pieceId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     onDuplicatePiece(pieceId);
+  };
+
+  // Handle inline editing
+  const handleCellClick = (pieceId: number, field: string, currentValue: string | number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingCell({ pieceId, field });
+    setEditValue(currentValue.toString());
+  };
+
+  const handleEditBlur = (pieceId: number, field: string) => {
+    if (!onPieceUpdate) {
+      setEditingCell(null);
+      return;
+    }
+
+    const piece = pieces.find(p => p.id === pieceId);
+    if (!piece) {
+      setEditingCell(null);
+      return;
+    }
+
+    // Validate and update
+    let updates: Partial<QuotePiece> = {};
+    
+    if (field === 'name') {
+      if (editValue.trim()) {
+        updates.name = editValue.trim();
+      }
+    } else if (field === 'lengthMm' || field === 'widthMm') {
+      const numValue = parseFloat(editValue);
+      if (!isNaN(numValue) && numValue > 0) {
+        // Convert from display units to mm if needed
+        updates[field] = displayUnitToMm(numValue, unitSystem);
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      debouncedSave(pieceId, updates);
+    }
+
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  const handleEditKeyDown = (pieceId: number, field: string, e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleEditBlur(pieceId, field);
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
+      setEditValue('');
+    }
   };
 
   if (pieces.length === 0) {
@@ -203,13 +276,70 @@ export default function PieceList({
                 </span>
               </td>
               <td className="px-4 py-3 whitespace-nowrap">
-                <div className="text-sm font-medium text-gray-900">{piece.name}</div>
-                {piece.materialName && (
-                  <div className="text-xs text-gray-500">{piece.materialName}</div>
+                {editingCell?.pieceId === piece.id && editingCell?.field === 'name' ? (
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => handleEditBlur(piece.id, 'name')}
+                    onKeyDown={(e) => handleEditKeyDown(piece.id, 'name', e)}
+                    autoFocus
+                    className="w-full px-2 py-1 text-sm font-medium text-gray-900 border border-blue-500 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <div 
+                    className="cursor-text hover:bg-blue-50 px-2 py-1 rounded"
+                    onClick={(e) => handleCellClick(piece.id, 'name', piece.name, e)}
+                  >
+                    <div className="text-sm font-medium text-gray-900">{piece.name}</div>
+                    {piece.materialName && (
+                      <div className="text-xs text-gray-500">{piece.materialName}</div>
+                    )}
+                  </div>
                 )}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                {Math.round(mmToDisplayUnit(piece.lengthMm, unitSystem))} × {Math.round(mmToDisplayUnit(piece.widthMm, unitSystem))}{unitLabel}
+                {editingCell?.pieceId === piece.id && editingCell?.field === 'lengthMm' ? (
+                  <input
+                    type="number"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => handleEditBlur(piece.id, 'lengthMm')}
+                    onKeyDown={(e) => handleEditKeyDown(piece.id, 'lengthMm', e)}
+                    autoFocus
+                    className="w-16 px-2 py-1 text-sm border border-blue-500 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span 
+                    className="cursor-text hover:bg-blue-50 px-2 py-1 rounded inline-block"
+                    onClick={(e) => handleCellClick(piece.id, 'lengthMm', Math.round(mmToDisplayUnit(piece.lengthMm, unitSystem)), e)}
+                  >
+                    {Math.round(mmToDisplayUnit(piece.lengthMm, unitSystem))}
+                  </span>
+                )}
+                {' × '}
+                {editingCell?.pieceId === piece.id && editingCell?.field === 'widthMm' ? (
+                  <input
+                    type="number"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => handleEditBlur(piece.id, 'widthMm')}
+                    onKeyDown={(e) => handleEditKeyDown(piece.id, 'widthMm', e)}
+                    autoFocus
+                    className="w-16 px-2 py-1 text-sm border border-blue-500 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span 
+                    className="cursor-text hover:bg-blue-50 px-2 py-1 rounded inline-block"
+                    onClick={(e) => handleCellClick(piece.id, 'widthMm', Math.round(mmToDisplayUnit(piece.widthMm, unitSystem)), e)}
+                  >
+                    {Math.round(mmToDisplayUnit(piece.widthMm, unitSystem))}
+                  </span>
+                )}
+                {unitLabel}
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                 {Math.round(mmToDisplayUnit(piece.thicknessMm, unitSystem))}{unitLabel}

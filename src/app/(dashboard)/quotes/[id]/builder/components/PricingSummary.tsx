@@ -6,6 +6,10 @@ import { useUnits } from '@/lib/contexts/UnitContext';
 import { formatAreaFromSqm } from '@/lib/utils/units';
 import { debounce } from '@/lib/utils/debounce';
 import type { CalculationResult } from '@/lib/types/pricing';
+import PieceBreakdownDisplay from './PieceBreakdownDisplay';
+import MaterialsBreakdown from './MaterialsBreakdown';
+import AdditionalCharges from './AdditionalCharges';
+import QuoteTotals from './QuoteTotals';
 
 // GST rate (configurable, default 10% for Australia)
 const GST_RATE = 0.10;
@@ -20,6 +24,19 @@ interface PricingSummaryProps {
   onCalculationComplete?: (result: CalculationResult | null) => void;
 }
 
+interface QuotePiece {
+  id: number;
+  name: string;
+  lengthMm: number;
+  widthMm: number;
+  thicknessMm: number;
+  edgeTop: string | null;
+  edgeBottom: string | null;
+  edgeLeft: string | null;
+  edgeRight: string | null;
+  cutouts: Array<{ cutoutTypeId: string; cutoutTypeName: string; quantity: number }>;
+}
+
 export default function PricingSummary({
   quoteId,
   refreshTrigger,
@@ -31,9 +48,32 @@ export default function PricingSummary({
 }: PricingSummaryProps) {
   const { unitSystem } = useUnits();
   const [calculation, setCalculation] = useState<CalculationResult | null>(null);
+  const [pieces, setPieces] = useState<QuotePiece[]>([]);
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [additionalDiscount, setAdditionalDiscount] = useState<{ type: 'percentage' | 'fixed'; value: number }>({
+    type: 'percentage',
+    value: 0
+  });
+
+  // Fetch pieces data
+  const fetchPieces = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/quotes/${quoteId}`);
+      if (!res.ok) throw new Error('Failed to fetch quote');
+      const data = await res.json();
+      const allPieces = data.rooms?.flatMap((room: any) => 
+        room.pieces.map((piece: any) => ({
+          ...piece,
+          cutouts: Array.isArray(piece.cutouts) ? piece.cutouts : []
+        }))
+      ) || [];
+      setPieces(allPieces);
+    } catch (err) {
+      console.error('Failed to fetch pieces:', err);
+    }
+  }, [quoteId]);
 
   // Debounced calculation function
   const performCalculation = useCallback(async () => {
@@ -57,6 +97,9 @@ export default function PricingSummary({
       if (onCalculationComplete) {
         onCalculationComplete(data);
       }
+      
+      // Fetch pieces data after calculation
+      await fetchPieces();
     } catch (err) {
       console.error('Calculation failed:', err);
       setError(err instanceof Error ? err.message : 'Calculation failed');
@@ -67,7 +110,7 @@ export default function PricingSummary({
     } finally {
       setIsCalculating(false);
     }
-  }, [quoteId, onCalculationComplete]);
+  }, [quoteId, onCalculationComplete, fetchPieces]);
 
   // Create debounced version with useMemo
   const debouncedCalculate = useMemo(
@@ -80,10 +123,102 @@ export default function PricingSummary({
     debouncedCalculate();
   }, [refreshTrigger, debouncedCalculate]);
 
+  // Calculate per-piece breakdowns
+  const pieceBreakdowns = useMemo(() => {
+    if (!calculation || !pieces.length) return [];
+
+    return pieces.map((piece, index) => {
+      const items = [];
+      const perimeter = 2 * (piece.lengthMm + piece.widthMm) / 1000; // in metres
+      
+      // Cutting (approximation - would need actual edge count)
+      const edgeCount = [piece.edgeTop, piece.edgeBottom, piece.edgeLeft, piece.edgeRight].filter(Boolean).length;
+      if (edgeCount > 0 && calculation.breakdown.edges) {
+        // Distribute cutting cost proportionally
+        const cuttingLm = perimeter;
+        const avgEdgeRate = calculation.breakdown.edges.subtotal / (calculation.breakdown.edges.totalLinearMeters || 1);
+        const cuttingBase = cuttingLm * avgEdgeRate;
+        const cuttingDiscount = (calculation.breakdown.edges.discount / (calculation.breakdown.edges.totalLinearMeters || 1)) * cuttingLm;
+        items.push({
+          label: 'Cutting',
+          quantity: cuttingLm,
+          unit: 'Lm',
+          rate: avgEdgeRate,
+          base: cuttingBase,
+          discount: cuttingDiscount,
+          total: cuttingBase - cuttingDiscount
+        });
+
+        // Polishing (same as cutting for now)
+        items.push({
+          label: 'Polishing',
+          quantity: cuttingLm,
+          unit: 'Lm',
+          rate: avgEdgeRate,
+          base: cuttingBase,
+          discount: cuttingDiscount,
+          total: cuttingBase - cuttingDiscount
+        });
+      }
+
+      // Edge profiles
+      calculation.breakdown.edges.byType.forEach(edge => {
+        items.push({
+          label: `Edge (${edge.edgeTypeName})`,
+          quantity: edge.linearMeters / pieces.length, // Rough approximation
+          unit: 'Lm',
+          rate: edge.appliedRate,
+          base: edge.subtotal / pieces.length,
+          discount: 0,
+          total: edge.subtotal / pieces.length
+        });
+      });
+
+      // Cutouts for this piece
+      piece.cutouts.forEach(cutout => {
+        const cutoutData = calculation.breakdown.cutouts.items.find(c => c.cutoutTypeId === cutout.cutoutTypeId);
+        if (cutoutData) {
+          items.push({
+            label: `Cutout (${cutout.cutoutTypeName})`,
+            quantity: cutout.quantity,
+            unit: '×',
+            rate: cutoutData.appliedPrice,
+            base: cutout.quantity * cutoutData.appliedPrice,
+            discount: 0,
+            total: cutout.quantity * cutoutData.appliedPrice
+          });
+        }
+      });
+
+      const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+
+      return {
+        index: index + 1,
+        piece,
+        items,
+        subtotal
+      };
+    });
+  }, [calculation, pieces]);
+
+  // Calculate totals
+  const fabricationTotal = pieceBreakdowns.reduce((sum, pb) => sum + pb.subtotal, 0);
+  const materialsTotal = calculation?.breakdown.materials?.total ?? 0;
+  const additionalTotal = 
+    (calculation?.breakdown.delivery?.finalCost ?? 0) +
+    (calculation?.breakdown.templating?.finalCost ?? 0);
+  
+  const baseSubtotal = fabricationTotal + materialsTotal + additionalTotal;
+  
+  // Apply additional discount
+  const discountAmount = additionalDiscount.type === 'percentage'
+    ? baseSubtotal * (additionalDiscount.value / 100)
+    : additionalDiscount.value;
+  const subtotalAfterDiscount = baseSubtotal - discountAmount;
+  
   // Calculate GST
-  const subtotal = calculation?.total ?? 0;
-  const gst = subtotal * GST_RATE;
-  const grandTotal = subtotal + gst;
+  const gst = subtotalAfterDiscount * GST_RATE;
+  const grandTotal = subtotalAfterDiscount + gst;
 
   // Calculate total savings
   const totalSavings = calculation?.discounts.reduce((sum, d) => sum + d.savings, 0) ?? 0;
@@ -109,7 +244,7 @@ export default function PricingSummary({
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          Quote Summary
+          PRICING
         </button>
         <button
           onClick={handleRetry}
@@ -129,7 +264,7 @@ export default function PricingSummary({
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              Recalculate
+              Recalculate 🔄
             </>
           )}
         </button>
@@ -205,244 +340,60 @@ export default function PricingSummary({
             </div>
           )}
 
-          {/* Warning when customer has no pricing tier assigned */}
-          {customerName && !customerTier && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <div className="flex items-start gap-2">
-                <svg className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div>
-                  <p className="text-amber-800 font-medium text-sm">
-                    No pricing tier assigned
-                  </p>
-                  <p className="text-amber-700 text-xs mt-1">
-                    Using base prices. Assign a tier in the
-                    <a href="/customers" className="underline ml-1 hover:text-amber-900">
-                      customer profile
-                    </a>
-                    {' '}to apply discounts.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Materials Section */}
-          {calculation?.breakdown.materials && (
-            <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">MATERIALS</h4>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between text-gray-600">
-                  <span>Total Area:</span>
-                  <span>{formatAreaFromSqm(Number(calculation.breakdown.materials.totalAreaM2) || 0, unitSystem)}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Rate:</span>
-                  <span>
-                    {formatCurrency(calculation.breakdown.materials.baseRate)}/{unitSystem === 'IMPERIAL' ? 'ft²' : 'm²'}
-                    {calculation.breakdown.materials.thicknessMultiplier !== 1 && (
-                      <span className="ml-1">
-                        × {(Number(calculation.breakdown.materials.thicknessMultiplier) || 1).toFixed(1)}
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(calculation.breakdown.materials.subtotal)}</span>
-                </div>
-                {calculation.breakdown.materials.discount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount:</span>
-                    <span>-{formatCurrency(calculation.breakdown.materials.discount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-medium">
-                  <span>Total:</span>
-                  <span>{formatCurrency(calculation.breakdown.materials.total)}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Edges Section */}
-          {calculation?.breakdown.edges && calculation.breakdown.edges.byType.length > 0 && (
-            <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">EDGES</h4>
-              <div className="space-y-1 text-sm">
-                {calculation.breakdown.edges.byType.map((edge) => (
-                  <div key={edge.edgeTypeId} className="flex justify-between text-gray-600">
-                    <span>{edge.edgeTypeName}:</span>
-                    <span>
-                      {(Number(edge.linearMeters) || 0).toFixed(1)} lm × {formatCurrency(edge.appliedRate)} = {formatCurrency(edge.subtotal)}
-                    </span>
-                  </div>
+          {/* Main Content */}
+          {calculation && pieces.length > 0 ? (
+            <>
+              {/* Piece Breakdown Section */}
+              <div className="pb-3 border-b-2 border-gray-300">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">PIECE BREAKDOWN</h4>
+                {pieceBreakdowns.map((pb) => (
+                  <PieceBreakdownDisplay
+                    key={pb.index}
+                    index={pb.index}
+                    piece={pb.piece}
+                    items={pb.items}
+                    subtotal={pb.subtotal}
+                  />
                 ))}
-                {calculation.breakdown.edges.discount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount:</span>
-                    <span>-{formatCurrency(calculation.breakdown.edges.discount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-medium pt-1">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(calculation.breakdown.edges.total)}</span>
-                </div>
               </div>
-            </div>
-          )}
 
-          {/* Cutouts Section */}
-          {calculation?.breakdown.cutouts && calculation.breakdown.cutouts.items.length > 0 && (
-            <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">CUTOUTS</h4>
-              <div className="space-y-1 text-sm">
-                {calculation.breakdown.cutouts.items.map((cutout) => (
-                  <div key={cutout.cutoutTypeId} className="flex justify-between text-gray-600">
-                    <span>{cutout.cutoutTypeName} × {cutout.quantity}:</span>
-                    <span>{formatCurrency(cutout.subtotal)}</span>
-                  </div>
-                ))}
-                {calculation.breakdown.cutouts.discount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount:</span>
-                    <span>-{formatCurrency(calculation.breakdown.cutouts.discount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-medium pt-1">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(calculation.breakdown.cutouts.total)}</span>
-                </div>
-              </div>
-            </div>
-          )}
+              {/* Materials Section */}
+              <MaterialsBreakdown
+                total={materialsTotal}
+              />
 
-          {/* Delivery Section */}
-          {calculation?.breakdown.delivery && calculation.breakdown.delivery.finalCost > 0 && (
-            <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">DELIVERY</h4>
-              <div className="space-y-1 text-sm">
-                {calculation.breakdown.delivery.address && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Address:</span>
-                    <span className="text-right text-xs max-w-[200px] truncate">
-                      {calculation.breakdown.delivery.address}
-                    </span>
-                  </div>
-                )}
-                {calculation.breakdown.delivery.distanceKm && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Distance:</span>
-                    <span>{(Number(calculation.breakdown.delivery.distanceKm) || 0).toFixed(1)} km</span>
-                  </div>
-                )}
-                {calculation.breakdown.delivery.zone && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Zone:</span>
-                    <span>{calculation.breakdown.delivery.zone}</span>
-                  </div>
-                )}
-                {calculation.breakdown.delivery.overrideCost !== null && (
-                  <div className="flex justify-between text-amber-600">
-                    <span>Override Applied:</span>
-                    <span>{formatCurrency(calculation.breakdown.delivery.overrideCost)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-medium pt-1">
-                  <span>Delivery Cost:</span>
-                  <span>{formatCurrency(calculation.breakdown.delivery.finalCost)}</span>
-                </div>
-              </div>
-            </div>
-          )}
+              {/* Additional Charges Section */}
+              {additionalTotal > 0 && (
+                <AdditionalCharges
+                  delivery={calculation.breakdown.delivery ? {
+                    zone: calculation.breakdown.delivery.zone || undefined,
+                    price: calculation.breakdown.delivery.finalCost
+                  } : undefined}
+                  templating={calculation.breakdown.templating?.finalCost ? {
+                    price: calculation.breakdown.templating.finalCost
+                  } : undefined}
+                  total={additionalTotal}
+                />
+              )}
 
-          {/* Templating Section */}
-          {calculation?.breakdown.templating && calculation.breakdown.templating.required && calculation.breakdown.templating.finalCost > 0 && (
-            <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">TEMPLATING</h4>
-              <div className="space-y-1 text-sm">
-                {calculation.breakdown.templating.distanceKm && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Distance:</span>
-                    <span>{(Number(calculation.breakdown.templating.distanceKm) || 0).toFixed(1)} km</span>
-                  </div>
-                )}
-                {calculation.breakdown.templating.overrideCost !== null && (
-                  <div className="flex justify-between text-amber-600">
-                    <span>Override Applied:</span>
-                    <span>{formatCurrency(calculation.breakdown.templating.overrideCost)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-medium pt-1">
-                  <span>Templating Cost:</span>
-                  <span>{formatCurrency(calculation.breakdown.templating.finalCost)}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Applied Discounts */}
-          {calculation?.discounts && calculation.discounts.length > 0 && (
-            <div className="pb-3 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">APPLIED DISCOUNTS</h4>
-              <div className="space-y-1 text-sm">
-                {calculation.discounts.map((discount) => (
-                  <div key={discount.ruleId} className="flex items-start gap-2 text-green-700">
-                    <svg className="h-4 w-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span>
-                      {discount.ruleName}
-                      {discount.type === 'percentage' && ` (${discount.value}%)`}
-                    </span>
-                  </div>
-                ))}
-                {totalSavings > 0 && (
-                  <div className="flex justify-between font-medium text-green-700 pt-1">
-                    <span>Total Savings:</span>
-                    <span>{formatCurrency(totalSavings)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Totals */}
-          <div className="space-y-2 pt-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Subtotal:</span>
-              <span className="font-medium">{formatCurrency(subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">GST ({(Number(GST_RATE) * 100 || 0).toFixed(0)}%):</span>
-              <span className="font-medium">{formatCurrency(gst)}</span>
-            </div>
-            <div className="flex justify-between pt-2 border-t border-gray-300">
-              <span className="text-lg font-bold">TOTAL:</span>
-              <span className="text-lg font-bold text-primary-600">
-                {formatCurrency(grandTotal)}
-              </span>
-            </div>
-          </div>
-
-          {/* Calculated At Timestamp */}
-          {calculation?.calculatedAt && (
-            <p className="text-xs text-gray-400 text-right pt-2">
-              Last calculated: {new Date(calculation.calculatedAt).toLocaleTimeString()}
-            </p>
-          )}
-
-          {/* Loading Overlay */}
-          {isCalculating && !calculation && (
+              {/* Totals Section */}
+              <QuoteTotals
+                fabricationTotal={fabricationTotal}
+                materialsTotal={materialsTotal}
+                additionalTotal={additionalTotal}
+                subtotal={baseSubtotal}
+                additionalDiscount={additionalDiscount}
+                onDiscountChange={setAdditionalDiscount}
+                subtotalAfterDiscount={subtotalAfterDiscount}
+                gst={gst}
+                total={grandTotal}
+              />
+            </>
+          ) : isCalculating ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
             </div>
-          )}
-
-          {/* No Data State */}
-          {!calculation && !isCalculating && !error && (
+          ) : (
             <div className="text-center py-8 text-gray-500">
               <p>No pricing data available.</p>
               <button
@@ -452,6 +403,13 @@ export default function PricingSummary({
                 Calculate Now
               </button>
             </div>
+          )}
+
+          {/* Calculated At Timestamp */}
+          {calculation?.calculatedAt && (
+            <p className="text-xs text-gray-400 text-right pt-2">
+              Last calculated: {new Date(calculation.calculatedAt).toLocaleTimeString()}
+            </p>
           )}
         </div>
       )}
