@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { Prisma } from '@prisma/client';
+import type { TierPriceMapping } from '@/lib/types/price-interpreter';
 
 export async function GET(
   request: NextRequest,
@@ -16,7 +17,15 @@ export async function GET(
       return NextResponse.json({ error: 'Client tier not found' }, { status: 404 });
     }
 
-    return NextResponse.json(clientTier);
+    // Type-safe cast for JSON fields per Critical Lessons Learned
+    const responseData = {
+      ...clientTier,
+      customPriceList: clientTier.customPriceList
+        ? (clientTier.customPriceList as unknown as TierPriceMapping[])
+        : null,
+    };
+
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error('Error fetching client tier:', error);
     return NextResponse.json({ error: 'Failed to fetch client tier' }, { status: 500 });

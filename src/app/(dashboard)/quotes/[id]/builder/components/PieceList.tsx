@@ -3,7 +3,25 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useUnits } from '@/lib/contexts/UnitContext';
 import { getDimensionUnitLabel, mmToDisplayUnit, displayUnitToMm } from '@/lib/utils/units';
-import { debounce } from '@/lib/utils/debounce';
+import { formatCurrency } from '@/lib/utils';
+import type { CalculationResult } from '@/lib/types/pricing';
+
+interface MachineOption {
+  id: string;
+  name: string;
+  kerfWidthMm: number;
+  isDefault: boolean;
+}
+
+interface EdgeType {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  baseRate: number;
+  isActive: boolean;
+  sortOrder: number;
+}
 
 interface QuotePiece {
   id: number;
@@ -12,11 +30,14 @@ interface QuotePiece {
   lengthMm: number;
   widthMm: number;
   thicknessMm: number;
+  materialId: number | null;
   materialName: string | null;
   edgeTop: string | null;
   edgeBottom: string | null;
   edgeLeft: string | null;
   edgeRight: string | null;
+  machineProfileId: string | null;
+  cutouts: any[];
   sortOrder: number;
   totalCost: number;
   room: {
@@ -33,7 +54,12 @@ interface PieceListProps {
   onDuplicatePiece: (pieceId: number) => void;
   onReorder: (pieces: { id: number; sortOrder: number }[]) => void;
   onPieceUpdate?: (pieceId: number, updates: Partial<QuotePiece>) => void;
-  kerfWidth?: number;
+  getKerfForPiece?: (piece: QuotePiece) => number;
+  machines?: MachineOption[];
+  defaultMachineId?: string | null;
+  calculation?: CalculationResult | null;
+  discountDisplayMode?: 'ITEMIZED' | 'TOTAL_ONLY';
+  edgeTypes?: EdgeType[];
 }
 
 // Format edge type ID to readable name
@@ -79,6 +105,15 @@ const count40mmEdges = (piece: QuotePiece): number => {
   return count;
 };
 
+// Check if any edge is a mitre type
+const hasMitreEdge = (piece: QuotePiece, edgeTypes: EdgeType[]): boolean => {
+  const edgeIds = [piece.edgeTop, piece.edgeBottom, piece.edgeLeft, piece.edgeRight].filter(Boolean);
+  return edgeIds.some(id => {
+    const et = edgeTypes.find(e => e.id === id);
+    return et && et.name.toLowerCase().includes('mitre');
+  });
+};
+
 export default function PieceList({
   pieces,
   selectedPieceId,
@@ -87,7 +122,12 @@ export default function PieceList({
   onDuplicatePiece,
   onReorder,
   onPieceUpdate,
-  kerfWidth = 8,
+  getKerfForPiece,
+  machines = [],
+  defaultMachineId,
+  calculation = null,
+  discountDisplayMode = 'ITEMIZED',
+  edgeTypes = [],
 }: PieceListProps) {
   const { unitSystem } = useUnits();
   const unitLabel = getDimensionUnitLabel(unitSystem);
@@ -109,6 +149,59 @@ export default function PieceList({
       }
     }, 500);
   }, [onPieceUpdate]);
+
+  // Resolve machine name and kerf for a piece
+  const getMachineInfo = (piece: QuotePiece): { name: string; kerf: number } => {
+    // Use provided getKerfForPiece if available
+    if (getKerfForPiece) {
+      return {
+        name: machines.find(m => m.id === piece.machineProfileId)?.name || 'Default Machine',
+        kerf: getKerfForPiece(piece)
+      };
+    }
+    
+    // Fallback logic
+    if (piece.machineProfileId) {
+      const machine = machines.find(m => m.id === piece.machineProfileId);
+      if (machine) return { name: machine.name, kerf: machine.kerfWidthMm };
+    }
+    const defaultMachine = machines.find(m => m.id === defaultMachineId);
+    if (defaultMachine) return { name: defaultMachine.name, kerf: defaultMachine.kerfWidthMm };
+    return { name: 'GMM Bridge Saw', kerf: 8 };
+  };
+
+  // Resolve edge type name from ID
+  const getEdgeTypeName = (edgeTypeId: string | null): string | null => {
+    if (!edgeTypeId) return null;
+    const et = edgeTypes.find(e => e.id === edgeTypeId);
+    return et?.name ?? null;
+  };
+
+  // Get mitre strip info for a piece (for 40mm+ with mitre edges)
+  const getMitreStripInfo = (piece: QuotePiece): { count: number; formula: string } | null => {
+    if (piece.thicknessMm < 40) return null;
+    const machineInfo = getMachineInfo(piece);
+    const edgeIds = [
+      { id: piece.edgeTop, side: 'T' },
+      { id: piece.edgeBottom, side: 'B' },
+      { id: piece.edgeLeft, side: 'L' },
+      { id: piece.edgeRight, side: 'R' },
+    ];
+    let mitreCount = 0;
+    for (const edge of edgeIds) {
+      if (!edge.id) continue;
+      const name = getEdgeTypeName(edge.id);
+      if (name && name.toLowerCase().includes('mitre')) {
+        mitreCount++;
+      }
+    }
+    if (mitreCount === 0) return null;
+    const stripWidth = piece.thicknessMm + machineInfo.kerf + 5;
+    return {
+      count: mitreCount,
+      formula: `${piece.thicknessMm}+${machineInfo.kerf}+5=${stripWidth}mm`,
+    };
+  };
 
   const handleMoveUp = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -361,7 +454,17 @@ export default function PieceList({
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
                         <span className="font-medium">
-                          {count40mmEdges(piece)} Lamination Strip{count40mmEdges(piece) !== 1 ? 's' : ''} (Kerf: {kerfWidth}mm)
+                          {count40mmEdges(piece)} Lamination Strip{count40mmEdges(piece) !== 1 ? 's' : ''} (Kerf: {getMachineInfo(piece).kerf}mm)
+                        </span>
+                      </div>
+                    )}
+                    {getMitreStripInfo(piece) && (
+                      <div className="flex items-center gap-1 text-xs text-purple-600">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span className="font-medium">
+                          {getMitreStripInfo(piece)!.count} Mitre Strip{getMitreStripInfo(piece)!.count !== 1 ? 's' : ''} ({getMitreStripInfo(piece)!.formula})
                         </span>
                       </div>
                     )}
