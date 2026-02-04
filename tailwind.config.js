@@ -21,6 +21,18 @@ module.exports = {
           900: '#1e3a8a',
           950: '#172554',
         },
+        // Linear-inspired palette
+        surface: '#FFFFFF',
+        background: '#FAFAFA',
+        sidebar: '#18181B',
+        accent: '#D97706',
+        zinc: {
+          50: '#FAFAFA',
+          900: '#18181B',
+        },
+        amber: {
+          600: '#D97706',
+        },
       },
     },
   },
