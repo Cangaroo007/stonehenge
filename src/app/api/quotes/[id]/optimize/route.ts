@@ -65,20 +65,20 @@ export async function POST(
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     }
 
-    // Extract pieces from quote with thickness and finished edges
-    const pieces = quote.rooms.flatMap((room: { 
-      name: string; 
-      pieces: Array<{ 
-        id: number; 
-        lengthMm: number; 
-        widthMm: number; 
+    // Extract pieces from quote with thickness, finished edges, and edge type names
+    const pieces = quote.rooms.flatMap((room: {
+      name: string;
+      pieces: Array<{
+        id: number;
+        lengthMm: number;
+        widthMm: number;
         thicknessMm: number;
         name: string;
         edgeTop: string | null;
         edgeBottom: string | null;
         edgeLeft: string | null;
         edgeRight: string | null;
-      }> 
+      }>
     }) =>
       room.pieces.map((piece) => ({
         id: piece.id.toString(),
@@ -91,6 +91,12 @@ export async function POST(
           bottom: piece.edgeBottom !== null,
           left: piece.edgeLeft !== null,
           right: piece.edgeRight !== null,
+        },
+        edgeTypeNames: {
+          top: piece.edgeTop || undefined,
+          bottom: piece.edgeBottom || undefined,
+          left: piece.edgeLeft || undefined,
+          right: piece.edgeRight || undefined,
         },
       }))
     );

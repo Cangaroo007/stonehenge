@@ -63,6 +63,14 @@ export interface OptimizationResult {
   laminationSummary?: LaminationSummary;
 }
 
+// Edge type info for each edge (used to determine strip width)
+export interface EdgeTypeInfo {
+  top?: string;    // Edge type name, e.g. '40mm Mitre', '20mm Polished'
+  bottom?: string;
+  left?: string;
+  right?: string;
+}
+
 export interface OptimizationInput {
   pieces: Array<{
     id: string;
@@ -70,10 +78,12 @@ export interface OptimizationInput {
     height: number;
     label: string;
     canRotate?: boolean;
-    // NEW: Thickness tracking (20mm, 40mm, 60mm, etc.)
+    // Thickness tracking (20mm, 40mm, 60mm, etc.)
     thickness?: number;
-    // NEW: Which edges need lamination strips
+    // Which edges need lamination strips
     finishedEdges?: FinishedEdges;
+    // Edge type names per edge (for determining strip widths)
+    edgeTypeNames?: EdgeTypeInfo;
   }>;
   slabWidth: number;
   slabHeight: number;

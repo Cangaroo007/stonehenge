@@ -21,7 +21,9 @@ interface Slab {
 }
 
 // Lamination strip constants
-const LAMINATION_STRIP_WIDTH = 40; // mm - standard strip width
+const LAMINATION_STRIP_WIDTH_DEFAULT = 40; // mm - standard strip width
+const LAMINATION_STRIP_WIDTH_MITRE = 108; // mm - for 40mm Mitre edges
+const LAMINATION_STRIP_WIDTH_NARROW = 60; // mm - for narrow mitre edges
 const LAMINATION_THRESHOLD = 40; // mm - pieces >= 40mm need lamination
 
 // Internal type for pieces during optimization (includes lamination data)
@@ -32,79 +34,100 @@ type OptimizationPiece = OptimizationInput['pieces'][0] & {
 };
 
 /**
+ * Determine the strip width for an edge based on the edge type name.
+ * - '40mm Mitre' edges use 108mm strips
+ * - Other mitre edges use 60mm strips
+ * - Standard polish edges use 40mm (default)
+ */
+function getStripWidthForEdge(edgeTypeName?: string): number {
+  if (!edgeTypeName) return LAMINATION_STRIP_WIDTH_DEFAULT;
+  const lower = edgeTypeName.toLowerCase();
+  if (lower.includes('40mm') && lower.includes('mitre')) return LAMINATION_STRIP_WIDTH_MITRE;
+  if (lower.includes('mitre')) return LAMINATION_STRIP_WIDTH_NARROW;
+  return LAMINATION_STRIP_WIDTH_DEFAULT;
+}
+
+/**
  * Generates lamination strips for a 40mm+ piece
- * Strips are needed under each finished edge to create the thickness appearance
+ * Strips are needed under each finished edge to create the thickness appearance.
+ * If the edge is a '40mm Mitre', the strip width is 108mm.
+ * Other mitre edges use 60mm strips.
  */
 function generateLaminationStrips(piece: OptimizationPiece): OptimizationPiece[] {
   // Only generate strips for 40mm+ pieces
   if (!piece.thickness || piece.thickness < LAMINATION_THRESHOLD) {
     return [];
   }
-  
+
   // If no finished edges specified, assume none (no strips needed)
   if (!piece.finishedEdges) {
     return [];
   }
-  
+
   const strips: OptimizationPiece[] = [];
   const edges = piece.finishedEdges;
-  
+  const edgeNames = piece.edgeTypeNames;
+
   // Top edge strip (runs along the width)
   if (edges.top) {
+    const stripW = getStripWidthForEdge(edgeNames?.top);
     strips.push({
       id: `${piece.id}-lam-top`,
       width: piece.width,
-      height: LAMINATION_STRIP_WIDTH,
+      height: stripW,
       thickness: 20, // Strips are cut from 20mm slab
-      label: `${piece.label} (Lam-Top)`,
+      label: `${piece.label} (Lam-Top${edgeNames?.top ? ` ${edgeNames.top}` : ''})`,
       isLaminationStrip: true,
       parentPieceId: piece.id,
       stripPosition: 'top'
     });
   }
-  
+
   // Bottom edge strip (runs along the width)
   if (edges.bottom) {
+    const stripW = getStripWidthForEdge(edgeNames?.bottom);
     strips.push({
       id: `${piece.id}-lam-bottom`,
       width: piece.width,
-      height: LAMINATION_STRIP_WIDTH,
+      height: stripW,
       thickness: 20,
-      label: `${piece.label} (Lam-Bottom)`,
+      label: `${piece.label} (Lam-Bottom${edgeNames?.bottom ? ` ${edgeNames.bottom}` : ''})`,
       isLaminationStrip: true,
       parentPieceId: piece.id,
       stripPosition: 'bottom'
     });
   }
-  
+
   // Left edge strip (runs along the height)
   if (edges.left) {
+    const stripW = getStripWidthForEdge(edgeNames?.left);
     strips.push({
       id: `${piece.id}-lam-left`,
-      width: LAMINATION_STRIP_WIDTH,
+      width: stripW,
       height: piece.height,
       thickness: 20,
-      label: `${piece.label} (Lam-Left)`,
+      label: `${piece.label} (Lam-Left${edgeNames?.left ? ` ${edgeNames.left}` : ''})`,
       isLaminationStrip: true,
       parentPieceId: piece.id,
       stripPosition: 'left'
     });
   }
-  
+
   // Right edge strip (runs along the height)
   if (edges.right) {
+    const stripW = getStripWidthForEdge(edgeNames?.right);
     strips.push({
       id: `${piece.id}-lam-right`,
-      width: LAMINATION_STRIP_WIDTH,
+      width: stripW,
       height: piece.height,
       thickness: 20,
-      label: `${piece.label} (Lam-Right)`,
+      label: `${piece.label} (Lam-Right${edgeNames?.right ? ` ${edgeNames.right}` : ''})`,
       isLaminationStrip: true,
       parentPieceId: piece.id,
       stripPosition: 'right'
     });
   }
-  
+
   return strips;
 }
 
@@ -137,10 +160,12 @@ function generateLaminationSummary(
       parentLabel: parent?.label || 'Unknown',
       strips: parentStrips.map(s => ({
         position: s.stripPosition || 'unknown',
-        lengthMm: s.stripPosition === 'left' || s.stripPosition === 'right' 
-          ? s.height 
+        lengthMm: s.stripPosition === 'left' || s.stripPosition === 'right'
+          ? s.height
           : s.width,
-        widthMm: LAMINATION_STRIP_WIDTH
+        widthMm: s.stripPosition === 'left' || s.stripPosition === 'right'
+          ? s.width
+          : s.height
       }))
     });
   }
