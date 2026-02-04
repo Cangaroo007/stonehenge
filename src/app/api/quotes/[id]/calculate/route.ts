@@ -83,7 +83,19 @@ export async function POST(
     }
 
     // Calculate the quote price
+    console.log(`[CALC API DEBUG] Calculating price for quote ID: ${id}`);
     const result = await calculateQuotePrice(id, options);
+
+    // DEBUG: Log pricing summary
+    console.log(`[CALC API DEBUG] Quote ${id} result summary:`, {
+      subtotal: result.subtotal,
+      total: result.total,
+      edgeTotalLm: result.breakdown.edges?.totalLinearMeters,
+      edgeSubtotal: result.breakdown.edges?.subtotal,
+      edgeByType: result.breakdown.edges?.byType,
+      polishing: result.breakdown.services?.items.find(i => i.serviceType === 'POLISHING'),
+      piecesCount: result.breakdown.pieces?.length,
+    });
 
     return NextResponse.json(result);
   } catch (error) {

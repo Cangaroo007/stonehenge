@@ -271,6 +271,19 @@ export async function calculateQuotePrice(
   // Flatten all pieces
   const allPieces = quote.rooms.flatMap(room => room.pieces);
 
+  // DEBUG: Log piece edge data for diagnostics
+  console.log(`[PRICING DEBUG] Quote ${quoteId} (${quote.quoteNumber || 'no number'}) - ${allPieces.length} pieces`);
+  for (const piece of allPieces) {
+    console.log(`[PRICING DEBUG] Piece "${piece.name}" (id=${piece.id}):`, {
+      dimensions: `${piece.lengthMm}x${piece.widthMm}x${piece.thicknessMm}mm`,
+      edgeTop: piece.edgeTop,
+      edgeBottom: piece.edgeBottom,
+      edgeLeft: piece.edgeLeft,
+      edgeRight: piece.edgeRight,
+      cutouts: piece.cutouts,
+    });
+  }
+
   // Get slab count from latest optimization (for PER_SLAB pricing)
   let slabCount: number | undefined;
   if (pricingContext.materialPricingBasis === 'PER_SLAB') {
@@ -483,19 +496,36 @@ function calculateEdgeCostV2(
 ): { totalLinearMeters: number; byType: EdgeBreakdown[]; subtotal: number } {
   const edgeTotals = new Map<string, { linearMeters: number; thickness: number; edgeType: typeof edgeTypes[number] }>();
 
+  // DEBUG: Log available edge types for matching
+  console.log(`[EDGE DEBUG] Available EdgeTypes (${edgeTypes.length}):`, edgeTypes.map(et => ({
+    id: et.id,
+    name: et.name,
+    baseRate: et.baseRate.toNumber(),
+    rate20mm: et.rate20mm?.toNumber() ?? null,
+    rate40mm: et.rate40mm?.toNumber() ?? null,
+  })));
+
   for (const piece of pieces) {
     const edges = [
-      { id: piece.edgeTop, length: piece.widthMm },
-      { id: piece.edgeBottom, length: piece.widthMm },
-      { id: piece.edgeLeft, length: piece.lengthMm },
-      { id: piece.edgeRight, length: piece.lengthMm },
+      { side: 'top', id: piece.edgeTop, length: piece.widthMm },
+      { side: 'bottom', id: piece.edgeBottom, length: piece.widthMm },
+      { side: 'left', id: piece.edgeLeft, length: piece.lengthMm },
+      { side: 'right', id: piece.edgeRight, length: piece.lengthMm },
     ];
+
+    // DEBUG: Log per-piece edge values
+    console.log(`[EDGE DEBUG] Piece edges:`, edges.map(e => `${e.side}=${e.id ?? 'NULL'}`).join(', '));
 
     for (const edge of edges) {
       if (!edge.id) continue;
 
       const edgeType = edgeTypes.find(et => et.id === edge.id);
-      if (!edgeType) continue;
+      if (!edgeType) {
+        // DEBUG: Edge ID didn't match any EdgeType - this is a likely root cause
+        console.warn(`[EDGE DEBUG] ⚠️ Edge ID "${edge.id}" (side=${edge.side}) does NOT match any EdgeType! Available IDs: ${edgeTypes.map(et => et.id).join(', ')}`);
+        continue;
+      }
+      console.log(`[EDGE DEBUG] ✓ Edge ID "${edge.id}" matched EdgeType "${edgeType.name}" (rate20mm=${edgeType.rate20mm?.toNumber()}, rate40mm=${edgeType.rate40mm?.toNumber()}, baseRate=${edgeType.baseRate.toNumber()})`);
 
       const linearMeters = edge.length / 1000;
       const key = `${edgeType.id}_${piece.thicknessMm}`;
@@ -513,13 +543,19 @@ function calculateEdgeCostV2(
   for (const [, data] of Array.from(edgeTotals.entries())) {
     // Select appropriate rate based on thickness
     let rate: number;
+    let rateSource: string;
     if (data.thickness <= 20 && data.edgeType.rate20mm) {
       rate = data.edgeType.rate20mm.toNumber();
+      rateSource = 'rate20mm';
     } else if (data.thickness > 20 && data.edgeType.rate40mm) {
       rate = data.edgeType.rate40mm.toNumber();
+      rateSource = 'rate40mm';
     } else {
       rate = data.edgeType.baseRate.toNumber(); // Fallback
+      rateSource = 'baseRate (fallback)';
     }
+
+    console.log(`[EDGE DEBUG] Rate for "${data.edgeType.name}" (${data.thickness}mm): $${rate} via ${rateSource}, linearMeters=${data.linearMeters}`);
 
     // Calculate cost
     let itemSubtotal = data.linearMeters * rate;
@@ -547,6 +583,11 @@ function calculateEdgeCostV2(
 
     totalLinearMeters += data.linearMeters;
     subtotal += itemSubtotal;
+  }
+
+  console.log(`[EDGE DEBUG] Edge cost summary: totalLinearMeters=${totalLinearMeters}, subtotal=$${subtotal}, edgeTypes=${byType.length}`);
+  if (byType.length === 0) {
+    console.warn(`[EDGE DEBUG] ⚠️ No edge costs calculated! Either all piece edges are NULL or edge IDs don't match any EdgeType records.`);
   }
 
   return { totalLinearMeters, byType, subtotal };
@@ -652,6 +693,7 @@ function calculateServiceCosts(
 
   // Polishing: per linear meter, calculated per-piece based on actual thickness
   const polishingRate = serviceRates.find(sr => sr.serviceType === 'POLISHING');
+  console.log(`[POLISHING DEBUG] polishingRate found: ${!!polishingRate}, totalEdgeLinearMeters: ${totalEdgeLinearMeters}`);
   if (polishingRate && totalEdgeLinearMeters > 0) {
     // Calculate polishing cost per-piece to use correct thickness-based rate
     let polishingCost = 0;
@@ -666,6 +708,7 @@ function calculateServiceCosts(
         piece.edgeRight ? piece.lengthMm : 0,
       ];
       const pieceEdgeMeters = edgeLengths.reduce((sum, len) => sum + len, 0) / 1000;
+      console.log(`[POLISHING DEBUG] Piece edges: top=${piece.edgeTop}, bottom=${piece.edgeBottom}, left=${piece.edgeLeft}, right=${piece.edgeRight} → ${pieceEdgeMeters} lm`);
       if (pieceEdgeMeters <= 0) continue;
 
       const rate = piece.thicknessMm <= 20
