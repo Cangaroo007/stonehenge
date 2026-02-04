@@ -2,7 +2,7 @@
 
 import prisma from '@/lib/db';
 import { Prisma } from '@prisma/client';
-import type { TierPriceMapping } from '@/lib/services/ai-price-interpreter';
+import type { TierPriceMapping } from '@/lib/types/price-interpreter';
 
 /**
  * Save the confirmed AI-interpreted price mapping to a tier's customPriceList JSON field.

@@ -6,7 +6,7 @@ import {
   ServiceCategory,
   CutoutType,
   InterpretationResult,
-} from '@/lib/services/ai-price-interpreter';
+} from '@/lib/types/price-interpreter';
 
 interface PriceMappingVerificationProps {
   interpretation: InterpretationResult;

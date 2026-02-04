@@ -1,94 +1,26 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+// Re-export types from the shared types file so server-side consumers
+// can continue importing from this module without breaking changes.
+export {
+  ServiceCategory,
+  CutoutType,
+} from '@/lib/types/price-interpreter';
+
+export type {
+  PriceMapping,
+  TierPriceMapping,
+  InterpretationResult,
+} from '@/lib/types/price-interpreter';
+
+import {
+  ServiceCategory,
+  type TierPriceMapping,
+  type InterpretationResult,
+} from '@/lib/types/price-interpreter';
+
 const anthropic = new Anthropic();
 const MODEL = 'claude-sonnet-4-5-20250929';
-
-/**
- * Service category enums matching our database schema
- */
-export enum ServiceCategory {
-  SLAB = 'SLAB',
-  CUTTING = 'CUTTING',
-  POLISHING = 'POLISHING',
-  CUTOUT = 'CUTOUT',
-  DELIVERY = 'DELIVERY',
-  INSTALLATION = 'INSTALLATION',
-}
-
-export enum CutoutType {
-  HOTPLATE = 'HOTPLATE',
-  GPO = 'GPO',
-  TAP_HOLE = 'TAP_HOLE',
-  DROP_IN_SINK = 'DROP_IN_SINK',
-  UNDERMOUNT_SINK = 'UNDERMOUNT_SINK',
-  FLUSH_COOKTOP = 'FLUSH_COOKTOP',
-  BASIN = 'BASIN',
-  DRAINER_GROOVES = 'DRAINER_GROOVES',
-  OTHER = 'OTHER',
-}
-
-/**
- * Price mapping structure returned by AI
- */
-export interface PriceMapping {
-  // Original data from spreadsheet
-  originalCategory: string;
-  originalName: string;
-  originalRate: number;
-  originalUnit?: string;
-
-  // Mapped to our internal system
-  serviceCategory: ServiceCategory;
-  cutoutType?: CutoutType; // Only for CUTOUT category
-
-  // Standardized pricing
-  rate20mm?: number; // For thickness-specific services
-  rate40mm?: number;
-  ratePerLinearMetre?: number;
-  ratePerSquareMetre?: number;
-  fixedRate?: number;
-
-  // Metadata
-  unit: 'Metre' | 'Millimetre' | 'Square Metre' | 'Fixed'; // Australian spelling
-  confidence: 'high' | 'medium' | 'low';
-  notes?: string;
-}
-
-/**
- * Tier-specific price mapping for persistence to customPriceList JSON field.
- * Uses the same structure as PriceMapping but typed for database storage.
- */
-export interface TierPriceMapping {
-  originalCategory: string;
-  originalName: string;
-  originalRate: number;
-  originalUnit?: string;
-  serviceCategory: ServiceCategory;
-  cutoutType?: CutoutType;
-  rate20mm?: number;
-  rate40mm?: number;
-  ratePerLinearMetre?: number;
-  ratePerSquareMetre?: number;
-  fixedRate?: number;
-  unit: 'Metre' | 'Millimetre' | 'Square Metre' | 'Fixed';
-  confidence: 'high' | 'medium' | 'low';
-  notes?: string;
-}
-
-/**
- * AI interpretation result
- */
-export interface InterpretationResult {
-  mappings: PriceMapping[];
-  summary: {
-    totalItems: number;
-    categoryCounts: Record<ServiceCategory, number>;
-    uniqueCategories: ServiceCategory[];
-    averageConfidence: number;
-    warnings: string[];
-  };
-  rawData: string; // Original file content for debugging
-}
 
 const AI_SYSTEM_PROMPT = `You are an expert in Australian Stone Masonry and stone fabrication pricing. Your job is to analyze uploaded price lists (CSV or spreadsheet data) and map the columns and rows to our internal pricing categories.
 
