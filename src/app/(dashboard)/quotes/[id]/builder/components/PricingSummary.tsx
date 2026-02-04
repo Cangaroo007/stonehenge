@@ -5,7 +5,7 @@ import { formatCurrency } from '@/lib/utils';
 import { useUnits } from '@/lib/contexts/UnitContext';
 import { formatAreaFromSqm } from '@/lib/utils/units';
 import { debounce } from '@/lib/utils/debounce';
-import type { CalculationResult } from '@/lib/types/pricing';
+import type { CalculationResult, PiecePricingBreakdown } from '@/lib/types/pricing';
 
 // GST rate (configurable, default 10% for Australia)
 const GST_RATE = 0.10;
@@ -412,6 +412,18 @@ export default function PricingSummary({
             </div>
           )}
 
+          {/* ====== PER-PIECE BREAKDOWN Section ====== */}
+          {discountDisplayMode === 'ITEMIZED' && calculation?.breakdown.pieces && calculation.breakdown.pieces.length > 0 && (
+            <div className="pb-3 border-b border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">PER-PIECE BREAKDOWN</h4>
+              <div className="space-y-3">
+                {calculation.breakdown.pieces.map((piece: PiecePricingBreakdown, idx: number) => (
+                  <PieceBreakdownRow key={`piece-${piece.pieceId || idx}`} piece={piece} />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Delivery Section */}
           {calculation?.breakdown.delivery && calculation.breakdown.delivery.finalCost > 0 && (
             <div className="pb-3 border-b border-gray-200">
@@ -594,6 +606,107 @@ export default function PricingSummary({
               </button>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Collapsible per-piece pricing breakdown row
+ */
+function PieceBreakdownRow({ piece }: { piece: PiecePricingBreakdown }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="bg-gray-50 rounded-lg p-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between text-sm hover:text-primary-600 transition-colors"
+      >
+        <div className="flex items-center gap-1.5">
+          <svg
+            className={`h-3.5 w-3.5 transform transition-transform ${expanded ? 'rotate-90' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          <span className="font-medium text-gray-800">{piece.pieceName}</span>
+          <span className="text-xs text-gray-500">
+            {piece.dimensions.lengthMm} × {piece.dimensions.widthMm} mm
+          </span>
+        </div>
+        <span className="font-medium text-gray-900">{formatCurrency(piece.pieceTotal)}</span>
+      </button>
+
+      {expanded && (
+        <div className="mt-2 ml-5 space-y-1 text-xs">
+          {/* Cutting */}
+          {piece.fabrication.cutting && piece.fabrication.cutting.baseAmount > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>Cutting ({piece.fabrication.cutting.linearMeters.toFixed(1)} lm × {formatCurrency(piece.fabrication.cutting.rate)}):</span>
+              <span>
+                {piece.fabrication.cutting.discount > 0 ? (
+                  <span>
+                    <span className="line-through text-gray-400 mr-1">{formatCurrency(piece.fabrication.cutting.baseAmount)}</span>
+                    {formatCurrency(piece.fabrication.cutting.total)}
+                  </span>
+                ) : (
+                  formatCurrency(piece.fabrication.cutting.total)
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* Polishing */}
+          {piece.fabrication.polishing && piece.fabrication.polishing.baseAmount > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>Polishing ({piece.fabrication.polishing.linearMeters.toFixed(1)} lm × {formatCurrency(piece.fabrication.polishing.rate)}):</span>
+              <span>
+                {piece.fabrication.polishing.discount > 0 ? (
+                  <span>
+                    <span className="line-through text-gray-400 mr-1">{formatCurrency(piece.fabrication.polishing.baseAmount)}</span>
+                    {formatCurrency(piece.fabrication.polishing.total)}
+                  </span>
+                ) : (
+                  formatCurrency(piece.fabrication.polishing.total)
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* Edges */}
+          {piece.fabrication.edges.length > 0 && piece.fabrication.edges.map((edge, idx) => (
+            <div key={`${edge.side}-${idx}`} className="flex justify-between text-gray-600">
+              <span>{edge.edgeTypeName} ({edge.side}, {edge.linearMeters.toFixed(1)} lm):</span>
+              <span>
+                {edge.discount > 0 ? (
+                  <span>
+                    <span className="line-through text-gray-400 mr-1">{formatCurrency(edge.baseAmount)}</span>
+                    {formatCurrency(edge.total)}
+                  </span>
+                ) : (
+                  formatCurrency(edge.total)
+                )}
+              </span>
+            </div>
+          ))}
+
+          {/* Cutouts */}
+          {piece.fabrication.cutouts.length > 0 && piece.fabrication.cutouts.map((cutout, idx) => (
+            <div key={`${cutout.cutoutTypeId}-${idx}`} className="flex justify-between text-gray-600">
+              <span>{cutout.cutoutTypeName} × {cutout.quantity}:</span>
+              <span>{formatCurrency(cutout.total)}</span>
+            </div>
+          ))}
+
+          {/* Piece subtotal */}
+          <div className="flex justify-between font-medium text-gray-800 pt-1 border-t border-gray-200">
+            <span>Piece Total:</span>
+            <span>{formatCurrency(piece.pieceTotal)}</span>
+          </div>
         </div>
       )}
     </div>

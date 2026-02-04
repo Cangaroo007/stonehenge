@@ -103,6 +103,7 @@ export interface CalculationResult {
       overrideCost: number | null;
       finalCost: number;
     };
+    pieces?: PiecePricingBreakdown[];
   };
   appliedRules: AppliedRule[];
   discounts: DiscountBreakdown[];
