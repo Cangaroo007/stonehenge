@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import CommandMenu from './CommandMenu';
 
 interface NavigationItem {
   name: string;
@@ -66,6 +67,8 @@ export default function AppShell({ children, user }: AppShellProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* Command Menu - Triggered by Cmd+K */}
+      <CommandMenu user={user} />
       {/* Mobile menu overlay */}
       {mobileMenuOpen && (
         <div
