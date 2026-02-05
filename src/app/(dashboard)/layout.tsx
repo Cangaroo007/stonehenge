@@ -1,8 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
 import { UnitProvider } from '@/lib/contexts/UnitContext';
+import AppShell from '@/components/layout/AppShell';
 
 export default async function DashboardLayout({
   children,
@@ -16,14 +15,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="lg:pl-64">
-        <Header user={user} />
-        <main className="p-6">
-          <UnitProvider>{children}</UnitProvider>
-        </main>
-      </div>
-    </div>
+    <AppShell
+      user={{
+        name: user.name || user.email,
+        email: user.email,
+        organization: undefined, // Can be populated from company settings if needed
+      }}
+    >
+      <UnitProvider>{children}</UnitProvider>
+    </AppShell>
   );
 }
