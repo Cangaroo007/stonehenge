@@ -16,6 +16,9 @@ import {
   Menu,
   X,
   LogOut,
+  Users,
+  Sliders,
+  UserCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -30,8 +33,11 @@ interface NavigationItem {
 const navigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Quotes', href: '/quotes', icon: FileText },
-  { name: 'Slab Optimizer', href: '/optimize', icon: Square },
+  { name: 'Customers', href: '/customers', icon: UserCircle },
   { name: 'Materials', href: '/materials', icon: Layers },
+  { name: 'Optimizer', href: '/optimize', icon: Square },
+  { name: 'Pricing', href: '/admin/pricing', icon: Sliders },
+  { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

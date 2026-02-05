@@ -11,6 +11,9 @@ import {
   User,
   Building2,
   Search,
+  Users,
+  Sliders,
+  UserCircle,
 } from 'lucide-react';
 
 interface CommandMenuProps {
@@ -63,12 +66,12 @@ export default function CommandMenu({ user }: CommandMenuProps) {
       keywords: ['add', 'create', 'new'],
     },
     {
-      id: 'optimizer',
-      label: 'Go to Slab Optimizer',
-      description: 'Optimize slab layouts',
-      icon: Square,
-      action: () => router.push('/optimize'),
-      keywords: ['optimize', 'slab', 'layout'],
+      id: 'customers',
+      label: 'Go to Customers',
+      description: 'View and manage customers',
+      icon: UserCircle,
+      action: () => router.push('/customers'),
+      keywords: ['customer', 'client', 'contact'],
     },
     {
       id: 'materials',
@@ -76,15 +79,31 @@ export default function CommandMenu({ user }: CommandMenuProps) {
       description: 'Manage materials',
       icon: Layers,
       action: () => router.push('/materials'),
-      keywords: ['material', 'inventory'],
+      keywords: ['material', 'inventory', 'stock'],
     },
     {
-      id: 'customers',
-      label: 'Go to Customers',
-      description: 'View and manage customers',
-      icon: User,
-      action: () => router.push('/customers'),
-      keywords: ['customer', 'client'],
+      id: 'optimizer',
+      label: 'Go to Slab Optimizer',
+      description: 'Optimize slab layouts',
+      icon: Square,
+      action: () => router.push('/optimize'),
+      keywords: ['optimize', 'slab', 'layout', 'cut'],
+    },
+    {
+      id: 'pricing',
+      label: 'Go to Pricing',
+      description: 'Manage pricing settings',
+      icon: Sliders,
+      action: () => router.push('/admin/pricing'),
+      keywords: ['pricing', 'rates', 'admin', 'price'],
+    },
+    {
+      id: 'users',
+      label: 'Go to Users',
+      description: 'Manage user accounts',
+      icon: Users,
+      action: () => router.push('/admin/users'),
+      keywords: ['users', 'admin', 'accounts', 'team'],
     },
     {
       id: 'settings',
@@ -92,7 +111,7 @@ export default function CommandMenu({ user }: CommandMenuProps) {
       description: 'Adjust your settings',
       icon: Settings,
       action: () => router.push('/settings'),
-      keywords: ['preferences', 'config'],
+      keywords: ['preferences', 'config', 'configuration'],
     },
   ];
 
