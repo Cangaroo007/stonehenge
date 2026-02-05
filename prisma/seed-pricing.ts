@@ -7,11 +7,11 @@ async function seedPricingEntities() {
 
   // Edge Types - Northcoast Stone pricing
   const edgeTypes = [
-    { name: 'Pencil Round', category: 'polish', baseRate: new Prisma.Decimal(35.00), sortOrder: 1 },
-    { name: 'Bullnose', category: 'polish', baseRate: new Prisma.Decimal(45.00), sortOrder: 2 },
-    { name: 'Arriss', category: 'polish', baseRate: new Prisma.Decimal(25.00), sortOrder: 3 },
-    { name: 'Waterfall', category: 'waterfall', baseRate: new Prisma.Decimal(85.00), sortOrder: 4 },
-    { name: 'Apron', category: 'apron', baseRate: new Prisma.Decimal(95.00), sortOrder: 5 },
+    { name: 'Pencil Round', category: 'polish', baseRate: new Prisma.Decimal(35.00), rate20mm: new Prisma.Decimal(0), rate40mm: new Prisma.Decimal(0), sortOrder: 1 },
+    { name: 'Bullnose', category: 'polish', baseRate: new Prisma.Decimal(45.00), rate20mm: new Prisma.Decimal(10.00), rate40mm: new Prisma.Decimal(10.00), sortOrder: 2 },
+    { name: 'Arriss', category: 'polish', baseRate: new Prisma.Decimal(25.00), rate20mm: new Prisma.Decimal(0), rate40mm: new Prisma.Decimal(0), sortOrder: 3 },
+    { name: 'Waterfall', category: 'waterfall', baseRate: new Prisma.Decimal(85.00), rate20mm: new Prisma.Decimal(75.00), rate40mm: new Prisma.Decimal(75.00), sortOrder: 4 },
+    { name: 'Apron', category: 'apron', baseRate: new Prisma.Decimal(95.00), rate20mm: new Prisma.Decimal(50.00), rate40mm: new Prisma.Decimal(50.00), sortOrder: 5 },
   ]
 
   for (const edge of edgeTypes) {

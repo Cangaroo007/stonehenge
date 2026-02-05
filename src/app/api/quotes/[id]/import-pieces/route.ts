@@ -53,6 +53,14 @@ export async function POST(
       );
     }
 
+    // Look up default edge type (Pencil Round) for pieces without edges
+    const defaultEdgeType = await prisma.edgeType.findFirst({
+      where: { category: 'polish', isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true },
+    });
+    const defaultEdgeId = defaultEdgeType?.id ?? null;
+
     // Validate all pieces have required fields
     for (let i = 0; i < pieces.length; i++) {
       const piece = pieces[i];
@@ -151,9 +159,9 @@ export async function POST(
             totalCost: 0,
             sortOrder: sortOrder++,
             cutouts: [],
-            edgeTop: pieceData.edgeTop || null,
+            edgeTop: pieceData.edgeTop || defaultEdgeId,
             edgeBottom: pieceData.edgeBottom || null,
-            edgeLeft: pieceData.edgeLeft || null,
+            edgeLeft: pieceData.edgeLeft || defaultEdgeId,
             edgeRight: pieceData.edgeRight || null,
           },
         });

@@ -93,14 +93,14 @@ async function main() {
   // CREATE EDGE TYPES (for EdgeSelector component)
   // ============================================
   const edgeTypes = [
-    { name: 'Pencil Round', description: 'Standard pencil round edge', category: 'polish', baseRate: 35, sortOrder: 1, isActive: true },
-    { name: 'Bullnose', description: 'Full bullnose edge', category: 'polish', baseRate: 45, sortOrder: 2, isActive: true },
-    { name: 'Arriss', description: 'Slight ease/chamfer on edge', category: 'polish', baseRate: 25, sortOrder: 3, isActive: true },
-    { name: 'Beveled', description: '45 degree bevel', category: 'polish', baseRate: 40, sortOrder: 4, isActive: true },
-    { name: 'Ogee', description: 'Decorative ogee profile', category: 'polish', baseRate: 65, sortOrder: 5, isActive: true },
-    { name: 'Square/Eased', description: 'Square edge with slight ease', category: 'polish', baseRate: 30, sortOrder: 6, isActive: true },
-    { name: 'Mitered', description: 'Mitered edge for thick appearance', category: 'polish', baseRate: 85, sortOrder: 7, isActive: true },
-    { name: 'Waterfall', description: 'Waterfall edge return', category: 'waterfall', baseRate: 120, sortOrder: 8, isActive: true },
+    { name: 'Pencil Round', description: 'Standard pencil round edge', category: 'polish', baseRate: 35, rate20mm: 0, rate40mm: 0, sortOrder: 1, isActive: true },
+    { name: 'Bullnose', description: 'Full bullnose edge', category: 'polish', baseRate: 45, rate20mm: 10, rate40mm: 10, sortOrder: 2, isActive: true },
+    { name: 'Arriss', description: 'Slight ease/chamfer on edge', category: 'polish', baseRate: 25, rate20mm: 0, rate40mm: 0, sortOrder: 3, isActive: true },
+    { name: 'Beveled', description: '45 degree bevel', category: 'polish', baseRate: 40, rate20mm: 5, rate40mm: 5, sortOrder: 4, isActive: true },
+    { name: 'Ogee', description: 'Decorative ogee profile', category: 'polish', baseRate: 65, rate20mm: 20, rate40mm: 25, sortOrder: 5, isActive: true },
+    { name: 'Square/Eased', description: 'Square edge with slight ease', category: 'polish', baseRate: 30, rate20mm: 0, rate40mm: 0, sortOrder: 6, isActive: true },
+    { name: 'Mitered', description: 'Mitered edge for thick appearance', category: 'polish', baseRate: 85, rate20mm: 40, rate40mm: 40, sortOrder: 7, isActive: true },
+    { name: 'Waterfall', description: 'Waterfall edge return', category: 'waterfall', baseRate: 120, rate20mm: 75, rate40mm: 75, sortOrder: 8, isActive: true },
   ];
 
   for (const edgeType of edgeTypes) {
