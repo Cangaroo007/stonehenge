@@ -20,6 +20,12 @@ import type {
   DiscountBreakdown,
 } from './pricing';
 import type { EnhancedCalculationResult, ServiceBreakdown } from '@/lib/services/pricing-calculator-v2';
+import type {
+  OptimizationResult,
+  OptimizationInput,
+  Placement,
+  SlabResult,
+} from '@/types/slab-optimization';
 
 // ============================================
 // CURRENCY & FORMATTING
@@ -487,6 +493,105 @@ export interface PricingContextView extends PricingContext {
     currencySymbol: string; // "$" | "£" | "€" etc.
     gstLabel: string; // "GST (10%)" or "VAT (20%)"
   };
+}
+
+// ============================================
+// SLAB OPTIMIZER STATE
+// ============================================
+
+/**
+ * Tracks the current layout of pieces on a slab during the optimization process.
+ * Wraps OptimizationResult/OptimizationInput from slab-optimization types
+ * and adds UI state for interactive editing and visual feedback.
+ */
+export interface SlabOptimizerState {
+  /** Current optimization input (pieces, slab dimensions, kerf) */
+  input: OptimizationInput;
+
+  /** Latest optimization result, null before first run */
+  result: OptimizationResult | null;
+
+  /** Per-slab display data with UI formatting */
+  slabs: SlabDisplayData[];
+
+  /** Pieces that could not be placed */
+  unplacedPieces: UnplacedPieceView[];
+
+  /** UI interaction state */
+  interaction: {
+    selectedPieceId: string | null;
+    hoveredPieceId: string | null;
+    dragActive: boolean;
+    zoomLevel: number;       // 0.5 – 2.0
+    panOffset: { x: number; y: number };
+  };
+
+  /** Optimization run status */
+  status: 'idle' | 'optimizing' | 'complete' | 'error';
+  errorMessage: string | null;
+
+  /** Summary metrics formatted for display */
+  summary: {
+    totalSlabs: number;
+    wastePercent: number;
+    totalUsedArea: number;
+    totalWasteArea: number;
+    formatted: {
+      wastePercent: FormattedPercentage;
+      totalUsedArea: string;  // e.g. "3.24 m²"
+      totalWasteArea: string; // e.g. "0.76 m²"
+    };
+    status: BadgeStyle; // Green for low waste, amber for moderate, red for high
+  };
+}
+
+/**
+ * Display data for a single slab in the optimizer view.
+ * Extends SlabResult with UI-specific fields.
+ */
+export interface SlabDisplayData extends SlabResult {
+  /** Placement data enriched with display labels and colours */
+  placementViews: PlacementView[];
+
+  formatted: {
+    dimensions: FormattedDimension; // e.g. "3000mm × 1500mm"
+    usedArea: string;               // e.g. "2.10 m²"
+    wasteArea: string;              // e.g. "0.45 m²"
+    wastePercent: FormattedPercentage;
+  };
+
+  status: BadgeStyle; // Waste-level indicator
+}
+
+/**
+ * A single piece placement with UI display data.
+ * Extends Placement with colour and label info for rendering.
+ */
+export interface PlacementView extends Placement {
+  /** Assigned colour for the piece (hex string) */
+  colour: string;
+
+  /** Whether this piece is currently selected in the UI */
+  isSelected: boolean;
+
+  /** Whether this piece is currently hovered */
+  isHovered: boolean;
+
+  formatted: {
+    dimensions: FormattedDimension; // e.g. "1200mm × 600mm"
+    position: string;               // e.g. "x: 50, y: 100"
+  };
+}
+
+/**
+ * Display data for a piece that could not be placed on any slab.
+ */
+export interface UnplacedPieceView {
+  pieceId: string;
+  label: string;
+  dimensions: FormattedDimension;
+  reason: string; // e.g. "Exceeds slab dimensions"
+  status: BadgeStyle;
 }
 
 // ============================================
