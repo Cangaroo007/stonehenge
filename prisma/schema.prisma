@@ -65,6 +65,7 @@ model Company {
   templatingRates   TemplatingRate[]
   priceBooks        PriceBook[]
   stripConfigurations StripConfiguration[]
+  accountingConnections AccountingConnection[]
   
   @@map("companies")
 }
@@ -155,6 +156,7 @@ model User {
   signatures   QuoteSignature[] @relation("QuoteSignatures")
   quoteOverrides Quote[] @relation("QuoteOverrides")
   quoteVersions QuoteVersion[]  // Add reverse relation for QuoteVersion
+  accountingConnections AccountingConnection[] @relation("AccountingConnections")
 
   @@map("users")
 }
@@ -901,6 +903,69 @@ model PriceBookRule {
 
   @@unique([priceBookId, pricingRuleId])
   @@map("price_book_rules")
+}
+
+// ============================================
+// ACCOUNTING CONNECTIONS (Xero / MYOB OAuth)
+// ============================================
+
+enum AccountingProvider {
+  XERO
+  MYOB
+}
+
+enum ConnectionStatus {
+  PENDING      // OAuth initiated but not completed
+  ACTIVE       // Successfully connected, tokens valid
+  EXPIRED      // Refresh token expired, needs re-auth
+  REVOKED      // User or admin revoked access
+  ERROR        // Persistent error state
+}
+
+model AccountingConnection {
+  id                  Int                @id @default(autoincrement())
+
+  // Link to company (multi-tenancy)
+  companyId           Int                @map("company_id")
+  company             Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Who connected this
+  connectedByUserId   Int                @map("connected_by_user_id")
+  connectedByUser     User               @relation("AccountingConnections", fields: [connectedByUserId], references: [id])
+
+  // Provider info
+  provider            AccountingProvider
+  status              ConnectionStatus   @default(PENDING)
+
+  // Xero: tenant_id / MYOB: company file ID
+  externalTenantId    String?            @map("external_tenant_id")
+  externalTenantName  String?            @map("external_tenant_name")
+
+  // Encrypted OAuth tokens (AES-256-GCM)
+  accessTokenEnc      String             @map("access_token_enc") @db.Text
+  refreshTokenEnc     String             @map("refresh_token_enc") @db.Text
+  tokenExpiresAt      DateTime           @map("token_expires_at")
+
+  // Scopes granted
+  scopes              String[]           @default([])
+
+  // Optional: link to a specific insolvency matter / project reference
+  matterReference     String?            @map("matter_reference")
+  matterName          String?            @map("matter_name")
+
+  // Metadata
+  lastSyncAt          DateTime?          @map("last_sync_at")
+  lastError           String?            @map("last_error") @db.Text
+  metadata            Json?              // Provider-specific extra data
+
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  @@unique([companyId, provider, externalTenantId])
+  @@index([companyId])
+  @@index([connectedByUserId])
+  @@index([status])
+  @@map("accounting_connections")
 }
 
 // ============================================
