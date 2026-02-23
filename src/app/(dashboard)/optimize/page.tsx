@@ -40,8 +40,8 @@ interface QuotePiece {
 
 export default function OptimizePage() {
   // Slab settings
-  const [slabWidth, setSlabWidth] = useState('3000');
-  const [slabHeight, setSlabHeight] = useState('1400');
+  const [slabWidth, setSlabWidth] = useState('3200');
+  const [slabHeight, setSlabHeight] = useState('1600');
   const [kerfWidth, setKerfWidth] = useState('3');
   const [allowRotation, setAllowRotation] = useState(true);
 
@@ -238,8 +238,8 @@ export default function OptimizePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          slabWidth: parseInt(slabWidth) || 3000,
-          slabHeight: parseInt(slabHeight) || 1400,
+          slabWidth: parseInt(slabWidth) || 3200,
+          slabHeight: parseInt(slabHeight) || 1600,
           kerfWidth: parseInt(kerfWidth) || 3,
           allowRotation,
         }),
@@ -260,7 +260,7 @@ export default function OptimizePage() {
   const handleExportCSV = () => {
     if (!result) return;
 
-    const csv = generateCutListCSV(result, parseInt(slabWidth) || 3000, parseInt(slabHeight) || 1400);
+    const csv = generateCutListCSV(result, parseInt(slabWidth) || 3200, parseInt(slabHeight) || 1600);
     const selectedQuote = quotes.find(q => String(q.id) === selectedQuoteId);
     const quoteLabel = selectedQuote ? selectedQuote.quoteNumber : 'standalone';
     const filename = `cut-list-${quoteLabel}-${new Date().toISOString().split('T')[0]}.csv`;
@@ -545,8 +545,8 @@ export default function OptimizePage() {
             <>
               <SlabResults
                 result={result}
-                slabWidth={parseInt(slabWidth) || 3000}
-                slabHeight={parseInt(slabHeight) || 1400}
+                slabWidth={parseInt(slabWidth) || 3200}
+                slabHeight={parseInt(slabHeight) || 1600}
               />
 
               {/* Export Buttons */}

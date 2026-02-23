@@ -44,7 +44,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { slabWidth = 3000, slabHeight = 1400, kerfWidth = 3, allowRotation = true } = body;
+    const { slabWidth = 3200, slabHeight = 1600, kerfWidth = 3, allowRotation = true } = body;
 
     console.log(`[Optimize API] Starting optimization for quote ${quoteId}`);
     console.log(`[Optimize API] Settings: ${slabWidth}x${slabHeight}mm, kerf: ${kerfWidth}mm, rotation: ${allowRotation}`);

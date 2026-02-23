@@ -928,8 +928,8 @@ model SlabOptimization {
   quote         Quote?   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   // Slab configuration
-  slabWidth     Int      @default(3000)  // mm
-  slabHeight    Int      @default(1400)  // mm
+  slabWidth     Int      @default(3200)  // mm
+  slabHeight    Int      @default(1600)  // mm
   kerfWidth     Int      @default(3)     // mm (saw blade width)
 
   // Results

@@ -1608,7 +1608,7 @@ export default function QuoteForm({
                                       type="button"
                                       onClick={() => togglePieceExpanded(index)}
                                       className="text-gray-400 hover:text-gray-600"
-                                      title="Edit edge polishing"
+                                      title="Edit edges"
                                     >
                                       <svg
                                         className={`h-5 w-5 transition-transform ${piece.expanded ? 'rotate-180' : ''}`}
@@ -1883,10 +1883,10 @@ export default function QuoteForm({
                         )}
                       </div>
 
-                      {/* Edge Polish Selection */}
+                      {/* Edge Selection */}
                       <div className="mt-4">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-700">Edge Polish</span>
+                          <span className="text-sm font-medium text-gray-700">Edges</span>
                           <button
                             type="button"
                             onClick={() => updatePiece(room.id, piece.id, { showEdgeSelector: !piece.showEdgeSelector })}

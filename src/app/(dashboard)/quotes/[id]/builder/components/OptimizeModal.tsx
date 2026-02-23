@@ -28,8 +28,8 @@ interface OptimizeModalProps {
 
 export function OptimizeModal({ quoteId, onClose, onSaved, defaultKerfWidth = 8 }: OptimizeModalProps) {
   // Slab settings
-  const [slabWidth, setSlabWidth] = useState('3000');
-  const [slabHeight, setSlabHeight] = useState('1400');
+  const [slabWidth, setSlabWidth] = useState('3200');
+  const [slabHeight, setSlabHeight] = useState('1600');
   const [kerfWidth, setKerfWidth] = useState(String(defaultKerfWidth));
   const [allowRotation, setAllowRotation] = useState(true);
 
@@ -95,8 +95,8 @@ export function OptimizeModal({ quoteId, onClose, onSaved, defaultKerfWidth = 8 
               console.log('✅ Loaded saved optimization from database');
               
               // Restore slab settings
-              setSlabWidth(String(savedOptimization.slabWidth || 3000));
-              setSlabHeight(String(savedOptimization.slabHeight || 1400));
+              setSlabWidth(String(savedOptimization.slabWidth || 3200));
+              setSlabHeight(String(savedOptimization.slabHeight || 1600));
               setKerfWidth(String(savedOptimization.kerfWidth || 3));
               
               // Reconstruct result from saved data
@@ -278,7 +278,7 @@ export function OptimizeModal({ quoteId, onClose, onSaved, defaultKerfWidth = 8 
   const handleExportCSV = () => {
     if (!result) return;
 
-    const csv = generateCutListCSV(result, parseInt(slabWidth) || 3000, parseInt(slabHeight) || 1400);
+    const csv = generateCutListCSV(result, parseInt(slabWidth) || 3200, parseInt(slabHeight) || 1600);
     const filename = `cut-list-quote-${quoteId}-${new Date().toISOString().split('T')[0]}.csv`;
     downloadCSV(csv, filename);
   };
@@ -528,8 +528,8 @@ export function OptimizeModal({ quoteId, onClose, onSaved, defaultKerfWidth = 8 
                   <div className="space-y-4">
                     <SlabResults 
                       result={result}
-                      slabWidth={parseInt(slabWidth) || 3000}
-                      slabHeight={parseInt(slabHeight) || 1400}
+                      slabWidth={parseInt(slabWidth) || 3200}
+                      slabHeight={parseInt(slabHeight) || 1600}
                     />
 
                     <div className="flex gap-2">

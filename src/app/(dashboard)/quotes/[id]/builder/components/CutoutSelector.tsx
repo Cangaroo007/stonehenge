@@ -110,7 +110,7 @@ export default function CutoutSelector({
     <div className="border border-gray-200 rounded-lg overflow-hidden">
       {/* Header */}
       <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700">Cutouts</h3>
+        <h3 className="text-sm font-semibold text-gray-700">Features &amp; Cutouts</h3>
         {!isAdding && (
           <button
             type="button"
