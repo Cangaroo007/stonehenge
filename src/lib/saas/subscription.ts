@@ -24,7 +24,7 @@ export interface SubscriptionPlan {
 
 export interface SubscriptionFeatures {
   // Core features
-  maxUsers: number;
+  maxUsers: number | 'unlimited';
   maxQuotesPerMonth: number | 'unlimited';
   maxProjects: number | 'unlimited';
   
@@ -119,7 +119,7 @@ export const SAAS_PLANS: Record<SubscriptionTier, SubscriptionPlan> = {
     monthlyPrice: new Decimal(499),
     annualPrice: new Decimal(4990),
     features: {
-      maxUsers: 'unlimited' as any,
+      maxUsers: 'unlimited',
       maxQuotesPerMonth: 'unlimited',
       maxProjects: 'unlimited',
       unitBlockSupport: true,
@@ -147,7 +147,7 @@ export const SAAS_PLANS: Record<SubscriptionTier, SubscriptionPlan> = {
     monthlyPrice: new Decimal(999),
     annualPrice: new Decimal(9990),
     features: {
-      maxUsers: 'unlimited' as any,
+      maxUsers: 'unlimited',
       maxQuotesPerMonth: 'unlimited',
       maxProjects: 'unlimited',
       unitBlockSupport: true,

@@ -17,6 +17,7 @@ import {
   PricingContext,
   CalculationOptions,
   AppliedPricingRule,
+  JoinCalculation,
 } from './types';
 import { MaterialCalculator, createMaterialCalculator } from './material-calculator';
 import { EdgeCalculator, createEdgeCalculator } from './edge-calculator';
@@ -188,7 +189,7 @@ export class QuoteCalculator {
 
     // Load pricing context
     this.pricingContext = await this.loadPricingContext(
-      quote.customer?.companyId?.toString() || '1'
+      quote.customer?.id?.toString() || '1'
     );
 
     // Load pricing configuration
@@ -216,7 +217,7 @@ export class QuoteCalculator {
       currency: settings?.currency || 'AUD',
       taxRate: new Decimal(settings?.gstRate || 0.10),
       clientTypeId: customer?.clientTypeId || undefined,
-      clientTierId: customer?.clientTierId || undefined,
+      clientTierId: customer?.clientTier?.id || undefined,
       customerId: customer?.id?.toString(),
       priceBookId: this.quoteData?.priceBookId || undefined,
     };
@@ -267,6 +268,7 @@ export class QuoteCalculator {
         dimensions: {
           lengthMm: piece.lengthMm,
           widthMm: piece.widthMm,
+          thicknessMm: piece.thicknessMm,
         },
         edges: {
           top: piece.edgeTop,
@@ -343,7 +345,7 @@ export class QuoteCalculator {
     };
   }
 
-  private calculateJoins() {
+  private calculateJoins(): JoinCalculation[] {
     // Implementation would go here
     return [];
   }
@@ -444,6 +446,7 @@ interface QuoteData {
     companyId?: number;
     clientTypeId: string | null;
     clientTier: {
+      id: string;
       discountMatrix: unknown;
     } | null;
   } | null;
