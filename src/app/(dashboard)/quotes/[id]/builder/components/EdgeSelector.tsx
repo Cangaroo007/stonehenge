@@ -129,7 +129,7 @@ export default function EdgeSelector({
     <div className="border border-gray-200 rounded-lg overflow-hidden">
       {/* Header */}
       <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-        <h3 className="text-sm font-semibold text-gray-700">Edge Polish Selection</h3>
+        <h3 className="text-sm font-semibold text-gray-700">Edges</h3>
       </div>
 
       <div className="p-4">
