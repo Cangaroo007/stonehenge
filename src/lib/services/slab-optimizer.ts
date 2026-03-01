@@ -30,6 +30,9 @@ type OptimizationPiece = OptimizationInput['pieces'][0] & {
   isLaminationStrip?: boolean;
   parentPieceId?: string;
   stripPosition?: 'top' | 'bottom' | 'left' | 'right';
+  isStripSegment?: boolean;      // true for strip parts split from oversize strips
+  stripSegmentIndex?: number;    // 0-based index within the split
+  totalStripSegments?: number;   // total number of parts this strip was split into
 };
 
 /**
@@ -134,6 +137,54 @@ function generateLaminationStrips(piece: OptimizationPiece, kerfWidth?: number):
 }
 
 /**
+ * Splits oversize lamination strips into placeable segments.
+ * Any strip whose width exceeds the slab usable width is split into N segments
+ * that each fit on a slab. Mirrors preprocessOversizePieces for main pieces.
+ *
+ * CRITICAL: parentPieceId stays as the original piece ID (not strip ID).
+ * Strip part IDs use '-part-' (NOT '-seg-') to avoid ghost strip filter.
+ */
+function preprocessOversizeStrips(
+  strips: OptimizationPiece[],
+  usableWidth: number
+): OptimizationPiece[] {
+  const result: OptimizationPiece[] = [];
+
+  for (const strip of strips) {
+    if (strip.width <= usableWidth) {
+      result.push(strip);
+      continue;
+    }
+
+    // Strip exceeds usable width — split into segments
+    const numSegments = Math.ceil(strip.width / usableWidth);
+    const segmentLength = Math.floor(strip.width / numSegments);
+    const lastSegmentLength = strip.width - segmentLength * (numSegments - 1);
+
+    for (let i = 0; i < numSegments; i++) {
+      const isLast = i === numSegments - 1;
+      const partLength = isLast ? lastSegmentLength : segmentLength;
+
+      result.push({
+        ...strip,
+        id: `${strip.id}-part-${i}`,
+        width: partLength,
+        // height (strip width, e.g. 40mm) unchanged
+        label: `${strip.label} (Part ${i + 1} of ${numSegments})`,
+        isStripSegment: true,
+        stripSegmentIndex: i,
+        totalStripSegments: numSegments,
+        // CRITICAL: parentPieceId stays as original piece ID, not strip ID
+        parentPieceId: strip.parentPieceId,
+        stripPosition: strip.stripPosition,
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
  * Generates lamination summary for reporting
  */
 function generateLaminationSummary(
@@ -207,15 +258,20 @@ export function optimizeSlabs(input: OptimizationInput): OptimizationResult {
   
   // Generate lamination strips for all 40mm+ pieces
   const allPieces: OptimizationPiece[] = [];
-  
+  const allStrips: OptimizationPiece[] = [];
+
   for (const piece of pieces) {
     // Add the main piece
     allPieces.push(piece as OptimizationPiece);
-    
-    // Generate and add lamination strips if needed
+
+    // Generate lamination strips if needed
     const strips = generateLaminationStrips(piece as OptimizationPiece, kerfWidth);
-    allPieces.push(...strips);
+    allStrips.push(...strips);
   }
+
+  // Split any strips that exceed usable slab width
+  const processedStrips = preprocessOversizeStrips(allStrips, slabWidth);
+  allPieces.push(...processedStrips);
   
   // Log for debugging (visible in server logs)
   if (allPieces.length > pieces.length) {
